@@ -13,7 +13,7 @@ import { generateClaimedImage } from './generateClaimedImage.js';
 import { getWalletBalance } from '../utils/getWalletBalance.js';
 import { escapeMarkdownV2 } from '../utils/escapeMarkdownV2.js';
 
-const DEFAULT_COMMISSION_PERCENTAGE = 25; // Default commission percentage
+const DEFAULT_COMMISSION_PERCENTAGE = 10; // Default commission percentage (users.referrer_commission_percent ?? referrals.commission_percentage ?? 10)
 
 export async function claimButton(ctx, walletId = null) {
     const userId = ctx.from.id;
@@ -157,7 +157,7 @@ Claim FREE Sol With SolClaim!
                     
 💰 Free SOL for every trader
 🆕 First SOL trader rewards bot
-🔐 Secure and safe (approved by Phantom)
+🔐 Secure and safe (approved by Privy)
                     
 👉 Start getting free SOL with SolClaim today.`;
                     const encodedText = encodeURIComponent(shareText);

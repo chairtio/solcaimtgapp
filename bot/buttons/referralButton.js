@@ -63,7 +63,7 @@ Claim FREE Sol With SolClaim!
 
 💰 Free SOL for every trader
 🆕 First SOL trader rewards bot
-🔐 Secure and safe (approved by Phantom)
+🔐 Secure and safe (approved by Privy)
 
 👉 Start getting free SOL with SolClaim today.`;
 

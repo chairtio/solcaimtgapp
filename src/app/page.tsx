@@ -45,6 +45,7 @@ import {
   updateWallet,
   upsertTokenAccounts,
   createTransaction,
+  createReferralPayout,
   getUserWalletsWithStats,
   saveWalletPrivateKey,
   deactivateWallet
@@ -52,7 +53,7 @@ import {
 import { toast } from 'sonner'
 import { executeClaimOnServer, closeTokenAccountsOnServer, sendClaimNotificationToGroup } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
-import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardAction, getRecentClaimsAction, getRecentClaimsFreshAction, getUserStatsAction } from '@/app/actions/stats'
+import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardAction, getRecentClaimsAction, getRecentClaimsFreshAction, getUserStatsAction, getReferralStatsAction } from '@/app/actions/stats'
 
 interface ClaimableAccount {
   accountAddress: string
@@ -105,11 +106,26 @@ export default function SolClaimApp() {
   const [leaderboard, setLeaderboard] = useState<{ rank: number; userId: string; totalSol: number; accountsClosed: number; displayName: string }[]>([])
   const [recentClaims, setRecentClaims] = useState<{ signature: string; sol_amount: number; created_at: string }[]>([])
 
+  // Referral stats (Invite tab)
+  const [referralStats, setReferralStats] = useState<{ total_ref_payout_amount: number; total_referred_users: number; num_referred_users_made_claims: number; commission_percentage: number } | null>(null)
+  const [referralStatsLoaded, setReferralStatsLoaded] = useState(false)
+
   // Video modal
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
 
   const TELEGRAM_VIDEO_URL = 'https://t.me/solclaim/162'
   const PROMO_CLAIMABLE = 0.001 // Teaser shown to new users who've never claimed
+
+  const SHARE_TEXT = `Claim FREE Sol With SolClaim!
+💰 Free SOL for every trader
+🆕 First SOL trader rewards bot
+🔐 Secure and safe (approved by Privy)
+👉 Start getting free SOL with SolClaim today.`
+  const openSharePopup = () => {
+    if (!user?.telegram_id) return
+    const shareUrl = `https://t.me/share/url?url=t.me/solclaimxbot?start=${user.telegram_id}&text=${encodeURIComponent(SHARE_TEXT)}`
+    window.open(shareUrl, '_blank', 'noopener,noreferrer')
+  }
   const UNLOCK_THRESHOLD = 0.001 // Shown as "unlocks when balance reaches this"
 
   // Only show promo AFTER userStats has loaded - prevents 0.001→0 flip on reload
@@ -203,6 +219,16 @@ export default function SolClaimApp() {
       getTotalClaimedAction().then(setTotalClaimed).catch(() => setTotalClaimed(null))
       getTotalClaimingUsersAction().then(setTotalClaimingUsers).catch(() => setTotalClaimingUsers(null))
       getLeaderboardAction(10).then(setLeaderboard).catch(() => setLeaderboard([]))
+    }
+    if (user?.telegram_id && activeTab === 'friends') {
+      setReferralStatsLoaded(false)
+      getReferralStatsAction(user.telegram_id).then((stats) => {
+        setReferralStats(stats)
+        setReferralStatsLoaded(true)
+      }).catch(() => {
+        setReferralStats(null)
+        setReferralStatsLoaded(true)
+      })
     }
   }, [user, activeTab])
 
@@ -399,19 +425,30 @@ export default function SolClaimApp() {
       await upsertTokenAccounts(dbAccounts)
 
       const succeededRent = result.succeededAccounts.reduce((s, a) => s + a.rentAmount, 0) / 1e9
+      const feeAmount = result.feeAmount ?? 0
+      const referrerAmount = result.referrerAmount ?? 0
+      const netAmount = succeededRent - feeAmount - referrerAmount
       const sig = result.signatures[0] || ('claim_' + Date.now())
 
-      await createTransaction({
+      const tx = await createTransaction({
         wallet_id: walletId,
         signature: sig,
         type: 'batch_claim',
         status: 'confirmed',
-        sol_amount: succeededRent,
+        sol_amount: netAmount,
         accounts_closed: result.succeededAccounts.length,
-        fee_amount: 0
+        fee_amount: feeAmount
       })
 
-      sendClaimNotificationToGroup({ userId: user.id, netAmount: succeededRent, walletCount: 1 }).catch(() => {})
+      if (referrerAmount > 0 && result.referrerId) {
+        await createReferralPayout({
+          referrer_id: result.referrerId,
+          amount: referrerAmount,
+          transaction_id: tx.id
+        })
+      }
+
+      sendClaimNotificationToGroup({ userId: user.id, netAmount, walletCount: 1 }).catch(() => {})
       await loadUserStats()
 
       setIsAddWalletModalOpen(false)
@@ -421,7 +458,10 @@ export default function SolClaimApp() {
       setAddWalletDerivedAddress('')
       await loadSavedWallets()
       if (user) getRecentClaimsFreshAction(user.id, 10).then(setRecentClaims).catch(() => {})
-      toast.success(`Claimed ${succeededRent.toFixed(4)} SOL`, { action: { label: 'View on Solscan', onClick: () => window.open(`https://solscan.io/tx/${sig}`) } })
+      toast.success(`Claimed ${netAmount.toFixed(4)} SOL`, {
+        action: { label: 'Share with friends', onClick: openSharePopup },
+        cancel: sig ? { label: 'View on Solscan', onClick: () => window.open(`https://solscan.io/tx/${sig}`) } : undefined
+      })
     } catch (e: any) {
       toast.error(e?.message || 'Claim failed')
     } finally {
@@ -635,6 +675,9 @@ export default function SolClaimApp() {
           const succeededAccounts = result.succeededAccounts ?? []
           if (succeededAccounts.length > 0) {
             const succeededRent = succeededAccounts.reduce((s, a) => s + a.rentAmount, 0) / 1e9
+            const feeAmount = result.feeAmount ?? 0
+            const referrerAmount = result.referrerAmount ?? 0
+            const netAmount = succeededRent - feeAmount - referrerAmount
             const sig = result.signatures[0] || ('batch_claim_' + Date.now())
 
             const dbAccounts = succeededAccounts.map(acc => ({
@@ -649,18 +692,26 @@ export default function SolClaimApp() {
 
             await upsertTokenAccounts(dbAccounts)
 
-            await createTransaction({
+            const tx = await createTransaction({
               wallet_id: wallet.id,
               signature: sig,
               type: 'batch_claim',
               status: 'confirmed',
-              sol_amount: succeededRent,
+              sol_amount: netAmount,
               accounts_closed: succeededAccounts.length,
-              fee_amount: 0
+              fee_amount: feeAmount
             })
 
+            if (referrerAmount > 0 && result.referrerId) {
+              await createReferralPayout({
+                referrer_id: result.referrerId,
+                amount: referrerAmount,
+                transaction_id: tx.id
+              })
+            }
+
             successfulClaims++
-            totalClaimedSol += succeededRent
+            totalClaimedSol += netAmount
             if (succeededAccounts.length < claimData.accounts.length) {
               console.warn(`Partial success: closed ${succeededAccounts.length}/${claimData.accounts.length} accounts for ${claimData.publicKey}`)
             }
@@ -676,7 +727,9 @@ export default function SolClaimApp() {
       if (successfulClaims > 0) {
         await loadUserStats()
         sendClaimNotificationToGroup({ userId: user.id, netAmount: totalClaimedSol, walletCount: successfulClaims }).catch(() => {})
-        toast.success(`Successfully claimed ${totalClaimedSol.toFixed(4)} SOL from ${successfulClaims} wallets!`)
+        toast.success(`Successfully claimed ${totalClaimedSol.toFixed(4)} SOL from ${successfulClaims} wallets!`, {
+          action: { label: 'Share with friends', onClick: openSharePopup }
+        })
         setBatchResults(null)
         await loadSavedWallets()
         if (user) getRecentClaimsFreshAction(user.id, 10).then(setRecentClaims).catch(() => {})
@@ -863,7 +916,8 @@ export default function SolClaimApp() {
       setIsSubmittingKey(false)
       const sig = result.signatures?.[0]
       toast.success(`Claimed ${result.netAmount!.toFixed(4)} SOL`, {
-        action: sig ? { label: 'View on Solscan', onClick: () => window.open(`https://solscan.io/tx/${sig}`) } : undefined
+        action: { label: 'Share with friends', onClick: openSharePopup },
+        cancel: sig ? { label: 'View on Solscan', onClick: () => window.open(`https://solscan.io/tx/${sig}`) } : undefined
       })
 
       await loadUserStats()
@@ -2010,7 +2064,15 @@ export default function SolClaimApp() {
                 <p className="text-white/90 text-sm font-medium mb-8 max-w-[240px] mx-auto leading-relaxed">
                   Get <span className="font-black text-white bg-white/20 px-2 py-0.5 rounded-md">0.01 SOL</span> for every friend who joins and claims rent.
                 </p>
-                <Button className="w-full h-14 rounded-2xl bg-white text-primary hover:bg-gray-50 font-black text-lg shadow-xl active:scale-[0.98] transition-all">
+                <Button
+                  className="w-full h-14 rounded-2xl bg-white text-primary hover:bg-gray-50 font-black text-lg shadow-xl active:scale-[0.98] transition-all"
+                  onClick={async () => {
+                    const inviteUrl = `https://t.me/solclaimxbot?start=${user?.telegram_id || ''}`
+                    await copyToClipboard(inviteUrl)
+                    toast.success('Invite link copied!')
+                  }}
+                  disabled={!user?.telegram_id}
+                >
                   <Copy className="w-5 h-5 mr-2" />
                   COPY INVITE LINK
                 </Button>
@@ -2018,16 +2080,29 @@ export default function SolClaimApp() {
             </div>
 
             <div className="bg-card rounded-3xl p-6 border-2 border-border shadow-sm">
-              <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center justify-between mb-6">
                 <h3 className="text-base font-black text-foreground uppercase tracking-widest">Your Referrals</h3>
-                <Badge variant="secondary" className="font-bold bg-primary/10 text-primary border-0 px-3 py-1">0 TOTAL</Badge>
+                <Badge variant="secondary" className="font-bold bg-primary/10 text-primary border-0 px-3 py-1">
+                  {!referralStatsLoaded ? '...' : (referralStats?.total_referred_users ?? 0)} TOTAL
+                </Badge>
               </div>
-              
+              {referralStatsLoaded && (referralStats?.total_ref_payout_amount ?? 0) > 0 && (
+                <div className="mb-6 p-4 rounded-2xl bg-primary/5 border border-primary/20">
+                  <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Total earned</p>
+                  <p className="text-2xl font-black text-primary">
+                    {(referralStats?.total_ref_payout_amount ?? 0).toFixed(4)} SOL
+                  </p>
+                </div>
+              )}
               <div className="flex flex-col items-center justify-center py-10 text-center">
                 <div className="w-16 h-16 rounded-3xl bg-secondary flex items-center justify-center mb-4 border border-border">
                   <Users className="w-8 h-8 text-muted-foreground" />
                 </div>
-                <p className="text-base font-bold text-foreground">No friends yet</p>
+                <p className="text-base font-bold text-foreground">
+                  {!referralStatsLoaded ? 'Loading...' : (referralStats?.total_referred_users ?? 0) > 0
+                    ? `${referralStats?.num_referred_users_made_claims ?? 0} friends have claimed`
+                    : 'No friends yet'}
+                </p>
                 <p className="text-sm font-medium text-muted-foreground mt-1">Share your link to start earning</p>
               </div>
             </div>
