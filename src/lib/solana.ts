@@ -382,6 +382,21 @@ export async function closeEmptyTokenAccounts(
     }
   }
 
+  // Wallet needs SOL to pay for tx fees. "Attempt to debit... no prior credit" = 0 or very low balance.
+  const MIN_LAMPORTS_FOR_FEES = 2_000_000 // ~0.002 SOL - need enough for multiple tx fees
+  const solBalance = await connection.getBalance(keypair.publicKey)
+  if (solBalance < MIN_LAMPORTS_FOR_FEES) {
+    return {
+      success: false,
+      signatures: [],
+      errors: [
+        `Insufficient SOL for transaction fees. Your wallet has ${(solBalance / 1e9).toFixed(6)} SOL. ` +
+        `You need at least ~0.002 SOL to pay for closing. Add a small amount of SOL to this wallet and try again.`
+      ],
+      succeededAccounts: []
+    }
+  }
+
   const signatures: string[] = []
   const errors: string[] = []
   const succeededAccounts: ClaimableAccount[] = []
@@ -461,14 +476,17 @@ export async function closeEmptyTokenAccounts(
           connection,
           tx,
           [keypair],
-          { commitment: 'confirmed', skipPreflight: false }
+          { commitment: 'confirmed', skipPreflight: true }
         )
         signatures.push(sig)
         succeededAccounts.push(acc)
-      } catch (error) {
-        const errDetail = error instanceof Error ? error.message : 'Unknown error'
-        errors.push(`Account ${i + 1} (${acc.accountAddress}): ${errDetail}`)
-        console.error(`Failed to burn+close ${acc.accountAddress}:`, error)
+    } catch (error) {
+      const errDetail = error instanceof Error ? error.message : 'Unknown error'
+      const debitHint = String(errDetail).toLowerCase().includes('attempt to debit') || String(errDetail).toLowerCase().includes('no record of a prior credit')
+        ? ' This usually means your wallet has no SOL for fees. Add ~0.001 SOL to pay for transactions.'
+        : ''
+      errors.push(`Account ${i + 1} (${acc.accountAddress}): ${errDetail}${debitHint}`)
+      console.error(`Failed to burn+close ${acc.accountAddress}:`, error)
       }
       continue
     }
@@ -499,7 +517,7 @@ export async function closeEmptyTokenAccounts(
         keypair.publicKey,
         keypair,
         [],
-        { commitment: 'confirmed' },
+        { commitment: 'confirmed', skipPreflight: true },
         programId
       )
       signatures.push(sig)
@@ -515,6 +533,9 @@ export async function closeEmptyTokenAccounts(
             hint = ` On-chain owner: ${onChainOwner}. Your keypair: ${signerAddress}.`
           }
         } catch (_) {}
+      }
+      if (String(errDetail).toLowerCase().includes('attempt to debit') || String(errDetail).toLowerCase().includes('no record of a prior credit')) {
+        hint = ' Your wallet needs SOL for fees. Add ~0.001 SOL and try again.'
       }
       errors.push(`Account ${i + 1} (${acc.accountAddress}): ${errDetail}${hint}`)
       console.error(`Failed to close ${acc.accountAddress}:`, error)
