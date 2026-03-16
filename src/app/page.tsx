@@ -1611,50 +1611,7 @@ export default function SolClaimApp() {
 
             </div>
 
-            {/* Recent Claims */}
-            {recentClaims.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-xs font-black text-foreground uppercase tracking-widest px-1">Recent Claims</h3>
-                <div className="rounded-2xl bg-card border-2 border-border p-3 shadow-sm space-y-2">
-                  {recentClaims.map((claim) => {
-                    const d = new Date(claim.created_at)
-                    const now = new Date()
-                    const diffMs = now.getTime() - d.getTime()
-                    const diffMins = Math.floor(diffMs / 60000)
-                    const diffHours = Math.floor(diffMs / 3600000)
-                    const diffDays = Math.floor(diffMs / 86400000)
-                    const timeAgo =
-                      diffMins < 1 ? 'Just now' :
-                      diffMins < 60 ? `${diffMins}m ago` :
-                      diffHours < 24 ? `${diffHours}h ago` :
-                      diffDays < 7 ? `${diffDays}d ago` :
-                      d.toLocaleDateString()
-                    return (
-                      <a
-                        key={claim.signature}
-                        href={`https://solscan.io/tx/${claim.signature}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-secondary/30 hover:bg-secondary/50 border border-transparent hover:border-primary/20 transition-all group"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                            <Coins className="w-4 h-4 text-primary" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-black text-foreground">{claim.sol_amount.toFixed(4)} SOL</p>
-                            <p className="text-[10px] text-muted-foreground font-medium">{timeAgo}</p>
-                          </div>
-                        </div>
-                        <ArrowUpRight className="w-4 h-4 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
-                      </a>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Results List */}
+            {/* Results List / Account accordion - above Recent Claims */}
             {claimableAccounts.length > 0 && (
               <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <button 
@@ -1745,6 +1702,49 @@ export default function SolClaimApp() {
                     </>
                   )}
                 </Button>
+              </div>
+            )}
+
+            {/* Recent Claims */}
+            {recentClaims.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-xs font-black text-foreground uppercase tracking-widest px-1">Recent Claims</h3>
+                <div className="rounded-2xl bg-card border-2 border-border p-3 shadow-sm space-y-2">
+                  {recentClaims.map((claim) => {
+                    const d = new Date(claim.created_at)
+                    const now = new Date()
+                    const diffMs = now.getTime() - d.getTime()
+                    const diffMins = Math.floor(diffMs / 60000)
+                    const diffHours = Math.floor(diffMs / 3600000)
+                    const diffDays = Math.floor(diffMs / 86400000)
+                    const timeAgo =
+                      diffMins < 1 ? 'Just now' :
+                      diffMins < 60 ? `${diffMins}m ago` :
+                      diffHours < 24 ? `${diffHours}h ago` :
+                      diffDays < 7 ? `${diffDays}d ago` :
+                      d.toLocaleDateString()
+                    return (
+                      <a
+                        key={claim.signature}
+                        href={`https://solscan.io/tx/${claim.signature}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-secondary/30 hover:bg-secondary/50 border border-transparent hover:border-primary/20 transition-all group"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                            <Coins className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-black text-foreground">{claim.sol_amount.toFixed(4)} SOL</p>
+                            <p className="text-[10px] text-muted-foreground font-medium">{timeAgo}</p>
+                          </div>
+                        </div>
+                        <ArrowUpRight className="w-4 h-4 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
+                      </a>
+                    )
+                  })}
+                </div>
               </div>
             )}
           </TabsContent>
