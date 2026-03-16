@@ -53,7 +53,7 @@ import {
 import { toast } from 'sonner'
 import { executeClaimOnServer, closeTokenAccountsOnServer } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
-import { getLeaderboardAction, getTotalClaimedAction } from '@/app/actions/stats'
+import { getLeaderboardAction, getTotalClaimedAction, getRecentClaimsAction } from '@/app/actions/stats'
 
 interface ClaimableAccount {
   accountAddress: string
@@ -97,8 +97,11 @@ export default function SolClaimApp() {
   
   // Stats State
   const [userStats, setUserStats] = useState<any>(null)
+  const [userStatsLoaded, setUserStatsLoaded] = useState(false)
+  const [walletsLoaded, setWalletsLoaded] = useState(false)
   const [totalClaimed, setTotalClaimed] = useState<number | null>(null)
   const [leaderboard, setLeaderboard] = useState<{ rank: number; userId: string; totalSol: number; accountsClosed: number; displayName: string }[]>([])
+  const [recentClaims, setRecentClaims] = useState<{ signature: string; sol_amount: number; created_at: string }[]>([])
 
   // Video modal
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
@@ -107,11 +110,11 @@ export default function SolClaimApp() {
   const PROMO_CLAIMABLE = 0.001 // Teaser shown to new users who've never claimed
   const UNLOCK_THRESHOLD = 0.001 // Shown as "unlocks when balance reaches this"
 
-  // Only show promo to users who have never claimed before
+  // Only show promo AFTER userStats has loaded - prevents 0.001→0 flip on reload
   const hasClaimedBefore = userStats && (Number(userStats.total_sol_claimed) > 0 || Number(userStats.total_accounts_closed) > 0)
-  const isPromoDisplay = claimableRent === 0 && claimableAccounts.length === 0 && !hasClaimedBefore
-  // Full claim amount (no fees)
-  const displayClaimableGross = hasClaimedBefore ? claimableRent : (isPromoDisplay ? PROMO_CLAIMABLE : claimableRent)
+  const isPromoDisplay = userStatsLoaded && claimableRent === 0 && claimableAccounts.length === 0 && !hasClaimedBefore
+  // While loading: show stable 0.0000 to avoid text flash. After load: show real value or promo
+  const displayClaimableGross = !userStatsLoaded ? 0 : (hasClaimedBefore ? claimableRent : (isPromoDisplay ? PROMO_CLAIMABLE : claimableRent))
   const displayClaimableNet = displayClaimableGross
 
   // Add Wallet modal - private key only, derive pubkey, scan & claim in popup
@@ -191,6 +194,9 @@ export default function SolClaimApp() {
     if (user && (activeTab === 'stats' || activeTab === 'home')) {
       loadUserStats()
     }
+    if (user && activeTab === 'home') {
+      getRecentClaimsAction(user.id, 10).then(setRecentClaims).catch(() => setRecentClaims([]))
+    }
     if (user && activeTab === 'stats') {
       getTotalClaimedAction().then(setTotalClaimed).catch(() => setTotalClaimed(null))
       getLeaderboardAction(10).then(setLeaderboard).catch(() => setLeaderboard([]))
@@ -226,12 +232,16 @@ export default function SolClaimApp() {
 
   const loadUserStats = async () => {
     if (!user) return
+    setUserStatsLoaded(false)
     try {
       const { getUserStats } = await import('@/lib/database')
       const stats = await getUserStats(user.id)
       setUserStats(stats)
     } catch (err) {
       console.error('Failed to load stats:', err)
+      setUserStats({ total_sol_claimed: 0, total_accounts_closed: 0 })
+    } finally {
+      setUserStatsLoaded(true)
     }
   }
 
@@ -246,13 +256,15 @@ export default function SolClaimApp() {
 
   const loadSavedWallets = async () => {
     if (!user) return
+    setWalletsLoaded(false)
     try {
       const wallets = await getUserWalletsWithStats(user.id)
       setSavedWallets(wallets)
-      // Reset batch results when reloading wallets
       setBatchResults(null)
     } catch (err) {
       console.error('Failed to load wallets:', err)
+    } finally {
+      setWalletsLoaded(true)
     }
   }
 
@@ -384,6 +396,7 @@ export default function SolClaimApp() {
       setAddWalletModalRent(0)
       setAddWalletDerivedAddress('')
       await loadSavedWallets()
+      if (user) getRecentClaimsAction(user.id, 10).then(setRecentClaims).catch(() => {})
       toast.success(`Claimed ${succeededRent.toFixed(4)} SOL`, { action: { label: 'View on Solscan', onClick: () => window.open(`https://solscan.io/tx/${sig}`) } })
     } catch (e: any) {
       toast.error(e?.message || 'Claim failed')
@@ -639,6 +652,7 @@ export default function SolClaimApp() {
         toast.success(`Successfully claimed ${totalClaimedSol.toFixed(4)} SOL from ${successfulClaims} wallets!`)
         setBatchResults(null)
         await loadSavedWallets()
+        if (user) getRecentClaimsAction(user.id, 10).then(setRecentClaims).catch(() => {})
       } else {
         toast.error(`Failed to claim from any wallets. (${failedClaims} failed)`)
       }
@@ -826,6 +840,7 @@ export default function SolClaimApp() {
       })
 
       await loadUserStats()
+      if (user) getRecentClaimsAction(user.id, 10).then(setRecentClaims).catch(() => {})
 
       // Clear the claimable accounts since they are now "claimed"
       setTimeout(() => {
@@ -929,8 +944,25 @@ export default function SolClaimApp() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="min-h-screen bg-background pb-24">
+        <div className="sticky top-0 z-40 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-3">
+          <div className="flex items-center gap-3 max-w-md mx-auto">
+            <div className="w-10 h-10 rounded-xl bg-secondary animate-pulse" />
+            <div className="flex-1 min-w-0">
+              <div className="h-5 w-24 bg-secondary rounded-md animate-pulse mb-1" />
+              <div className="h-3 w-16 bg-secondary/70 rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+        <div className="px-4 py-6 max-w-md mx-auto space-y-6">
+          <div className="rounded-2xl border-2 border-border py-8 px-4 bg-card/50">
+            <div className="h-3 w-16 bg-secondary rounded mx-auto mb-3 animate-pulse" />
+            <div className="h-8 w-24 bg-secondary rounded mx-auto mb-2 animate-pulse" />
+            <div className="h-3 w-32 bg-secondary/70 rounded mx-auto animate-pulse" />
+          </div>
+          <div className="h-12 bg-secondary/50 rounded-xl animate-pulse" />
+          <div className="h-12 bg-primary/20 rounded-xl animate-pulse" />
+        </div>
       </div>
     )
   }
@@ -1457,15 +1489,19 @@ export default function SolClaimApp() {
                   </span>
                   <span className="text-sm font-bold text-primary">SOL</span>
                 </div>
-                {isPromoDisplay ? (
-                  <p className="text-[10px] font-bold text-primary/90 relative z-10">
-                    Pending • Unlocks when balance reaches {UNLOCK_THRESHOLD} SOL
-                  </p>
-                ) : (
-                  <p className="text-[10px] font-bold text-secondary-foreground bg-secondary px-2 py-1 rounded-md border border-primary/20 shadow-sm relative z-10">
-                    ≈ ${(displayClaimableNet * 150).toFixed(2)}
-                  </p>
-                )}
+                <div className="relative z-10 min-h-[28px] flex items-center justify-center">
+                  {!userStatsLoaded ? (
+                    <p className="text-[10px] font-bold text-muted-foreground">Scan to check</p>
+                  ) : isPromoDisplay ? (
+                    <p className="text-[10px] font-bold text-primary/90">
+                      Pending • Unlocks when balance reaches {UNLOCK_THRESHOLD} SOL
+                    </p>
+                  ) : (
+                    <p className="text-[10px] font-bold text-secondary-foreground bg-secondary px-2 py-1 rounded-md border border-primary/20 shadow-sm">
+                      ≈ ${(displayClaimableNet * 150).toFixed(2)}
+                    </p>
+                  )}
+                </div>
               </div>
 
             <a
@@ -1482,10 +1518,12 @@ export default function SolClaimApp() {
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label htmlFor="publicKey" className="text-[11px] font-black text-muted-foreground ml-1 uppercase tracking-widest">
-                  {savedWallets.length === 0 ? 'Solana Wallet Address' : 'Scan New Wallet'}
+                  {!walletsLoaded ? 'Wallet Address' : (savedWallets.length === 0 ? 'Solana Wallet Address' : 'Scan New Wallet')}
                 </Label>
-                <p className="text-[10px] text-muted-foreground ml-1">
-                  {savedWallets.length === 0 
+                <p className="text-[10px] text-muted-foreground ml-1 min-h-[32px]">
+                  {!walletsLoaded
+                    ? 'Enter your address to find claimable rent.'
+                    : savedWallets.length === 0 
                     ? 'Enter your address to find claimable rent. Scanning adds the wallet when you claim.'
                     : 'Enter a new address to scan, or go to Wallets to manage saved ones.'
                   }
@@ -1493,7 +1531,7 @@ export default function SolClaimApp() {
                 <div className="relative group">
                   <Input
                     id="publicKey"
-                    placeholder={savedWallets.length === 0 ? 'Paste your public key...' : 'Paste address to scan...'}
+                    placeholder={!walletsLoaded ? 'Paste your public key...' : (savedWallets.length === 0 ? 'Paste your public key...' : 'Paste address to scan...')}
                     value={publicKey}
                     onChange={(e) => setPublicKey(e.target.value)}
                     className="h-12 bg-card border-2 border-border rounded-xl pl-4 pr-10 text-base text-foreground font-mono placeholder:text-muted-foreground placeholder:font-sans ring-0 ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary focus-visible:outline-none shadow-sm min-w-0"
@@ -1525,6 +1563,49 @@ export default function SolClaimApp() {
               </Button>
 
             </div>
+
+            {/* Recent Claims */}
+            {recentClaims.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-xs font-black text-foreground uppercase tracking-widest px-1">Recent Claims</h3>
+                <div className="rounded-2xl bg-card border-2 border-border p-3 shadow-sm space-y-2">
+                  {recentClaims.map((claim) => {
+                    const d = new Date(claim.created_at)
+                    const now = new Date()
+                    const diffMs = now.getTime() - d.getTime()
+                    const diffMins = Math.floor(diffMs / 60000)
+                    const diffHours = Math.floor(diffMs / 3600000)
+                    const diffDays = Math.floor(diffMs / 86400000)
+                    const timeAgo =
+                      diffMins < 1 ? 'Just now' :
+                      diffMins < 60 ? `${diffMins}m ago` :
+                      diffHours < 24 ? `${diffHours}h ago` :
+                      diffDays < 7 ? `${diffDays}d ago` :
+                      d.toLocaleDateString()
+                    return (
+                      <a
+                        key={claim.signature}
+                        href={`https://solscan.io/tx/${claim.signature}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-secondary/30 hover:bg-secondary/50 border border-transparent hover:border-primary/20 transition-all group"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                            <Coins className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-black text-foreground">{claim.sol_amount.toFixed(4)} SOL</p>
+                            <p className="text-[10px] text-muted-foreground font-medium">{timeAgo}</p>
+                          </div>
+                        </div>
+                        <ArrowUpRight className="w-4 h-4 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
+                      </a>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Results List */}
             {claimableAccounts.length > 0 && (
