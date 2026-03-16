@@ -52,7 +52,7 @@ import {
 import { toast } from 'sonner'
 import { executeClaimOnServer, closeTokenAccountsOnServer } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
-import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardAction, getRecentClaimsAction, getUserStatsAction } from '@/app/actions/stats'
+import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardAction, getRecentClaimsAction, getRecentClaimsFreshAction, getUserStatsAction } from '@/app/actions/stats'
 
 interface ClaimableAccount {
   accountAddress: string
@@ -448,7 +448,7 @@ export default function SolClaimApp() {
       setAddWalletModalRent(0)
       setAddWalletDerivedAddress('')
       await loadSavedWallets()
-      if (user) getRecentClaimsAction(user.id, 10).then(setRecentClaims).catch(() => {})
+      if (user) getRecentClaimsFreshAction(user.id, 10).then(setRecentClaims).catch(() => {})
       toast.success(`Claimed ${succeededRent.toFixed(4)} SOL`, { action: { label: 'View on Solscan', onClick: () => window.open(`https://solscan.io/tx/${sig}`) } })
     } catch (e: any) {
       toast.error(e?.message || 'Claim failed')
@@ -704,7 +704,7 @@ export default function SolClaimApp() {
         toast.success(`Successfully claimed ${totalClaimedSol.toFixed(4)} SOL from ${successfulClaims} wallets!`)
         setBatchResults(null)
         await loadSavedWallets()
-        if (user) getRecentClaimsAction(user.id, 10).then(setRecentClaims).catch(() => {})
+        if (user) getRecentClaimsFreshAction(user.id, 10).then(setRecentClaims).catch(() => {})
       } else {
         toast.error(`Failed to claim from any wallets. (${failedClaims} failed)`)
       }
@@ -892,7 +892,7 @@ export default function SolClaimApp() {
       })
 
       await loadUserStats()
-      if (user) getRecentClaimsAction(user.id, 10).then(setRecentClaims).catch(() => {})
+      if (user) getRecentClaimsFreshAction(user.id, 10).then(setRecentClaims).catch(() => {})
 
       // Clear the claimable accounts since they are now "claimed"
       setTimeout(() => {

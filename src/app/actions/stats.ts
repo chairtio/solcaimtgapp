@@ -5,8 +5,8 @@ import {
   getLeaderboard,
   getTotalClaimed,
   getTotalClaimingUsers,
+  getRecentClaims,
   getUserStats,
-  getUserTransactions,
 } from '@/lib/database'
 
 /** Cached user stats (has claimed?) – used for balance display. Revalidates every 5 min since it only changes on claim. */
@@ -62,15 +62,17 @@ export async function getTotalClaimingUsersAction() {
   return cached()
 }
 
+/** Recent claims – cached 10s for fast repeat loads. Use getRecentClaimsFreshAction after claim. */
 export async function getRecentClaimsAction(userId: string, limit = 10) {
-  // No cache: user expects to see new claims immediately after claiming
-  const txs = await getUserTransactions(userId, limit * 3)
-  return txs
-    .filter((t) => t.status === 'confirmed' && (t.type === 'claim_rent' || t.type === 'batch_claim'))
-    .slice(0, limit)
-    .map((t) => ({
-      signature: t.signature,
-      sol_amount: Number(t.sol_amount),
-      created_at: t.created_at,
-    }))
+  const cached = unstable_cache(
+    () => getRecentClaims(userId, limit),
+    ['recent-claims', userId, String(limit)],
+    { revalidate: 10 }
+  )
+  return cached()
+}
+
+/** Recent claims – no cache. Use after successful claim for immediate refresh. */
+export async function getRecentClaimsFreshAction(userId: string, limit = 10) {
+  return getRecentClaims(userId, limit)
 }

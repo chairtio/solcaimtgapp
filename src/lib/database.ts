@@ -434,3 +434,19 @@ export async function getTotalClaimingUsers(): Promise<number> {
   if (error) throw error
   return typeof data === 'number' ? data : Number(data ?? 0)
 }
+
+/** Recent claims for a user – optimized RPC returns only needed columns */
+export async function getRecentClaims(userId: string, limit = 10): Promise<{ signature: string; sol_amount: number; created_at: string }[]> {
+  const { data, error } = await supabaseAdmin.rpc('get_user_recent_claims', {
+    p_user_id: userId,
+    p_limit: limit,
+  })
+
+  if (error) throw error
+  if (!Array.isArray(data)) return []
+  return data.map((row: { signature: string; sol_amount: number; created_at: string }) => ({
+    signature: row.signature,
+    sol_amount: Number(row.sol_amount),
+    created_at: row.created_at,
+  }))
+}
