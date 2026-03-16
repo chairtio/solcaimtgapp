@@ -55,6 +55,7 @@ import { toast } from 'sonner'
 import { executeClaimOnServer, closeTokenAccountsOnServer, sendClaimNotificationToGroup } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
 import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardAction, getRecentClaimsAction, getRecentClaimsFreshAction, getUserStatsAction, getReferralStatsAction } from '@/app/actions/stats'
+import { getTasksForUser, verifyAndCompleteTask } from '@/app/actions/tasks'
 
 interface ClaimableAccount {
   accountAddress: string
@@ -110,6 +111,11 @@ export default function SolClaimApp() {
   // Referral stats (Invite tab)
   const [referralStats, setReferralStats] = useState<{ total_ref_payout_amount: number; total_referred_users: number; num_referred_users_made_claims: number; commission_percentage: number } | null>(null)
   const [referralStatsLoaded, setReferralStatsLoaded] = useState(false)
+
+  // Tasks tab
+  const [tasksResult, setTasksResult] = useState<Awaited<ReturnType<typeof getTasksForUser>> | null>(null)
+  const [tasksLoaded, setTasksLoaded] = useState(false)
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null)
 
   // Video modal
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
@@ -279,6 +285,19 @@ t.me/solclaimxbot?start=${telegramId}`
       setSettingsReceiverInput(user.receiver_wallet || '')
     }
   }, [user, activeTab, user?.receiver_wallet])
+
+  // Fetch tasks when switching to Tasks tab
+  useEffect(() => {
+    if (!user?.id || activeTab !== 'tasks') return
+    setTasksLoaded(false)
+    getTasksForUser(user.id)
+      .then(setTasksResult)
+      .catch((err) => {
+        console.error('Failed to load tasks:', err)
+        setTasksResult(null)
+      })
+      .finally(() => setTasksLoaded(true))
+  }, [user?.id, activeTab])
 
   // Show Telegram init errors as toast
   useEffect(() => {
@@ -1904,45 +1923,103 @@ t.me/solclaimxbot?start=${telegramId}`
               <div className="flex justify-between items-end mb-5 relative z-10">
                 <div>
                   <p className="text-xs font-bold text-primary uppercase tracking-widest mb-1">Your Level</p>
-                  <h2 className="text-3xl font-black text-foreground tracking-tight">Novice</h2>
+                  <h2 className="text-3xl font-black text-foreground tracking-tight">
+                    {tasksLoaded && tasksResult ? tasksResult.levelName : '—'}
+                  </h2>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-black text-foreground">250 <span className="text-muted-foreground font-semibold">/ 500 XP</span></p>
+                  <p className="text-sm font-black text-foreground">
+                    {tasksLoaded && tasksResult ? (
+                      <>{tasksResult.experiencePoints} <span className="text-muted-foreground font-semibold">/ {tasksResult.nextLevelAt} XP</span></>
+                    ) : (
+                      '—'
+                    )}
+                  </p>
                 </div>
               </div>
-              <Progress value={50} className="h-3 bg-secondary relative z-10" />
+              <Progress
+                value={tasksLoaded && tasksResult ? Math.round(tasksResult.levelProgress * 100) : 0}
+                className="h-3 bg-secondary relative z-10"
+              />
             </div>
 
             <div className="space-y-4">
-              <h3 className="text-base font-black text-foreground uppercase tracking-widest px-1">Daily Tasks</h3>
-              
-              <div className="space-y-3">
-                {[
-                  { icon: CheckCircle, title: 'Daily Check-in', desc: 'Come back tomorrow', xp: '+10 XP', done: true },
-                  { icon: Target, title: 'Share on Telegram', desc: 'Share with 3 friends', xp: '+25 XP', done: false },
-                  { icon: Users, title: 'Invite a Friend', desc: 'They must claim rent', xp: '+50 XP', done: false },
-                ].map((task, i) => (
-                  <div key={i} className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all ${task.done ? 'bg-secondary/30 border-transparent opacity-60' : 'bg-card border-border hover:border-primary/30 shadow-sm group cursor-pointer'}`}>
-                    <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${task.done ? 'bg-background' : 'bg-primary/10 group-hover:bg-primary/20'}`}>
-                        <task.icon className={`w-6 h-6 ${task.done ? 'text-muted-foreground' : 'text-primary'}`} />
+              <h3 className="text-base font-black text-foreground uppercase tracking-widest px-1">Tasks</h3>
+              {!tasksLoaded ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">Loading tasks...</p>
+              ) : tasksResult?.tasks?.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">No tasks available.</p>
+              ) : (
+                <div className="space-y-3">
+                  {tasksResult?.tasks?.map((task) => {
+                    const handleAction = async () => {
+                      if (task.completed) return
+                      if (task.canComplete) {
+                        setCompletingTaskId(task.id)
+                        try {
+                          const result = await verifyAndCompleteTask(user!.id, task.id)
+                          if (result.success) {
+                            const fresh = await getTasksForUser(user!.id)
+                            setTasksResult(fresh)
+                            toast.success(`+${task.points} XP earned!`)
+                          } else {
+                            toast.error(result.error || 'Could not complete task')
+                          }
+                        } finally {
+                          setCompletingTaskId(null)
+                        }
+                      } else if (task.id === 'refer_5_people') {
+                        openSharePopup()
+                      } else if (task.url) {
+                        window.open(task.url, '_blank', 'noopener,noreferrer')
+                      }
+                    }
+                    const buttonLabel = task.verification_type === 'manual'
+                      ? 'Done'
+                      : (task.canComplete ? 'Claim' : (task.button_text || 'Go'))
+                    return (
+                      <div
+                        key={task.id}
+                        className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all ${
+                          task.completed ? 'bg-secondary/30 border-transparent opacity-60' : 'bg-card border-border hover:border-primary/30 shadow-sm group'
+                        }`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl transition-colors ${
+                            task.completed ? 'bg-background' : 'bg-primary/10 group-hover:bg-primary/20'
+                          }`}>
+                            {task.icon || '📌'}
+                          </div>
+                          <div>
+                            <h4 className={`font-bold text-base ${task.completed ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
+                              {task.title}
+                            </h4>
+                            {task.description && (
+                              <p className="text-xs font-medium text-muted-foreground mt-0.5 line-clamp-2">{task.description}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <span className={`text-sm font-black ${task.completed ? 'text-muted-foreground' : 'text-primary'}`}>
+                            +{task.points} XP
+                          </span>
+                          {!task.completed && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="text-xs font-bold h-8 px-4 rounded-xl"
+                              onClick={handleAction}
+                              disabled={completingTaskId === task.id}
+                            >
+                              {completingTaskId === task.id ? '...' : buttonLabel}
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <h4 className={`font-bold text-base ${task.done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{task.title}</h4>
-                        <p className="text-xs font-medium text-muted-foreground mt-0.5">{task.desc}</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <span className={`text-sm font-black ${task.done ? 'text-muted-foreground' : 'text-primary'}`}>{task.xp}</span>
-                      {!task.done && (
-                        <button className="text-xs font-bold bg-secondary hover:bg-primary hover:text-primary-foreground text-foreground px-4 py-2 rounded-xl transition-all active:scale-95">
-                          START
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </TabsContent>
 

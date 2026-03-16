@@ -310,7 +310,8 @@ export async function getUserTransactions(userId: string, limit = 50): Promise<T
   return data || []
 }
 
-// Task operations
+// Task operations (legacy – use getTaskDefinitions + getUserTaskCompletions instead)
+/** @deprecated Use getTaskDefinitions + getUserTaskCompletions + getTasksForUser action */
 export async function getAvailableTasks(userId: string): Promise<Task[]> {
   const { data, error } = await supabaseAdmin
     .from('tasks')
@@ -323,6 +324,8 @@ export async function getAvailableTasks(userId: string): Promise<Task[]> {
   return data || []
 }
 
+/** @deprecated Use upsertUserTaskCompletion instead */
+/** @deprecated Use upsertUserTaskCompletion instead */
 export async function createTask(taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>): Promise<Task> {
   const { data, error } = await supabaseAdmin
     .from('tasks')
@@ -334,6 +337,8 @@ export async function createTask(taskData: Omit<Task, 'id' | 'created_at' | 'upd
   return data
 }
 
+/** @deprecated Use verifyAndCompleteTask action instead */
+/** @deprecated Use verifyAndCompleteTask from @/app/actions/tasks instead */
 export async function completeTask(taskId: string): Promise<Task> {
   const { data, error } = await supabaseAdmin
     .from('tasks')
@@ -348,6 +353,97 @@ export async function completeTask(taskId: string): Promise<Task> {
 
   if (error) throw error
   return data
+}
+
+// Task definitions + user progress (new tasks system)
+export interface TaskDefinition {
+  id: string
+  title: string
+  description: string | null
+  points: number
+  type: string
+  url: string | null
+  icon: string | null
+  button_text: string | null
+  verification_type: string
+  sort: number
+  telegram_channel: string | null
+}
+
+export async function getTaskDefinitions(): Promise<TaskDefinition[]> {
+  const { data, error } = await supabaseAdmin
+    .from('task_definitions')
+    .select('*')
+    .order('sort', { ascending: true })
+
+  if (error) throw error
+  return data || []
+}
+
+export async function getUserTaskCompletions(userId: string): Promise<{ task_definition_id: string; completed_at: string }[]> {
+  const { data, error } = await supabaseAdmin
+    .from('user_task_completions')
+    .select('task_definition_id, completed_at')
+    .eq('user_id', userId)
+
+  if (error) throw error
+  return data || []
+}
+
+export async function insertUserTaskCompletion(
+  userId: string,
+  taskDefinitionId: string
+): Promise<{ id: string }> {
+  const { data, error } = await supabaseAdmin
+    .from('user_task_completions')
+    .insert({ user_id: userId, task_definition_id: taskDefinitionId })
+    .select('id')
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+/** Insert completion and add points. Idempotent: skips if already completed (no duplicate points). */
+export async function upsertUserTaskCompletion(
+  userId: string,
+  taskDefinitionId: string,
+  points: number
+): Promise<void> {
+  const { error: insertError } = await supabaseAdmin
+    .from('user_task_completions')
+    .insert({ user_id: userId, task_definition_id: taskDefinitionId })
+    .select()
+    .single()
+
+  if (insertError) {
+    if (insertError.code === '23505') return // Unique violation = already completed, do not add points
+    throw insertError
+  }
+  await addUserTaskPoints(userId, points)
+}
+
+export async function getUserTaskPoints(userId: string): Promise<number> {
+  const { data, error } = await supabaseAdmin
+    .from('user_task_points')
+    .select('experience_points')
+    .eq('user_id', userId)
+    .single()
+
+  if (error && error.code !== 'PGRST116') throw error
+  return data?.experience_points ?? 0
+}
+
+export async function addUserTaskPoints(userId: string, points: number): Promise<void> {
+  const now = new Date().toISOString()
+  const current = await getUserTaskPoints(userId)
+  const { error } = await supabaseAdmin
+    .from('user_task_points')
+    .upsert(
+      { user_id: userId, experience_points: current + points, updated_at: now },
+      { onConflict: 'user_id' }
+    )
+  if (error) throw error
 }
 
 // Referral operations
