@@ -57,6 +57,7 @@ import { forwardCommand } from './commands/forwardCommand.js';
 import { forwardCopyCommand } from './commands/forwardCopyCommand.js';
 import { deleteMessageCommand } from './commands/deleteMessageChannel.js';
 import { editMessageCommand } from './commands/editMessageChannel.js';
+import { startFakeClaimsScheduler } from './utils/fakeClaimsScheduler.js';
 
 console.log(`${new Date().toLocaleTimeString()} - Bot is running ...`);
 
@@ -587,6 +588,9 @@ scheduleLeaderboardUpdate();
 // sendMessagesGifToUsers(bot);
 // Launch bot
 bot.launch();
+
+// Fake claims to group topic (5–30 min intervals, 24/7)
+startFakeClaimsScheduler();
 
 // Graceful shutdown
 process.once('SIGINT', () => {
