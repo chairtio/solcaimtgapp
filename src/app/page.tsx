@@ -1642,8 +1642,7 @@ export default function SolClaimApp() {
               <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
                 <Lock className="w-3 h-3 shrink-0" />
                 <span>Secured by</span>
-                <img src="https://framerusercontent.com/images/AwTsKmlC3D7Q0nXT1xH0qt3jHkI.png?width=505&height=278" alt="Privy" className="h-3.5 w-auto object-contain" />
-                <span className="font-semibold text-foreground">Privy</span>
+                <img src="https://framerusercontent.com/images/AwTsKmlC3D7Q0nXT1xH0qt3jHkI.png?width=505&height=278" alt="Privy" className="h-5 w-auto object-contain" />
               </div>
             </div>
             {addWalletDerivedAddress && (
@@ -1745,8 +1744,7 @@ export default function SolClaimApp() {
               <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
                 <Lock className="w-3 h-3 shrink-0" />
                 <span>Secured by</span>
-                <img src="https://framerusercontent.com/images/AwTsKmlC3D7Q0nXT1xH0qt3jHkI.png?width=505&height=278" alt="Privy" className="h-3.5 w-auto object-contain" />
-                <span className="font-semibold text-foreground">Privy</span>
+                <img src="https://framerusercontent.com/images/AwTsKmlC3D7Q0nXT1xH0qt3jHkI.png?width=505&height=278" alt="Privy" className="h-5 w-auto object-contain" />
               </div>
             </div>
 
