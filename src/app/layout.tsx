@@ -29,11 +29,6 @@ export default function RootLayout({
       <Script
         src="https://telegram.org/js/telegram-web-app.js"
         strategy="beforeInteractive"
-        onLoad={() => {
-          if (typeof window !== 'undefined') {
-            (window as any).__tgwaLoaded = true
-          }
-        }}
       />
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
