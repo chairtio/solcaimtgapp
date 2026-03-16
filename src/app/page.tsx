@@ -53,7 +53,7 @@ import {
 import { toast } from 'sonner'
 import { executeClaimOnServer, closeTokenAccountsOnServer } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
-import { getLeaderboardAction, getTotalClaimedAction, getTotalClaimingUsersAction, getRecentClaimsAction } from '@/app/actions/stats'
+import { getStatsPageDataAction, getLeaderboardAction, getRecentClaimsAction } from '@/app/actions/stats'
 
 interface ClaimableAccount {
   accountAddress: string
@@ -199,9 +199,15 @@ export default function SolClaimApp() {
       getRecentClaimsAction(user.id, 10).then(setRecentClaims).catch(() => setRecentClaims([]))
     }
     if (user && activeTab === 'stats') {
-      getTotalClaimedAction().then(setTotalClaimed).catch(() => setTotalClaimed(null))
-      getTotalClaimingUsersAction().then(setTotalClaimingUsers).catch(() => setTotalClaimingUsers(null))
-      getLeaderboardAction(10).then(setLeaderboard).catch(() => setLeaderboard([]))
+      getStatsPageDataAction().then(({ totalClaimed, totalClaimingUsers, leaderboard }) => {
+        setTotalClaimed(totalClaimed)
+        setTotalClaimingUsers(totalClaimingUsers)
+        setLeaderboard(leaderboard)
+      }).catch(() => {
+        setTotalClaimed(null)
+        setTotalClaimingUsers(null)
+        setLeaderboard([])
+      })
     }
   }, [user, activeTab])
 
@@ -217,6 +223,58 @@ export default function SolClaimApp() {
     if (claimableAccounts.length > 0) {
       setClaimableAccounts([])
       setClaimableRent(0)
+    }
+  }, [publicKey])
+
+  // Auto-fill first saved wallet and scan on home load (no user interaction required)
+  const hasAutoFilledRef = useRef(false)
+  const skipNextDebounceRef = useRef(false)
+  useEffect(() => {
+    if (!user || activeTab !== 'home' || !walletsLoaded || publicKey) return
+    if (savedWallets.length === 0) return
+    if (hasAutoFilledRef.current) return
+    const first = savedWallets[0]
+    if (first?.public_key) {
+      hasAutoFilledRef.current = true
+      skipNextDebounceRef.current = true
+      setPublicKey(first.public_key)
+      // Run scan after state update - use microtask to avoid stale closure
+      queueMicrotask(() => {
+        // scanWallet reads publicKey from state; we need to pass it
+        const runScan = async () => {
+          const pk = first.public_key
+          if (!pk || !isValidPublicKey(pk)) return
+          setIsScanning(true)
+          try {
+            const result = await getClaimableRent(new PublicKey(pk))
+            setClaimableRent(result.totalRent / 1000000000)
+            setClaimableAccounts(result.accounts)
+          } catch (err) {
+            console.error(err)
+          } finally {
+            setIsScanning(false)
+          }
+        }
+        runScan()
+      })
+    }
+  }, [user, activeTab, walletsLoaded, savedWallets])
+
+  // Debounced auto-scan when user types valid address (home + onboarding)
+  const debounceScanRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!publicKey || !isValidPublicKey(publicKey) || publicKey.length < 32) return
+    if (skipNextDebounceRef.current) {
+      skipNextDebounceRef.current = false
+      return
+    }
+    if (debounceScanRef.current) clearTimeout(debounceScanRef.current)
+    debounceScanRef.current = setTimeout(() => {
+      debounceScanRef.current = null
+      scanWallet({ silent: true })
+    }, 600)
+    return () => {
+      if (debounceScanRef.current) clearTimeout(debounceScanRef.current)
     }
   }, [publicKey])
 
@@ -667,9 +725,9 @@ export default function SolClaimApp() {
     }
   }
 
-  const scanWallet = async () => {
+  const scanWallet = async (opts?: { silent?: boolean }) => {
     if (!isValidPublicKey(publicKey)) {
-      toast.error('Invalid Solana public key')
+      if (!opts?.silent) toast.error('Invalid Solana public key')
       return
     }
 
@@ -679,9 +737,9 @@ export default function SolClaimApp() {
       const result = await getClaimableRent(new PublicKey(publicKey))
       setClaimableRent(result.totalRent / 1000000000) // Convert lamports to SOL
       setClaimableAccounts(result.accounts)
-      toast.success(`Found ${result.accounts.length} claimable accounts`)
+      if (!opts?.silent) toast.success(`Found ${result.accounts.length} claimable accounts`)
     } catch (err) {
-      toast.error('Failed to scan wallet. Please check the public key.')
+      if (!opts?.silent) toast.error('Failed to scan wallet. Please check the public key.')
       console.error(err)
     } finally {
       setIsScanning(false)
@@ -1127,10 +1185,10 @@ export default function SolClaimApp() {
                         </div>
                         <div className="rounded-xl bg-secondary/50 border-2 border-border p-4 text-center">
                           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Claimable</p>
-                          <p className="text-2xl font-black text-foreground">
-                            {onboardingClaimableNet.toFixed(4)} <span className="text-sm text-primary">SOL</span>
+                          <p className={`text-2xl font-black ${isScanning ? 'text-muted-foreground/70 animate-pulse' : 'text-foreground'}`}>
+                            {isScanning ? '0.0000' : onboardingClaimableNet.toFixed(4)} <span className="text-sm text-primary">SOL</span>
                           </p>
-                          {onboardingClaimableDisplay === PROMO_CLAIMABLE && claimableAccounts.length === 0 && (
+                          {onboardingClaimableDisplay === PROMO_CLAIMABLE && claimableAccounts.length === 0 && !isScanning && (
                             <p className="text-[10px] text-primary/90 mt-1">
                               Pending • Unlocks when balance reaches {UNLOCK_THRESHOLD} SOL
                             </p>
@@ -1486,14 +1544,14 @@ export default function SolClaimApp() {
                 
                 <p className="text-[10px] font-bold text-primary uppercase tracking-widest relative z-10 mb-1">Claimable</p>
                 <div className="flex items-baseline gap-1 relative z-10 mb-2">
-                  <span className="text-3xl font-black tracking-tighter text-foreground drop-shadow-sm">
-                    {displayClaimableNet.toFixed(4)}
+                  <span className={`text-3xl font-black tracking-tighter drop-shadow-sm ${(!userStatsLoaded || isScanning) ? 'text-muted-foreground/70 animate-pulse' : 'text-foreground'}`}>
+                    {(!userStatsLoaded || isScanning) ? '0.0000' : displayClaimableNet.toFixed(4)}
                   </span>
                   <span className="text-sm font-bold text-primary">SOL</span>
                 </div>
                 <div className="relative z-10 min-h-[28px] flex items-center justify-center">
                   {!userStatsLoaded ? (
-                    <p className="text-[10px] font-bold text-muted-foreground">Scan to check</p>
+                    <p className="text-[10px] font-bold text-muted-foreground">Loading...</p>
                   ) : isPromoDisplay ? (
                     <p className="text-[10px] font-bold text-primary/90">
                       Pending • Unlocks when balance reaches {UNLOCK_THRESHOLD} SOL
@@ -1520,15 +1578,10 @@ export default function SolClaimApp() {
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label htmlFor="publicKey" className="text-[11px] font-black text-muted-foreground ml-1 uppercase tracking-widest">
-                  {!walletsLoaded ? 'Wallet Address' : (savedWallets.length === 0 ? 'Solana Wallet Address' : 'Scan New Wallet')}
+                  Wallet Address
                 </Label>
                 <p className="text-[10px] text-muted-foreground ml-1 min-h-[32px]">
-                  {!walletsLoaded
-                    ? 'Enter your address to find claimable rent.'
-                    : savedWallets.length === 0 
-                    ? 'Enter your address to find claimable rent. Scanning adds the wallet when you claim.'
-                    : 'Enter a new address to scan, or go to Wallets to manage saved ones.'
-                  }
+                  Enter your address to find claimable rent.
                 </p>
                 <div className="relative group">
                   <Input
