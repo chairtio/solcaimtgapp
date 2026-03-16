@@ -4,21 +4,38 @@
  */
 import { bot, groupChatId, claimTopics } from '../private/private.js'
 
-const FIRST_NAMES = [
-  'Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Avery', 'Quinn',
-  'Sam', 'Charlie', 'Jamie', 'Dakota', 'Skyler', 'Reese', 'Parker', 'Drew',
-  'Kai', 'River', 'Phoenix', 'Blake', 'Hayden', 'Cameron', 'Logan', 'Noah',
-  'Emma', 'Liam', 'Olivia', 'Ethan', 'Sophia', 'Mason', 'Isabella', 'Lucas',
-  'Mia', 'James', 'Ava', 'William', 'Ella', 'Oliver', 'Grace', 'Jack',
-  'Lily', 'Henry', 'Chloe', 'Leo', 'Zoe', 'Alexander', 'Harper', 'Sebastian',
-  'Aria', 'Benjamin', 'Mila', 'Elijah', 'Aurora', 'Daniel', 'Scarlett', 'Matthew'
-]
-
-const LAST_NAMES = [
-  'Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis',
-  'Rodriguez', 'Martinez', 'Anderson', 'Taylor', 'Thomas', 'Moore', 'Jackson',
-  'Martin', 'Lee', 'Thompson', 'White', 'Harris', 'Clark', 'Lewis', 'Walker',
-  'Hall', 'Young', 'King', 'Wright', 'Hill', 'Scott', 'Green', 'Adams', 'Baker'
+const NAMES = [
+  'Alex', 'Jordan', 'Taylor', 'Morgan', 'Kai', 'River', 'Phoenix', 'Blake',
+  'Noah', 'Emma', 'Liam', 'Olivia', 'Ethan', 'Sophia', 'Mason', 'Lucas',
+  'Mia', 'James', 'Ava', 'Oliver', 'Grace', 'Leo', 'Zoe', 'Harper', 'Aria',
+  'Satoshi', 'Vitalik', 'Pepe', 'Wojak', 'Gm', 'Anon', 'Moon', 'Diamond',
+  'HODL', 'WAGMI', 'Ser', 'Degen', 'Chad', 'Alpha', 'Omega', 'Zed',
+  'Nexus', 'Cipher', 'Apex', 'Vortex', 'Nova', 'Zen', 'Crypto', 'Solana',
+  'Serum', 'Raydium', 'Jupiter', 'Phantom', 'Sol', 'Luna', 'Orbit',
+  'Flux', 'Prism', 'Pulse', 'Spark', 'Bolt', 'Blaze', 'Ember', 'Ash',
+  'Stone', 'Frost', 'Storm', 'Thunder', 'Shadow', 'Ghost', 'Echo', 'Rogue',
+  'Fang', 'Claw', 'Talon', 'Razor', 'Edge', 'Blade', 'Swift', 'Dash',
+  'Jet', 'Aero', 'Cosmo', 'Astro', 'Nebula', 'Orion', 'Atlas', 'Titan',
+  'Max', 'Rex', 'Ace', 'Jax', 'Zeke', 'Cruz', 'Koda', 'Ryker', 'Axel',
+  'Knox', 'Jett', 'Milo', 'Finn', 'Rio', 'Stella', 'Aurora', 'Ivy',
+  'Jade', 'Ruby', 'Onyx', 'Sky', 'Ocean', 'Rain', 'Coral', 'Sage',
+  'Willow', 'Maple', 'Birch', 'Flame', 'Inferno', 'Charcoal', 'Obsidian',
+  'Silver', 'Gold', 'Pump', 'Dump', 'Ape', 'Whale', 'Ser', 'Wen', 'Giga',
+  'Based', 'BasedGod', 'SatoshiNakamoto', 'VitalikB', 'CZ', 'SBF',
+  'Ponzi', 'Rug', 'Rekt', 'Lambo', 'Wagmi', 'Ngmi', 'Fud', 'Fomo',
+  'Bags', 'Diamonds', 'Hands', 'Paper', 'GigaChad', 'Sigma', 'Alpha',
+  'Kek', 'Boomer', 'Zoomer', 'Dood', 'Nerd', 'Fren', 'Gm', 'Gn',
+  'Yolo', 'Send', 'Leeroy', 'Jenkins', 'Pog', 'Copium', 'Hopium',
+  'Airdrop', 'Mint', 'Burn', 'Stake', 'Farm', 'Yield', 'Roi',
+  'Mochi', 'Pudgy', 'Milady', 'Remilio', 'Turbo', 'Based',
+  'Cypher', 'Morph', 'Nyx', 'Zephyr', 'Helix', 'Vector', 'Matrix',
+  'Neo', 'Zero', 'Null', 'Void', 'Abyss', 'Chaos', 'Order', 'Balance',
+  'Quant', 'Algo', 'Block', 'Chain', 'Node', 'Mempool', 'Gas',
+  'Fees', 'Slippage', 'Liquidity', 'Pool', 'Swap', 'Bridge', 'Layer',
+  'Zk', 'Rollup', 'L2', 'Mainnet', 'Testnet', 'Devnet', 'Fork',
+  'Merkle', 'Hash', 'Nonce', 'Seed', 'Key', 'Wallet', 'Vault',
+  'Vibes', 'Chill', 'Vibe', 'Grok', 'Meme', 'Dank', 'Lit', 'Fire',
+  'Bussin', 'NoCap', 'Cap', 'Sus', 'Bet', 'Slay', 'Flex', 'Clout'
 ]
 
 function randomInt(min, max) {
@@ -35,7 +52,7 @@ function randomChoice(arr) {
 }
 
 function pickRandomName() {
-  return `${randomChoice(FIRST_NAMES)} ${randomChoice(LAST_NAMES)}`
+  return randomChoice(NAMES)
 }
 
 function sendFakeClaim() {
