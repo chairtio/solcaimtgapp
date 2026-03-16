@@ -779,42 +779,29 @@ export default function SolClaimApp() {
       {/* Top Header */}
       <div className="sticky top-0 z-40 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-3">
         <div className="flex items-center justify-between max-w-md mx-auto">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/20">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/20 shrink-0">
               <Wallet className="w-5 h-5 text-primary-foreground" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-xl font-black tracking-tight text-foreground">
                 SolClaim
               </h1>
               {user ? (
-                <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Hi, {user.first_name}</p>
+                <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider flex items-center gap-2 truncate">
+                  {user.photo_url ? (
+                    <img src={user.photo_url} alt="" className="w-5 h-5 rounded-full object-cover ring-1 ring-primary/20 shrink-0" />
+                  ) : (
+                    <span className="w-5 h-5 rounded-full bg-primary/20 inline-flex items-center justify-center shrink-0 text-[9px] font-black text-primary">{(user.first_name?.[0] || '?').toUpperCase()}</span>
+                  )}
+                  Hi, {[user.first_name, user.last_name].filter(Boolean).join(' ')}
+                </p>
               ) : (
                 <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Claim SOL Rent</p>
               )}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {user && (
-              <div className="flex items-center gap-1.5 min-w-0">
-                {user.photo_url ? (
-                  <img
-                    src={user.photo_url}
-                    alt=""
-                    className="w-7 h-7 rounded-full object-cover ring-2 ring-primary/20 flex-shrink-0"
-                  />
-                ) : (
-                  <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                    <span className="text-[10px] font-black text-primary">
-                      {(user.first_name?.[0] || '?').toUpperCase()}
-                    </span>
-                  </div>
-                )}
-                <span className="text-[11px] font-bold text-foreground truncate max-w-[72px] sm:max-w-[90px]">
-                  {user.first_name}{user.last_name ? ` ${user.last_name}` : ''}
-                </span>
-              </div>
-            )}
             {user?.is_premium && (
               <Badge variant="secondary" className="font-black text-[10px] uppercase tracking-widest bg-primary/10 text-primary border-0">
                 PRO
