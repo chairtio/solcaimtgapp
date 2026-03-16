@@ -18,6 +18,7 @@ import {
   Target,
   Gift,
   ChevronRight,
+  ChevronLeft,
   ArrowUpRight,
   ArrowLeftRight,
   ChevronDown,
@@ -45,7 +46,6 @@ import {
   upsertTokenAccounts,
   createTransaction,
   getUserStats,
-  updateUserStats,
   getUserWalletsWithStats,
   saveWalletPrivateKey,
   deactivateWallet
@@ -154,9 +154,16 @@ export default function SolClaimApp() {
     if (typeof localStorage !== 'undefined') localStorage.setItem('solclaim_promo_banner_dismissed', '1')
   }
 
-  // Story-style onboarding (first visit only)
+  // Story-style onboarding (first visit only) - Tinder-style swipe
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null)
   const [onboardingStep, setOnboardingStep] = useState(0)
+  const [onboardingDragX, setOnboardingDragX] = useState(0)
+  const [onboardingIsDragging, setOnboardingIsDragging] = useState(false)
+  const onboardingSwipeRef = useRef<HTMLDivElement>(null)
+  const onboardingTouchStartX = useRef(0)
+  const onboardingTouchCurrentX = useRef(0)
+  const onboardingDragXRef = useRef(0)
+  const onboardingIsDraggingRef = useRef(false)
   useEffect(() => {
     const seen = typeof localStorage !== 'undefined' && localStorage.getItem('solclaim_onboarding_seen') === '1'
     setShowOnboarding(!seen)
@@ -166,9 +173,10 @@ export default function SolClaimApp() {
     setShowOnboarding(false)
   }
   const ONBOARDING_STEPS = [
-    { title: 'You trade tokens on Solana', desc: 'Every token account pays a rent fee to the blockchain.', icon: ArrowLeftRight },
-    { title: 'When you sell, those token accounts become empty', desc: 'Leftover SOL stays locked in those abandoned token accounts.', icon: Package },
-    { title: 'Claim your SOL back', desc: 'Recover 100% of your rent from the Solana blockchain.', icon: Sparkles },
+    { title: 'You trade tokens on Solana', desc: 'Every token account pays rent to the blockchain. Swap, bridge, or hold—each account locks SOL.', icon: ArrowLeftRight, gradient: 'from-amber-500/30 via-orange-500/15 to-transparent', accent: 'text-amber-600 dark:text-amber-400', emoji: '🔄' },
+    { title: 'When you sell, accounts go empty', desc: 'Leftover SOL stays locked in abandoned token accounts. Nobody tells you it’s reclaimable.', icon: Package, gradient: 'from-rose-500/20 via-pink-500/10 to-transparent', accent: 'text-rose-600 dark:text-rose-400' },
+    { title: 'Claim your SOL back', desc: 'Recover 100% of your rent from the blockchain. No fees, no hassle—just add your wallet and tap.', icon: Sparkles, gradient: 'from-emerald-500/30 via-teal-500/15 to-transparent', accent: 'text-emerald-600 dark:text-emerald-400', emoji: '✨' },
+    { title: 'Check your wallet', desc: 'Add your wallet address and see how much SOL you can reclaim. Most users find 0.01–0.1 SOL waiting.', icon: Wallet, gradient: 'from-primary/40 via-primary/15 to-transparent', accent: 'text-primary', emoji: '👛' },
   ]
 
   // Skip receiver check when we just saved in Set Receiver modal (React state not updated yet)
@@ -366,13 +374,7 @@ export default function SolClaimApp() {
         fee_amount: 0
       })
 
-      const stats = await getUserStats(user.id)
-      const prevSol = stats ? Number(stats.total_sol_claimed) : 0
-      const prevAccounts = stats ? Number(stats.total_accounts_closed) : 0
-      await updateUserStats(user.id, {
-        total_sol_claimed: prevSol + succeededRent,
-        total_accounts_closed: prevAccounts + result.succeededAccounts.length
-      })
+      await loadUserStats()
 
       setIsAddWalletModalOpen(false)
       setAddWalletKey('')
@@ -630,14 +632,7 @@ export default function SolClaimApp() {
       }
 
       if (successfulClaims > 0) {
-        // Update global user stats (increment)
-        const stats = await getUserStats(user.id)
-        const prevSol = stats ? Number(stats.total_sol_claimed) : 0
-        const prevAccounts = stats ? Number(stats.total_accounts_closed) : 0
-        await updateUserStats(user.id, {
-          total_sol_claimed: prevSol + totalClaimedSol,
-          total_accounts_closed: prevAccounts + batchResults.totalAccounts
-        })
+        await loadUserStats()
 
         toast.success(`Successfully claimed ${totalClaimedSol.toFixed(4)} SOL from ${successfulClaims} wallets!`)
         setBatchResults(null)
@@ -828,6 +823,8 @@ export default function SolClaimApp() {
         action: sig ? { label: 'View on Solscan', onClick: () => window.open(`https://solscan.io/tx/${sig}`) } : undefined
       })
 
+      await loadUserStats()
+
       // Clear the claimable accounts since they are now "claimed"
       setTimeout(() => {
         setClaimableAccounts([])
@@ -936,55 +933,181 @@ export default function SolClaimApp() {
     )
   }
 
-  // Onboarding (first visit only) - matches app design
+  // Onboarding (first visit only) - Tinder-style swipeable cards with drag feedback
   if (showOnboarding === true) {
-    const step = ONBOARDING_STEPS[onboardingStep]
-    const StepIcon = step.icon
-    const isLast = onboardingStep === ONBOARDING_STEPS.length - 1
+    const totalSteps = ONBOARDING_STEPS.length
+    const isLast = onboardingStep === totalSteps - 1
+    const CARD_WIDTH = 340
+    const SWIPE_THRESHOLD = 60
+
+    const goNext = () => {
+      setOnboardingDragX(0)
+      setOnboardingIsDragging(false)
+      if (isLast) finishOnboarding()
+      else setOnboardingStep((s) => Math.min(s + 1, totalSteps - 1))
+    }
+    const goPrev = () => {
+      setOnboardingDragX(0)
+      setOnboardingIsDragging(false)
+      setOnboardingStep((s) => Math.max(s - 1, 0))
+    }
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+      onboardingTouchStartX.current = e.touches[0].clientX
+      onboardingTouchCurrentX.current = e.touches[0].clientX
+    }
+    const handleTouchMove = (e: React.TouchEvent) => {
+      onboardingTouchCurrentX.current = e.touches[0].clientX
+      const diff = onboardingTouchStartX.current - onboardingTouchCurrentX.current
+      setOnboardingDragX(diff)
+    }
+    const handleTouchEnd = () => {
+      const diff = onboardingTouchStartX.current - onboardingTouchCurrentX.current
+      if (diff > SWIPE_THRESHOLD) goNext()
+      else if (diff < -SWIPE_THRESHOLD) goPrev()
+      else {
+        setOnboardingDragX(0)
+      }
+    }
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+      e.preventDefault()
+      onboardingTouchStartX.current = e.clientX
+      onboardingIsDraggingRef.current = true
+    }
+    const handleMouseMove = (e: React.MouseEvent) => {
+      if (!onboardingIsDraggingRef.current) return
+      const diff = onboardingTouchStartX.current - e.clientX
+      onboardingDragXRef.current = diff
+      setOnboardingDragX(diff)
+    }
+    const handleMouseUp = () => {
+      if (!onboardingIsDraggingRef.current) return
+      const diff = onboardingDragXRef.current
+      onboardingIsDraggingRef.current = false
+      if (diff > SWIPE_THRESHOLD) goNext()
+      else if (diff < -SWIPE_THRESHOLD) goPrev()
+      else setOnboardingDragX(0)
+    }
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') goPrev()
+      if (e.key === 'ArrowRight') goNext()
+    }
+
+    // Clamp drag for visual feedback (max ~100px)
+    const dragOffset = Math.max(-100, Math.min(100, onboardingDragX))
+    const dragRotation = (dragOffset / CARD_WIDTH) * 12
+
     return (
-      <div className="fixed inset-0 z-[200] bg-background flex flex-col">
-        <div className="flex gap-1.5 px-4 pt-[max(1.5rem,env(safe-area-inset-top))]">
-          {ONBOARDING_STEPS.map((_, i) => (
-            <div
-              key={i}
-              className={`h-0.5 flex-1 transition-all duration-300 ${
-                i <= onboardingStep ? 'bg-primary' : 'bg-muted'
-              }`}
-            />
-          ))}
-        </div>
+      <div
+        className="fixed inset-0 z-[200] overflow-hidden bg-gradient-to-b from-background via-background to-muted/30"
+        onKeyDown={handleKeyDown}
+        tabIndex={0}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
         <button
           onClick={finishOnboarding}
-          className="absolute right-4 top-[max(1.5rem,env(safe-area-inset-top))] p-2 text-muted-foreground hover:text-foreground transition-colors"
+          className="absolute right-4 top-[max(1.5rem,env(safe-area-inset-top))] z-10 p-2.5 rounded-full bg-black/5 dark:bg-white/5 text-muted-foreground hover:text-foreground hover:bg-black/10 dark:hover:bg-white/10 transition-all"
           aria-label="Skip"
         >
           <X className="w-5 h-5" />
         </button>
-        <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-          <div className="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center mb-6">
-            <StepIcon className="w-8 h-8 text-primary" />
+
+        <div
+          ref={onboardingSwipeRef}
+          className="h-full flex items-center justify-center px-4 pt-16 pb-6"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onMouseDown={handleMouseDown}
+          style={{ touchAction: 'pan-y' }}
+        >
+          <div className="w-full max-w-[360px] relative" style={{ perspective: '1200px' }}>
+            {/* Card stack - show next 2 cards behind */}
+            {ONBOARDING_STEPS.map((step, i) => {
+              const StepIcon = step.icon
+              const isActive = i === onboardingStep
+              const offset = i - onboardingStep
+              const isBehind = offset !== 0
+              const stackScale = 1 - Math.abs(offset) * 0.08
+              const stackZ = 20 - Math.abs(offset) * 2
+
+              const baseX = isActive ? dragOffset : offset * (CARD_WIDTH + 24)
+              const baseRotate = isActive ? dragRotation : 0
+              const opacity = isActive ? (1 - Math.min(1, Math.abs(dragOffset) / 150) * 0.3) : (offset === 0 ? 1 : 0.4)
+
+              return (
+                <div
+                  key={i}
+                  className="absolute inset-0 flex items-center justify-center transition-all duration-200 ease-out"
+                  style={{
+                    zIndex: stackZ,
+                    transform: `translateX(calc(50% - 170px + ${baseX}px)) translateY(0) scale(${stackScale}) rotate(${baseRotate}deg)`,
+                    pointerEvents: isActive ? 'auto' : 'none',
+                  }}
+                >
+                  <div
+                    className={`w-[340px] rounded-[28px] overflow-hidden shadow-2xl border-2 transition-shadow duration-200 ${
+                      isActive ? 'border-primary/30 shadow-primary/10' : 'border-border shadow-xl'
+                    } bg-gradient-to-br ${step.gradient || 'from-card to-card'} min-h-[440px]`}
+                    style={{ opacity: isBehind ? opacity : 1 }}
+                  >
+                    <div className="p-8 flex flex-col items-center text-center h-full">
+                      {(step as { emoji?: string }).emoji && (
+                        <span className="text-4xl mb-3" role="img" aria-hidden>{(step as { emoji?: string }).emoji}</span>
+                      )}
+                      <div
+                        className={`w-28 h-28 rounded-[24px] flex items-center justify-center mb-7 shadow-xl backdrop-blur-sm ${
+                          step.accent === 'text-primary' ? 'bg-primary/20' : 'bg-white/10 dark:bg-black/20'
+                        }`}
+                      >
+                        <StepIcon className={`w-14 h-14 ${step.accent || 'text-primary'}`} />
+                      </div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-3 text-muted-foreground">
+                        Step {i + 1} of {totalSteps}
+                      </p>
+                      <h2 className="text-2xl font-black leading-tight mb-4 text-foreground">
+                        {step.title}
+                      </h2>
+                      <p className="text-[15px] leading-relaxed max-w-[280px] text-muted-foreground">
+                        {step.desc}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">
-            {onboardingStep + 1} of {ONBOARDING_STEPS.length}
-          </p>
-          <h2 className="text-xl font-black text-foreground mb-2 leading-tight">
-            {step.title}
-          </h2>
-          <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
-            {step.desc}
-          </p>
         </div>
-        <div className="px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+
+        <div className="absolute bottom-0 left-0 right-0 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col gap-4">
+          <div className="flex justify-center gap-2.5">
+            {ONBOARDING_STEPS.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => { setOnboardingStep(i); setOnboardingDragX(0) }}
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  i === onboardingStep ? 'w-10 bg-primary' : 'w-2 bg-muted-foreground/30 hover:bg-muted-foreground/50'
+                }`}
+                aria-label={`Go to step ${i + 1}`}
+              />
+            ))}
+          </div>
           <Button
-            onClick={() => {
-              if (isLast) finishOnboarding()
-              else setOnboardingStep((s) => s + 1)
-            }}
-            className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-black text-xs hover:bg-primary/90 active:scale-[0.98]"
+            onClick={goNext}
+            className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-black text-base hover:bg-primary/90 active:scale-[0.98] shadow-xl shadow-primary/20 transition-all"
           >
-            {isLast ? 'Get Started' : 'Next'}
-            {!isLast && <ChevronRight className="w-4 h-4 ml-1" />}
+            {isLast ? 'Check My Wallet' : 'Next'}
+            {!isLast && <ChevronRight className="w-5 h-5 ml-2" />}
           </Button>
+          <p className="text-center text-xs text-muted-foreground flex items-center justify-center gap-1">
+            <ChevronLeft className="w-3.5 h-3.5" />
+            Swipe or tap
+            <ChevronRight className="w-3.5 h-3.5" />
+          </p>
         </div>
       </div>
     )

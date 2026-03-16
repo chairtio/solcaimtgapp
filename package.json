@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "import:xano-users": "npx tsx scripts/import-xano-users.ts",
+    "import:xano-claims": "npx tsx scripts/import-xano-claims.ts"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -42,7 +44,9 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "supabase": "^2.79.0",
     "tailwindcss": "^4",
+    "tsx": "^4.19.2",
     "typescript": "^5"
   }
 }

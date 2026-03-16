@@ -81,16 +81,8 @@ export interface Referral {
 }
 
 export interface UserStats {
-  id: string
-  user_id: string
   total_sol_claimed: number
   total_accounts_closed: number
-  total_tasks_completed: number
-  total_referrals: number
-  current_level: number
-  experience_points: number
-  created_at: string
-  updated_at: string
 }
 
 // User operations
@@ -386,19 +378,19 @@ export async function getReferralByCode(code: string): Promise<Referral | null> 
   return data
 }
 
-// User stats operations
-export async function getUserStats(userId: string): Promise<UserStats | null> {
-  const { data, error } = await supabaseAdmin
-    .from('user_stats')
-    .select('*')
-    .eq('user_id', userId)
-    .single()
+// User stats (computed on-the-fly from transactions)
+export async function getUserStats(userId: string): Promise<UserStats> {
+  const { data, error } = await supabaseAdmin.rpc('get_user_stats', {
+    p_user_id: userId,
+  })
 
-  if (error && error.code !== 'PGRST116') {
-    throw error
+  if (error) throw error
+
+  const row = Array.isArray(data) && data.length > 0 ? data[0] : null
+  return {
+    total_sol_claimed: row ? Number(row.total_sol_claimed) : 0,
+    total_accounts_closed: row ? Number(row.total_accounts_closed) : 0,
   }
-
-  return data
 }
 
 export interface LeaderboardEntry {
@@ -410,63 +402,18 @@ export interface LeaderboardEntry {
 }
 
 export async function getLeaderboard(limit = 10): Promise<LeaderboardEntry[]> {
-  const { data: statsList, error } = await supabaseAdmin
-    .from('user_stats')
-    .select('user_id, total_sol_claimed, total_accounts_closed')
-    .gt('total_sol_claimed', 0)
-    .order('total_sol_claimed', { ascending: false })
-    .limit(limit)
+  const { data, error } = await supabaseAdmin.rpc('get_leaderboard', {
+    p_limit: limit,
+  })
 
   if (error) throw error
-  if (!statsList?.length) return []
+  if (!Array.isArray(data) || data.length === 0) return []
 
-  const userIds = statsList.map((s) => s.user_id)
-  const { data: users } = await supabaseAdmin
-    .from('users')
-    .select('id, first_name, username')
-    .in('id', userIds)
-
-  const userMap = new Map((users || []).map((u) => [u.id, u]))
-
-  return statsList.map((s, i) => ({
-    rank: i + 1,
-    userId: s.user_id,
-    totalSol: Number(s.total_sol_claimed),
-    accountsClosed: Number(s.total_accounts_closed),
-    displayName: userMap.get(s.user_id)?.first_name || userMap.get(s.user_id)?.username || 'Anon',
+  return data.map((row: { rank: number; user_id: string; total_sol: number; total_accounts: number; display_name: string }) => ({
+    rank: Number(row.rank),
+    userId: row.user_id,
+    totalSol: Number(row.total_sol),
+    accountsClosed: Number(row.total_accounts),
+    displayName: row.display_name || 'Anon',
   }))
-}
-
-export async function updateUserStats(userId: string, updates: Partial<UserStats>): Promise<UserStats> {
-  const existing = await getUserStats(userId)
-
-  if (existing) {
-    const { data, error } = await supabaseAdmin
-      .from('user_stats')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('user_id', userId)
-      .select()
-      .single()
-
-    if (error) throw error
-    return data
-  } else {
-    const { data, error } = await supabaseAdmin
-      .from('user_stats')
-      .insert({
-        user_id: userId,
-        total_sol_claimed: 0,
-        total_accounts_closed: 0,
-        total_tasks_completed: 0,
-        total_referrals: 0,
-        current_level: 1,
-        experience_points: 0,
-        ...updates
-      })
-      .select()
-      .single()
-
-    if (error) throw error
-    return data
-  }
 }

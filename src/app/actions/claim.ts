@@ -8,8 +8,6 @@ import {
   getUserById,
   upsertTokenAccounts,
   createTransaction,
-  getUserStats,
-  updateUserStats
 } from '@/lib/database'
 
 export interface ClaimableAccountForAction {
@@ -109,14 +107,6 @@ export async function executeClaimOnServer(params: {
       sol_amount: netAmount,
       accounts_closed: closed.length,
       fee_amount: 0
-    })
-
-    const stats = await getUserStats(userId)
-    const prevSol = stats ? Number(stats.total_sol_claimed) : 0
-    const prevAccounts = stats ? Number(stats.total_accounts_closed) : 0
-    await updateUserStats(userId, {
-      total_sol_claimed: prevSol + netAmount,
-      total_accounts_closed: prevAccounts + closed.length
     })
 
     return {
