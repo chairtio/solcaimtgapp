@@ -2,15 +2,18 @@
  * Import Xano claims.csv into Supabase transactions table.
  *
  * XANO ID MAPPING (all use Xano internal IDs, NOT actual Telegram IDs):
- * - telegram_users.id         = Xano internal user ID (referenced everywhere)
- * - telegram_users.telegram_id = Actual Telegram ID (matches Supabase users.telegram_id)
- * - wallets.telegram_user_id  = References telegram_users.id
- * - claims.telegram_user_id   = References telegram_users.id
- * - claims.wallet_id          = References wallets.id
+ * - telegram_users.id          = Xano internal user ID (referenced everywhere)
+ * - telegram_users.telegram_id  = Actual Telegram ID (matches Supabase users.telegram_id)
+ * - wallets.telegram_user_id    = References telegram_users.id
+ * - claims.wallet_id           = References wallets.id (Xano)
  *
  * Run: npx tsx scripts/import-xano-claims.ts
  *   --dry-run        Preview without inserting
  *   --limit N        Process only N claims
+ *
+ * Requires: Run import-xano-users.ts and import-xano-wallets.ts first.
+ * All wallets must exist in Supabase (no wallet creation).
+ * Skips transactions that already exist (by signature).
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -65,19 +68,23 @@ function parseCSV(content: string): Record<string, string>[] {
     const vals = line.split(',')
     const row: Record<string, string> = {}
     header.forEach((h, j) => {
-      row[h] = vals[j] ?? ''
+      row[h.trim()] = vals[j] ?? ''
     })
     return row
   })
 }
 
+function getCol(row: Record<string, string>, keys: string[]): string {
+  for (const k of keys) {
+    const v = row[k] ?? ''
+    if (v) return v.trim()
+  }
+  return ''
+}
+
 async function main() {
   if (!fs.existsSync(WALLETS_PATH)) {
-    console.error(
-      '\nMissing xano/wallets.csv\n\n' +
-        'Export wallets from Xano with columns: id, telegram_user_id, public_key\n' +
-        '(or id, user_id, public_key / address)\n'
-    )
+    console.error('\nMissing xano/wallets.csv\n\nRun import-xano-wallets.ts first.')
     process.exit(1)
   }
 
@@ -86,79 +93,100 @@ async function main() {
   const walletsRaw = parseCSV(fs.readFileSync(WALLETS_PATH, 'utf-8'))
   const usersRaw = parseCSV(fs.readFileSync(USERS_PATH, 'utf-8'))
 
+  const walletsHeader = fs.readFileSync(WALLETS_PATH, 'utf-8').split(/\r?\n/)[0]?.split(',') ?? []
+  const walletIdKey = walletsHeader.find((h) => h === 'id') ?? walletsHeader[0]
+  const pkKey = walletsHeader.find((h) => h === 'public_key') ?? 'public_key'
+
   // Map: Xano user id -> telegram_id
   const xanoUserIdToTelegram = new Map<string, string>()
   for (const u of usersRaw) {
-    const xanoId = (u.id || u.telegram_user_id || '').trim()
-    const telegramId = (u.telegram_id || '').trim()
+    const xanoId = (u.id ?? u.telegram_user_id ?? '').trim()
+    const telegramId = (u.telegram_id ?? '').trim()
     if (xanoId && telegramId) xanoUserIdToTelegram.set(xanoId, telegramId)
   }
 
   // Map: Xano wallet id -> { telegram_user_id, public_key }
-  const pkCol = walletsRaw[0]?.public_key ? 'public_key' : walletsRaw[0]?.address ? 'address' : 'public_key'
-  const userIdCol = walletsRaw[0]?.telegram_user_id
-    ? 'telegram_user_id'
-    : walletsRaw[0]?.user_id
-      ? 'user_id'
-      : 'telegram_user_id'
-
   const xanoWalletMap = new Map<string, { telegramUserId: string; publicKey: string }>()
   for (const w of walletsRaw) {
-    const wid = (w.id || '').trim()
-    const pubkey = (w[pkCol] || w.public_key || w.address || '').trim()
-    const uid = (w[userIdCol] || w.user_id || '').trim()
+    const wid = getCol(w, [walletIdKey, 'id', walletsHeader[0]])
+    const pubkey = getCol(w, [pkKey, 'public_key'])
+    const uid = (w.telegram_user_id ?? w.user_id ?? '').trim()
     if (wid && pubkey && uid) {
       xanoWalletMap.set(wid, { telegramUserId: uid, publicKey: pubkey })
     }
   }
 
-  // Fetch Supabase users by telegram_id (normalize to string for lookup)
-  const { data: supabaseUsers } = await supabase.from('users').select('id, telegram_id')
+  // Map: telegram_id -> Supabase user_id (paginate - Supabase limits to 1000 rows/request)
   const telegramToSupabaseUser = new Map<string, string>()
-  for (const u of supabaseUsers || []) {
-    const tid = u.telegram_id != null ? String(u.telegram_id) : ''
-    if (tid) telegramToSupabaseUser.set(tid, u.id)
+  let userOffset = 0
+  const userChunk = 1000
+  while (true) {
+    const { data } = await supabase
+      .from('users')
+      .select('id, telegram_id')
+      .order('id', { ascending: true })
+      .range(userOffset, userOffset + userChunk - 1)
+    if (!data?.length) break
+    for (const u of data) {
+      const tid = u.telegram_id != null ? String(u.telegram_id) : ''
+      if (tid) telegramToSupabaseUser.set(tid, u.id)
+    }
+    if (data.length < userChunk) break
+    userOffset += userChunk
+  }
+  console.log(`Loaded ${telegramToSupabaseUser.size} Supabase users for mapping`)
+
+  // Build xano_wallet_id -> supabase_wallet_id map (paginate - Supabase limits to 1000 rows/request)
+  const xanoToSupabaseWallet = new Map<string, string>()
+  const walletLookupKey = new Map<string, string>() // (user_id, public_key) -> supabase wallet_id
+  let walletOffset = 0
+  const walletChunk = 1000
+  while (true) {
+    const { data } = await supabase
+      .from('wallets')
+      .select('id, user_id, public_key')
+      .order('id', { ascending: true })
+      .range(walletOffset, walletOffset + walletChunk - 1)
+    if (!data?.length) break
+    for (const w of data) {
+      walletLookupKey.set(`${w.user_id}:${w.public_key}`, w.id)
+    }
+    if (data.length < walletChunk) break
+    walletOffset += walletChunk
   }
 
-  // Get or create Supabase wallets: (user_id, public_key) -> wallet_id
-  const walletCache = new Map<string, string>()
-  async function getOrCreateWallet(supabaseUserId: string, publicKey: string): Promise<string | null> {
-    const key = `${supabaseUserId}:${publicKey}`
-    if (walletCache.has(key)) return walletCache.get(key)!
-
-    if (DRY_RUN) {
-      walletCache.set(key, `dry-${walletCache.size}`)
-      return walletCache.get(key)!
+  for (const w of walletsRaw) {
+    const xanoWid = getCol(w, [walletIdKey, 'id', walletsHeader[0]])
+    const telegramUserId = (w.telegram_user_id ?? w.user_id ?? '').trim()
+    const publicKey = getCol(w, [pkKey, 'public_key'])
+    const telegramId = xanoUserIdToTelegram.get(telegramUserId)
+    const supabaseUserId = telegramId ? telegramToSupabaseUser.get(telegramId) : null
+    if (xanoWid && supabaseUserId && publicKey) {
+      const supabaseWid = walletLookupKey.get(`${supabaseUserId}:${publicKey}`)
+      if (supabaseWid) xanoToSupabaseWallet.set(xanoWid, supabaseWid)
     }
-
-    const { data: existing } = await supabase
-      .from('wallets')
-      .select('id')
-      .eq('user_id', supabaseUserId)
-      .eq('public_key', publicKey)
-      .maybeSingle()
-
-    if (existing?.id) {
-      walletCache.set(key, existing.id)
-      return existing.id
-    }
-
-    const { data: created, error } = await supabase
-      .from('wallets')
-      .insert({
-        user_id: supabaseUserId,
-        public_key: publicKey,
-        status: 'active',
-      })
-      .select('id')
-      .single()
-
-    if (error) return null
-    walletCache.set(key, created.id)
-    return created.id
   }
 
-  // Build transactions from claims
+  console.log(`Wallet map: ${xanoToSupabaseWallet.size} Xano wallets -> Supabase wallets`)
+
+  // Fetch existing signatures for deduplication (ordered for deterministic pagination)
+  const existingSignatures = new Set<string>()
+  let sigOffset = 0
+  const sigChunk = 10000
+  while (true) {
+    const { data } = await supabase
+      .from('transactions')
+      .select('signature')
+      .order('id', { ascending: true })
+      .range(sigOffset, sigOffset + sigChunk - 1)
+    if (!data?.length) break
+    data.forEach((r) => existingSignatures.add(r.signature))
+    if (data.length < sigChunk) break
+    sigOffset += sigChunk
+  }
+  console.log(`Existing signatures: ${existingSignatures.size}`)
+
+  // Build transactions from claims (no wallet creation)
   const transactions: {
     wallet_id: string
     signature: string
@@ -174,45 +202,49 @@ async function main() {
   let skipNoWallet = 0
   let skipNoUser = 0
   let skipNoSupabaseUser = 0
-  let skipWalletCreate = 0
+  let skipNoSupabaseWallet = 0
+  let skipDupSignature = 0
 
   for (const c of claimsRaw) {
-    const xanoUserId = (c.telegram_user_id || '').trim()
-    const walletInfo = xanoWalletMap.get((c.wallet_id || '').trim())
+    const xanoWalletId = (c.wallet_id ?? '').trim()
+    const walletInfo = xanoWalletMap.get(xanoWalletId)
     if (!walletInfo) {
       skipNoWallet++
       continue
     }
 
-    // telegram_users.id (Xano internal) -> telegram_users.telegram_id (actual)
-    const telegramId = xanoUserIdToTelegram.get(xanoUserId)
+    const telegramId = xanoUserIdToTelegram.get((c.telegram_user_id ?? '').trim())
     if (!telegramId) {
       skipNoUser++
       continue
     }
 
-    // Supabase users.telegram_id (actual) -> users.id
     const supabaseUserId = telegramToSupabaseUser.get(String(telegramId))
     if (!supabaseUserId) {
       skipNoSupabaseUser++
       continue
     }
 
-    const walletId = await getOrCreateWallet(supabaseUserId, walletInfo.publicKey)
-    if (!walletId) {
-      skipWalletCreate++
+    const supabaseWalletId = xanoToSupabaseWallet.get(xanoWalletId)
+    if (!supabaseWalletId) {
+      skipNoSupabaseWallet++
       continue
     }
 
-    const createdMs = parseInt(c.created_at || '0', 10)
-    const createdAt = isNaN(createdMs) ? new Date().toISOString() : new Date(createdMs).toISOString()
+    const signature = (c.tx_id ?? c.signature ?? `claim_${c.id}`).trim()
+    if (existingSignatures.has(signature)) {
+      skipDupSignature++
+      continue
+    }
 
-    const payoutAmount = parseFloat(c.payout_amount || c.amount || '0')
-    const feeAmount = parseFloat(c.fee || '0')
+    const createdMs = parseInt(c.created_at ?? '0', 10)
+    const createdAt = isNaN(createdMs) ? new Date().toISOString() : new Date(createdMs).toISOString()
+    const payoutAmount = parseFloat(c.payout_amount ?? c.amount ?? '0')
+    const feeAmount = parseFloat(c.fee ?? '0')
 
     transactions.push({
-      wallet_id: walletId,
-      signature: (c.tx_id || c.signature || `claim_${c.id}`).trim(),
+      wallet_id: supabaseWalletId,
+      signature,
       type: 'claim_rent',
       status: 'confirmed',
       sol_amount: payoutAmount,
@@ -221,6 +253,7 @@ async function main() {
       created_at: createdAt,
       updated_at: createdAt,
     })
+    existingSignatures.add(signature) // avoid duplicates within this run
   }
 
   let toImport = transactions
@@ -229,9 +262,12 @@ async function main() {
     console.log(`Limited to ${LIMIT} claims`)
   }
 
-  const totalSkipped = skipNoWallet + skipNoUser + skipNoSupabaseUser + skipWalletCreate
+  const totalSkipped =
+    skipNoWallet + skipNoUser + skipNoSupabaseUser + skipNoSupabaseWallet + skipDupSignature
   console.log(
-    `Claims: ${claimsRaw.length}, valid: ${transactions.length}, skipped: ${totalSkipped} (no_wallet:${skipNoWallet}, no_user:${skipNoUser}, no_supabase:${skipNoSupabaseUser}, wallet_fail:${skipWalletCreate}), to import: ${toImport.length}`
+    `Claims: ${claimsRaw.length}, valid: ${transactions.length}, skipped: ${totalSkipped} ` +
+      `(no_wallet:${skipNoWallet}, no_user:${skipNoUser}, no_supabase_user:${skipNoSupabaseUser}, ` +
+      `no_supabase_wallet:${skipNoSupabaseWallet}, dup_signature:${skipDupSignature}), to import: ${toImport.length}`
   )
 
   if (DRY_RUN) {
@@ -259,7 +295,7 @@ async function main() {
     }
 
     inserted += batch.length
-    const pct = ((i + batch.length) / toImport.length * 100).toFixed(1)
+    const pct = (((i + batch.length) / toImport.length) * 100).toFixed(1)
     process.stdout.write(`\rProgress: ${i + batch.length}/${toImport.length} (${pct}%)`)
   }
 

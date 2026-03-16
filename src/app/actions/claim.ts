@@ -6,9 +6,12 @@ import { closeEmptyTokenAccounts } from '@/lib/solana'
 import {
   getWallets,
   getUserById,
+  getReferrerByReferee,
   upsertTokenAccounts,
   createTransaction,
+  createReferralPayout,
 } from '@/lib/database'
+import { getCommissionWallet } from '@/lib/config'
 
 export interface ClaimableAccountForAction {
   accountAddress: string
@@ -68,11 +71,26 @@ export async function executeClaimOnServer(params: {
       return { success: false, error: 'Invalid receiver wallet in Settings. Please update it.' }
     }
 
+    // Look up referrer for 10% referral split (referee = dbUser.telegram_id)
+    const referrer = dbUser?.telegram_id ? await getReferrerByReferee(dbUser.telegram_id) : null
+    const commissionWallet = getCommissionWallet()
+
+    const options =
+      referrer != null || commissionWallet != null
+        ? {
+            referrerWallet:
+              referrer?.receiverWallet != null ? new PublicKey(referrer.receiverWallet) : undefined,
+            referralPercent: referrer?.commissionPercentage ?? 10,
+            commissionWallet: commissionWallet ?? undefined,
+          }
+        : undefined
+
     const result = await closeEmptyTokenAccounts(
       keypair,
       claimableAccounts,
       publicKey,
-      new PublicKey(receiverWallet)
+      new PublicKey(receiverWallet),
+      options
     )
 
     if (result.succeededAccounts.length === 0) {
@@ -85,7 +103,9 @@ export async function executeClaimOnServer(params: {
     const closed = result.succeededAccounts
     const actualRentLamports = closed.reduce((s, a) => s + a.rentAmount, 0)
     const actualRentSol = actualRentLamports / 1e9
-    const netAmount = actualRentSol
+    const feeAmount = result.feeAmount ?? 0
+    const referrerAmount = result.referrerAmount ?? 0
+    const netAmount = actualRentSol - feeAmount - referrerAmount
 
     const dbAccounts = closed.map((acc) => ({
       wallet_id: walletId,
@@ -99,15 +119,23 @@ export async function executeClaimOnServer(params: {
 
     await upsertTokenAccounts(dbAccounts)
 
-    await createTransaction({
+    const tx = await createTransaction({
       wallet_id: walletId,
       signature: result.signatures[0] || 'claim_' + Date.now(),
       type: 'batch_claim',
       status: 'confirmed',
       sol_amount: netAmount,
       accounts_closed: closed.length,
-      fee_amount: 0
+      fee_amount: feeAmount
     })
+
+    if (referrerAmount > 0 && referrer != null) {
+      await createReferralPayout({
+        referrer_id: referrer.referrerId,
+        amount: referrerAmount,
+        transaction_id: tx.id
+      })
+    }
 
     return {
       success: true,

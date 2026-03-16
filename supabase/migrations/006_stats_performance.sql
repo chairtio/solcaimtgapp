@@ -13,3 +13,4 @@ AS $$
   FROM transactions
   WHERE status = 'confirmed';
 $$;
+

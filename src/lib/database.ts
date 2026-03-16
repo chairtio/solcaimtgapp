@@ -76,8 +76,17 @@ export interface Referral {
   status: 'pending' | 'completed' | 'expired'
   reward_claimed: boolean
   reward_amount?: number
+  commission_percentage?: number
   created_at: string
   updated_at: string
+}
+
+export interface ReferralPayout {
+  id: string
+  referrer_id: string
+  amount: number
+  transaction_id: string
+  created_at: string
 }
 
 export interface UserStats {
@@ -376,6 +385,61 @@ export async function getReferralByCode(code: string): Promise<Referral | null> 
   }
 
   return data
+}
+
+/** Get referrer for a referee (by referee telegram_id). Returns null if no referrer. */
+export async function getReferrerByReferee(
+  refereeTelegramId: string
+): Promise<{
+  referrerId: string
+  referrerTelegramId: string
+  receiverWallet: string
+  commissionPercentage: number
+} | null> {
+  const { data: referee, error: refereeError } = await supabaseAdmin
+    .from('users')
+    .select('id')
+    .eq('telegram_id', refereeTelegramId)
+    .single()
+
+  if (refereeError || !referee) return null
+
+  const { data: ref, error: refError } = await supabaseAdmin
+    .from('referrals')
+    .select('referrer_id, commission_percentage')
+    .eq('referee_id', referee.id)
+    .limit(1)
+    .single()
+
+  if (refError || !ref) return null
+
+  const { data: referrerUser, error: userError } = await supabaseAdmin
+    .from('users')
+    .select('telegram_id, receiver_wallet')
+    .eq('id', ref.referrer_id)
+    .single()
+
+  if (userError || !referrerUser?.receiver_wallet?.trim()) return null
+
+  return {
+    referrerId: ref.referrer_id,
+    referrerTelegramId: referrerUser.telegram_id,
+    receiverWallet: referrerUser.receiver_wallet,
+    commissionPercentage: ref.commission_percentage ?? 10
+  }
+}
+
+export async function createReferralPayout(
+  data: Omit<ReferralPayout, 'id' | 'created_at'>
+): Promise<ReferralPayout> {
+  const { data: row, error } = await supabaseAdmin
+    .from('referral_payouts')
+    .insert(data)
+    .select()
+    .single()
+
+  if (error) throw error
+  return row
 }
 
 // User stats (computed on-the-fly from transactions)

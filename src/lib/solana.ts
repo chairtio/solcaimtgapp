@@ -9,6 +9,27 @@ import {
   ComputeBudgetProgram
 } from '@solana/web3.js'
 import {
+  hasPlatformCommission,
+  getCommissionWallet,
+  hasReferralProgram,
+  SOLCLAIM_RENT_PER_ACCOUNT,
+  SOLCLAIM_COMMISSION_PER_ACCOUNT,
+  SOLCLAIM_USER_PAYOUT_BEFORE_REFERRAL,
+  SOLCLAIM_REFERRAL_PERCENT
+} from './config'
+
+export interface CloseEmptyTokenAccountsOptions {
+  /** Referrer's receiver wallet - when set, referrer gets referralPercent of user payout */
+  referrerWallet?: PublicKey
+  /** Referral percent (0-100). Uses config default when not provided. */
+  referralPercent?: number
+  /** Commission wallet - required when platform commission > 0 */
+  commissionWallet?: PublicKey
+  /** Platform commission percent (0-100). Uses config when not provided. */
+  commissionPercent?: number
+}
+
+import {
   TOKEN_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -335,6 +356,18 @@ export interface CloseEmptyTokenAccountsResult {
   errors: string[]
   /** Accounts that were successfully closed (for partial success handling) */
   succeededAccounts: ClaimableAccount[]
+  /** Total fee/commission amount (SOL) when platform commission taken */
+  feeAmount?: number
+  /** Total referrer amount (SOL) when referral payout made */
+  referrerAmount?: number
+}
+
+/** Options for commission and referral splits. When omitted, uses config defaults. */
+export interface CloseEmptyTokenAccountsOptions {
+  referrerWallet?: PublicKey
+  referralPercent?: number
+  commissionWallet?: PublicKey
+  commissionPercent?: number
 }
 
 const COMPUTE_UNITS = 120000
@@ -359,12 +392,14 @@ function getFeePayerKeypair(): Keypair | null {
  * Rent is sent to receiverPublicKey (user's receiver wallet), not the keypair.
  * @param expectedOwner - Wallet address that owns the accounts. Must match keypair.publicKey.
  * @param receiverPublicKey - Where rent lamports are sent. User's receiver wallet from Settings.
+ * @param options - Commission/referral splits. When omitted, 100% goes to user.
  */
 export async function closeEmptyTokenAccounts(
   keypair: Keypair,
   accountsToClose: ClaimableAccount[],
   expectedOwner: string | undefined,
-  receiverPublicKey: PublicKey
+  receiverPublicKey: PublicKey,
+  options?: CloseEmptyTokenAccountsOptions
 ): Promise<CloseEmptyTokenAccountsResult> {
   if (accountsToClose.length === 0) {
     return { success: true, signatures: [], errors: [], succeededAccounts: [] }
@@ -403,11 +438,10 @@ export async function closeEmptyTokenAccounts(
   const signatures: string[] = []
   const errors: string[] = []
   const succeededAccounts: ClaimableAccount[] = []
+  let totalFeeAmount = 0
+  let totalReferrerAmount = 0
   const feePayerPubkey = useFeePayer ? feePayer!.publicKey : keypair.publicKey
   const signers = useFeePayer ? [feePayer!, keypair] : [keypair]
-
-  const isTokenProgram = (a: ClaimableAccount) =>
-    a.programIdStr === TOKEN_PROGRAM_ID.toString() || !a.programIdStr
 
   // --- Phase 1: Collect valid empty accounts (batch into txs) ---
   const emptyAccounts: { acc: ClaimableAccount; programId: typeof TOKEN_PROGRAM_ID | typeof TOKEN_2022_PROGRAM_ID }[] = []
@@ -447,10 +481,26 @@ export async function closeEmptyTokenAccounts(
     emptyAccounts.push({ acc, programId })
   }
 
+  // Determine if we need commission/referral split (close to keypair + transfers)
+  const referrerWallet = options?.referrerWallet ?? null
+  const commissionWallet = options?.commissionWallet ?? getCommissionWallet()
+  const referralPercent = options?.referralPercent ?? SOLCLAIM_REFERRAL_PERCENT
+  const commissionPercent = options?.commissionPercent
+  const needSplit = referrerWallet != null || (commissionWallet != null && (commissionPercent === undefined ? hasPlatformCommission : commissionPercent > 0))
+
   // --- Phase 2: Batch and send empty account closes ---
   const emptyBatches = chunkArray(emptyAccounts, BATCH_SIZE_EMPTY)
   for (const batch of emptyBatches) {
     try {
+      const n = batch.length
+      const totalRent = n * SOLCLAIM_RENT_PER_ACCOUNT
+      const commissionAmount = commissionWallet && (commissionPercent === undefined ? hasPlatformCommission : commissionPercent > 0)
+        ? n * (commissionPercent !== undefined ? SOLCLAIM_RENT_PER_ACCOUNT * (commissionPercent / 100) : SOLCLAIM_COMMISSION_PER_ACCOUNT)
+        : 0
+      const userPayoutBeforeReferral = totalRent - commissionAmount
+      const referrerAmount = referrerWallet ? userPayoutBeforeReferral * (referralPercent / 100) : 0
+      const userReceives = userPayoutBeforeReferral - referrerAmount
+
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
       const tx = new Transaction({
         feePayer: feePayerPubkey,
@@ -458,21 +508,55 @@ export async function closeEmptyTokenAccounts(
         lastValidBlockHeight
       })
       tx.add(
-        ComputeBudgetProgram.setComputeUnitLimit({ units: COMPUTE_UNITS * batch.length }),
+        ComputeBudgetProgram.setComputeUnitLimit({ units: COMPUTE_UNITS * n }),
         ComputeBudgetProgram.setComputeUnitPrice({ microLamports: COMPUTE_PRICE })
       )
+
+      const closeDestination = needSplit ? keypair.publicKey : receiverPublicKey
       for (const { acc, programId } of batch) {
         const accountPubkey = new PublicKey(acc.accountAddress)
         tx.add(
           createCloseAccountInstruction(
             accountPubkey,
-            receiverPublicKey,
+            closeDestination,
             keypair.publicKey,
             [],
             programId
           )
         )
       }
+
+      if (needSplit) {
+        const userLamports = Math.round(userReceives * LAMPORTS_PER_SOL)
+        tx.add(
+          SystemProgram.transfer({
+            fromPubkey: keypair.publicKey,
+            toPubkey: receiverPublicKey,
+            lamports: userLamports
+          })
+        )
+        if (referrerAmount > 0 && referrerWallet) {
+          totalReferrerAmount += referrerAmount
+          tx.add(
+            SystemProgram.transfer({
+              fromPubkey: keypair.publicKey,
+              toPubkey: referrerWallet,
+              lamports: Math.round(referrerAmount * LAMPORTS_PER_SOL)
+            })
+          )
+        }
+        if (commissionAmount > 0 && commissionWallet) {
+          totalFeeAmount += commissionAmount
+          tx.add(
+            SystemProgram.transfer({
+              fromPubkey: keypair.publicKey,
+              toPubkey: commissionWallet,
+              lamports: Math.round(commissionAmount * LAMPORTS_PER_SOL)
+            })
+          )
+        }
+      }
+
       const sig = await sendAndConfirmTransaction(
         connection,
         tx,
@@ -500,7 +584,9 @@ export async function closeEmptyTokenAccounts(
     success: errors.length === 0,
     signatures,
     errors,
-    succeededAccounts
+    succeededAccounts,
+    ...(totalFeeAmount > 0 && { feeAmount: totalFeeAmount }),
+    ...(totalReferrerAmount > 0 && { referrerAmount: totalReferrerAmount })
   }
 }
 
