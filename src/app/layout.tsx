@@ -20,6 +20,14 @@ export const metadata: Metadata = {
   description: "Claim back rent from empty Solana token accounts",
 };
 
+// Prevent mobile zoom/shift on input focus (iOS Safari zooms when input font < 16px)
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
