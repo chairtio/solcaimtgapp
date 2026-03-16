@@ -2,7 +2,7 @@
 
 import { Keypair, PublicKey } from '@solana/web3.js'
 import bs58 from 'bs58'
-import { closeEmptyTokenAccounts } from '@/lib/solana'
+import { closeEmptyTokenAccounts, getClaimableRent } from '@/lib/solana'
 import {
   getWallets,
   getUserById,
@@ -50,6 +50,18 @@ export async function sendClaimNotificationToGroup(params: {
     }
   } catch (e) {
     console.error('[Claim] Failed to send group notification:', e)
+  }
+}
+
+/** Server-side wallet scan – avoids RPC CORS when called from browser. */
+export async function scanWalletForClaimableAction(publicKey: string): Promise<{
+  totalRent: number
+  accounts: { accountAddress: string; mintAddress: string; rentAmount: number; balance: number; tokenName?: string; tokenImage?: string; usdValue?: number; isDust?: boolean; programIdStr?: string }[]
+}> {
+  const result = await getClaimableRent(new PublicKey(publicKey))
+  return {
+    totalRent: result.totalRent,
+    accounts: result.accounts,
   }
 }
 

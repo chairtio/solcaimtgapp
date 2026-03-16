@@ -52,7 +52,7 @@ import {
   deactivateWallet
 } from '@/lib/database'
 import { toast } from 'sonner'
-import { executeClaimOnServer, closeTokenAccountsOnServer, sendClaimNotificationToGroup } from '@/app/actions/claim'
+import { executeClaimOnServer, closeTokenAccountsOnServer, sendClaimNotificationToGroup, scanWalletForClaimableAction } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
 import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardAction, getRecentClaimsAction, getRecentClaimsFreshAction, getUserStatsAction, getReferralStatsAction } from '@/app/actions/stats'
 import { getTasksForUser, verifyAndCompleteTask } from '@/app/actions/tasks'
@@ -116,6 +116,8 @@ export default function SolClaimApp() {
   const [tasksResult, setTasksResult] = useState<Awaited<ReturnType<typeof getTasksForUser>> | null>(null)
   const [tasksLoaded, setTasksLoaded] = useState(false)
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null)
+  const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set())
+  const [shareStoryOpenedIds, setShareStoryOpenedIds] = useState<Set<string>>(new Set())
 
   // Video modal
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
@@ -584,9 +586,13 @@ t.me/solclaimxbot?start=${telegramId}`
   }
 
   const scanAllWallets = async () => {
-    if (!savedWallets.length) return
+    if (!savedWallets.length) {
+      toast.error('No wallets to scan. Add a wallet first.')
+      return
+    }
 
-    const walletsToScan = savedWallets.filter((w) => w.has_key)
+    // Scan uses public key only – keys needed only for claiming
+    const walletsToScan = savedWallets
     if (walletsToScan.length === 0) return
     
     setIsBatchScanning(true)
@@ -599,7 +605,7 @@ t.me/solclaimxbot?start=${telegramId}`
       const walletsWithClaims = []
 
       for (const wallet of walletsToScan) {
-        const result = await getClaimableRent(new PublicKey(wallet.public_key))
+        const result = await scanWalletForClaimableAction(wallet.public_key)
         setBatchScanScannedIds((prev) => [...prev, wallet.id])
         
         if (result.accounts.length > 0) {
@@ -1817,7 +1823,7 @@ t.me/solclaimxbot?start=${telegramId}`
             </div>
 
             {/* Batch Operations - Home-consistent design */}
-            {savedWallets.filter(w => w.has_key).length > 0 && (
+            {savedWallets.length > 0 && (
               <div className="w-full rounded-2xl bg-card border-2 border-border py-4 px-4 shadow-sm space-y-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -1825,7 +1831,7 @@ t.me/solclaimxbot?start=${telegramId}`
                   </div>
                   <div>
                     <h3 className="font-black text-sm text-foreground uppercase tracking-widest">Batch Claim</h3>
-                    <p className="text-[10px] text-muted-foreground">Scan all wallets with keys</p>
+                    <p className="text-[10px] text-muted-foreground">Scan all wallets (add keys to claim)</p>
                   </div>
                 </div>
 
@@ -1952,8 +1958,40 @@ t.me/solclaimxbot?start=${telegramId}`
               ) : (
                 <div className="space-y-3">
                   {tasksResult?.tasks?.map((task) => {
+                    const isShareStory = task.id === 'share_story' && task.media_url
+                    const hasOpenedShareStory = shareStoryOpenedIds.has(task.id)
+                    const isExpanded = expandedTaskIds.has(task.id)
+                    const toggleExpand = () => setExpandedTaskIds((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(task.id)) next.delete(task.id)
+                      else next.add(task.id)
+                      return next
+                    })
+
                     const handleAction = async () => {
                       if (task.completed) return
+
+                      // Share-to-story: first click opens shareToStory, second marks done
+                      if (isShareStory) {
+                        const webApp = typeof window !== 'undefined' ? (window as any).Telegram?.WebApp : null
+                        if (webApp?.shareToStory && task.media_url) {
+                          if (!hasOpenedShareStory) {
+                            try {
+                              webApp.shareToStory(task.media_url)
+                              setShareStoryOpenedIds((prev) => new Set(prev).add(task.id))
+                              toast.success('Share the video to your story, then tap Done to earn points.')
+                            } catch {
+                              window.open(task.media_url!, '_blank')
+                              toast.success('Share the video, then tap Done.')
+                            }
+                            return
+                          }
+                        } else if (task.url) {
+                          window.open(task.url, '_blank', 'noopener,noreferrer')
+                          return
+                        }
+                      }
+
                       if (task.canComplete) {
                         setCompletingTaskId(task.id)
                         try {
@@ -1974,46 +2012,64 @@ t.me/solclaimxbot?start=${telegramId}`
                         window.open(task.url, '_blank', 'noopener,noreferrer')
                       }
                     }
-                    const buttonLabel = task.verification_type === 'manual'
-                      ? 'Done'
-                      : (task.canComplete ? 'Claim' : (task.button_text || 'Go'))
+
+                    const buttonLabel = isShareStory && !hasOpenedShareStory
+                      ? (task.button_text || 'Share Story')
+                      : task.verification_type === 'manual'
+                        ? 'Done'
+                        : (task.canComplete ? 'Claim' : (task.button_text || 'Go'))
+
                     return (
                       <div
                         key={task.id}
-                        className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all ${
-                          task.completed ? 'bg-secondary/30 border-transparent opacity-60' : 'bg-card border-border hover:border-primary/30 shadow-sm group'
+                        className={`rounded-2xl border-2 transition-all overflow-hidden ${
+                          task.completed ? 'bg-secondary/30 border-transparent opacity-60' : 'bg-card border-border hover:border-primary/30 shadow-sm'
                         }`}
                       >
-                        <div className="flex items-center gap-4">
-                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl transition-colors ${
-                            task.completed ? 'bg-background' : 'bg-primary/10 group-hover:bg-primary/20'
+                        <div className="flex flex-wrap items-start gap-3 p-4 sm:p-5 min-w-0">
+                          <div className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center text-2xl ${
+                            task.completed ? 'bg-background' : 'bg-primary/10'
                           }`}>
                             {task.icon || '📌'}
                           </div>
-                          <div>
-                            <h4 className={`font-bold text-base ${task.completed ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
+                          <div className="flex-1 min-w-0">
+                            <h4 className={`font-bold text-sm sm:text-base break-words ${task.completed ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
                               {task.title}
                             </h4>
                             {task.description && (
-                              <p className="text-xs font-medium text-muted-foreground mt-0.5 line-clamp-2">{task.description}</p>
+                              <>
+                                <p className={`text-xs font-medium text-muted-foreground mt-0.5 ${isExpanded ? '' : 'line-clamp-2'}`}>
+                                  {task.description}
+                                </p>
+                                {task.description.length > 80 && (
+                                  <button
+                                    type="button"
+                                    onClick={toggleExpand}
+                                    className="text-[10px] font-bold text-primary mt-1 uppercase tracking-wider flex items-center gap-0.5"
+                                  >
+                                    {isExpanded ? 'Less' : 'More'}
+                                    <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                  </button>
+                                )}
+                              </>
                             )}
                           </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                          <span className={`text-sm font-black ${task.completed ? 'text-muted-foreground' : 'text-primary'}`}>
-                            +{task.points} XP
-                          </span>
-                          {!task.completed && (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              className="text-xs font-bold h-8 px-4 rounded-xl"
-                              onClick={handleAction}
-                              disabled={completingTaskId === task.id}
-                            >
-                              {completingTaskId === task.id ? '...' : buttonLabel}
-                            </Button>
-                          )}
+                          <div className="flex flex-col items-end gap-2 shrink-0 ml-auto">
+                            <span className={`text-sm font-black ${task.completed ? 'text-muted-foreground' : 'text-primary'}`}>
+                              +{task.points} XP
+                            </span>
+                            {!task.completed && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="text-[10px] sm:text-xs font-bold h-8 px-3 sm:px-4 rounded-xl whitespace-nowrap min-w-0"
+                                onClick={handleAction}
+                                disabled={completingTaskId === task.id}
+                              >
+                                {completingTaskId === task.id ? '...' : buttonLabel}
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     )

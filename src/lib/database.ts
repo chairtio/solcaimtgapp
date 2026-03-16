@@ -368,6 +368,7 @@ export interface TaskDefinition {
   verification_type: string
   sort: number
   telegram_channel: string | null
+  media_url: string | null
 }
 
 export async function getTaskDefinitions(): Promise<TaskDefinition[]> {

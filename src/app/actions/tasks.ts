@@ -23,6 +23,7 @@ export interface TaskWithStatus {
   verification_type: string
   telegram_channel: string | null
   sort: number
+  media_url: string | null
   completed: boolean
   completedAt: string | null
   canComplete: boolean
