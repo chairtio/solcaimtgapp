@@ -24,7 +24,7 @@ npm install
 ### 2. Environment Setup
 
 ```bash
-cp .env.local.example .env.local
+cp .env.example .env.local
 ```
 
 Fill in your environment variables:
@@ -240,9 +240,20 @@ Visit `http://localhost:3000` (or the port shown in terminal).
 ## Deployment
 
 ### Vercel (Recommended)
-1. Connect GitHub repository
-2. Set environment variables
-3. Deploy automatically
+
+1. **Connect** your GitHub repository to Vercel.
+2. **Set environment variables** (required for Supabase):
+   - Go to Vercel project → Settings → Environment Variables
+   - Add:
+     - `NEXT_PUBLIC_SUPABASE_URL` – from Supabase Dashboard → Settings → API
+     - `SUPABASE_SERVICE_ROLE_KEY` – from Supabase Dashboard → Settings → API (use Service Role, not anon)
+   - Also add other vars from `.env.example` as needed (Solana RPC, Telegram, etc.)
+3. **Deploy** – Vercel will build and deploy on every push.
+
+**Verify Supabase after deploy:** Visit `https://your-app.vercel.app/api/health`. It returns:
+- `{"ok":true,"database":"connected"}` – everything works
+- `{"ok":false,"error":"missing_env_vars",...}` – add env vars in Vercel
+- `{"ok":false,"error":"tables_missing",...}` – run the SQL migration in Supabase SQL Editor
 
 ### Manual Deployment
 1. Build: `npm run build`

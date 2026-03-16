@@ -883,7 +883,7 @@ export default function SolClaimApp() {
                     placeholder={savedWallets.length === 0 ? 'Paste your public key...' : 'Paste address to scan...'}
                     value={publicKey}
                     onChange={(e) => setPublicKey(e.target.value)}
-                    className="h-12 bg-card border-2 border-border rounded-xl pl-4 pr-10 text-sm text-foreground font-mono placeholder:text-muted-foreground placeholder:font-sans focus-visible:ring-0 focus-visible:border-primary transition-all shadow-sm"
+                    className="h-12 bg-card border-2 border-border rounded-xl pl-4 pr-10 text-base text-foreground font-mono placeholder:text-muted-foreground placeholder:font-sans ring-0 ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary focus-visible:outline-none shadow-sm min-w-0"
                   />
                   {publicKey && (
                     <button 

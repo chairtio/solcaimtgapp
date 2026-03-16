@@ -84,40 +84,60 @@ export function useTelegram() {
           webApp.ready()
         }
 
-        // Check if user exists in database
-        let dbUser = await getUser(telegramUser.id.toString())
+        // Check if user exists in database (with degraded fallback if DB fails)
+        let dbUser: User | null = null
+        let dbError: string | null = null
 
-        if (!dbUser) {
-          // Create new user
-          dbUser = await createUser({
-            telegram_id: telegramUser.id.toString(),
-            username: telegramUser.username,
-            first_name: telegramUser.first_name,
-            last_name: telegramUser.last_name,
-            photo_url: telegramUser.photo_url,
-            is_premium: telegramUser.is_premium || false
-          })
-        } else {
-          // Update user info if needed
-          const needsUpdate =
-            dbUser.username !== telegramUser.username ||
-            dbUser.first_name !== telegramUser.first_name ||
-            dbUser.last_name !== telegramUser.last_name ||
-            dbUser.photo_url !== telegramUser.photo_url ||
-            dbUser.is_premium !== (telegramUser.is_premium || false)
+        try {
+          dbUser = await getUser(telegramUser.id.toString())
 
-          if (needsUpdate) {
-            dbUser = await updateUser(telegramUser.id.toString(), {
+          if (!dbUser) {
+            dbUser = await createUser({
+              telegram_id: telegramUser.id.toString(),
               username: telegramUser.username,
               first_name: telegramUser.first_name,
               last_name: telegramUser.last_name,
               photo_url: telegramUser.photo_url,
               is_premium: telegramUser.is_premium || false
             })
+          } else {
+            const needsUpdate =
+              dbUser.username !== telegramUser.username ||
+              dbUser.first_name !== telegramUser.first_name ||
+              dbUser.last_name !== telegramUser.last_name ||
+              dbUser.photo_url !== telegramUser.photo_url ||
+              dbUser.is_premium !== (telegramUser.is_premium || false)
+
+            if (needsUpdate) {
+              dbUser = await updateUser(telegramUser.id.toString(), {
+                username: telegramUser.username,
+                first_name: telegramUser.first_name,
+                last_name: telegramUser.last_name,
+                photo_url: telegramUser.photo_url,
+                is_premium: telegramUser.is_premium || false
+              })
+            }
+          }
+        } catch (dbErr) {
+          console.error('Database error (using limited mode):', dbErr)
+          const errMsg = dbErr instanceof Error ? dbErr.message : String(dbErr)
+          dbError = `Database unavailable: ${errMsg}. Wallet data won't be saved.`
+          // Degraded mode: create in-memory user so app still works
+          dbUser = {
+            id: `temp-${telegramUser.id}`,
+            telegram_id: telegramUser.id.toString(),
+            username: telegramUser.username,
+            first_name: telegramUser.first_name,
+            last_name: telegramUser.last_name,
+            photo_url: telegramUser.photo_url,
+            is_premium: telegramUser.is_premium || false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           }
         }
 
         setUser(dbUser)
+        setError(dbError)
         setIsLoading(false)
 
         // Expand the WebApp to full height (only in Telegram)
