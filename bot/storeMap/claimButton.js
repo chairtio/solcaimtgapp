@@ -232,7 +232,7 @@ Claim FREE Sol With SolClaim!
             }
             const walletText = results.length === 1 ? 'wallet' : 'wallets';
 
-            const groupMessage = `${icon} New claim: ${escapeMarkdownV2(totalClaimedOverall.toFixed(4))} SOL from ${results.length} ${walletText} by [${escapeMarkdownV2(userFirstName)}](tg://user?id=${userId})`; 
+            const groupMessage = `${icon} New claim: ${escapeMarkdownV2(totalClaimedOverall.toFixed(4))} SOL from ${results.length} ${walletText} by ${escapeMarkdownV2(userFirstName)}`;
             await sendMessageToClaimsTopic(ctx, groupMessage);
 
         }

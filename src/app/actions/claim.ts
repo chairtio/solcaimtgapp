@@ -39,7 +39,7 @@ export async function sendClaimNotificationToGroup(params: {
     const displayName = [dbUser.first_name, dbUser.last_name].filter(Boolean).join(' ').trim() || dbUser.username || 'User'
     const escapedName = displayName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     const walletText = walletCount === 1 ? 'wallet' : 'wallets'
-    const text = `${icon} New claim: ${netAmount.toFixed(4)} SOL from ${walletCount} ${walletText} by <a href="tg://user?id=${dbUser.telegram_id}">${escapedName}</a>`
+    const text = `${icon} New claim: ${netAmount.toFixed(4)} SOL from ${walletCount} ${walletText} by ${escapedName}`
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
