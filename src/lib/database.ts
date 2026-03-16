@@ -426,3 +426,11 @@ export async function getTotalClaimed(): Promise<number> {
   const row = Array.isArray(data) && data.length > 0 ? data[0] : null
   return row ? Number(row.total_sol) : 0
 }
+
+/** Count of distinct users who have at least one confirmed claim */
+export async function getTotalClaimingUsers(): Promise<number> {
+  const { data, error } = await supabaseAdmin.rpc('get_total_claiming_users')
+
+  if (error) throw error
+  return typeof data === 'number' ? data : Number(data ?? 0)
+}

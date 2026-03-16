@@ -53,7 +53,7 @@ import {
 import { toast } from 'sonner'
 import { executeClaimOnServer, closeTokenAccountsOnServer } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
-import { getLeaderboardAction, getTotalClaimedAction, getRecentClaimsAction } from '@/app/actions/stats'
+import { getLeaderboardAction, getTotalClaimedAction, getTotalClaimingUsersAction, getRecentClaimsAction } from '@/app/actions/stats'
 
 interface ClaimableAccount {
   accountAddress: string
@@ -100,6 +100,7 @@ export default function SolClaimApp() {
   const [userStatsLoaded, setUserStatsLoaded] = useState(false)
   const [walletsLoaded, setWalletsLoaded] = useState(false)
   const [totalClaimed, setTotalClaimed] = useState<number | null>(null)
+  const [totalClaimingUsers, setTotalClaimingUsers] = useState<number | null>(null)
   const [leaderboard, setLeaderboard] = useState<{ rank: number; userId: string; totalSol: number; accountsClosed: number; displayName: string }[]>([])
   const [recentClaims, setRecentClaims] = useState<{ signature: string; sol_amount: number; created_at: string }[]>([])
 
@@ -199,6 +200,7 @@ export default function SolClaimApp() {
     }
     if (user && activeTab === 'stats') {
       getTotalClaimedAction().then(setTotalClaimed).catch(() => setTotalClaimed(null))
+      getTotalClaimingUsersAction().then(setTotalClaimingUsers).catch(() => setTotalClaimingUsers(null))
       getLeaderboardAction(10).then(setLeaderboard).catch(() => setLeaderboard([]))
     }
   }, [user, activeTab])
@@ -1884,7 +1886,14 @@ export default function SolClaimApp() {
             </div>
 
             <div className="rounded-2xl bg-card border-2 border-border p-4 shadow-sm">
-              <h3 className="text-xs font-black text-foreground uppercase tracking-widest mb-3">Leaderboard</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-black text-foreground uppercase tracking-widest">Leaderboard</h3>
+                {totalClaimingUsers != null && (
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                    {totalClaimingUsers.toLocaleString()} users claimed
+                  </span>
+                )}
+              </div>
               {leaderboard.length === 0 ? (
                 <p className="text-xs text-muted-foreground py-4 text-center">No claims yet. Be the first!</p>
               ) : (
