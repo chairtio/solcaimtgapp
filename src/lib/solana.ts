@@ -355,10 +355,13 @@ export interface CloseEmptyTokenAccountsResult {
   succeededAccounts: ClaimableAccount[]
 }
 
+const COMPUTE_UNITS = 120000
+const COMPUTE_PRICE = 50000
+
 /**
- * Closes token accounts using spl-token's closeAccount helper (matches official docs).
+ * Closes token accounts. Handles both empty accounts and dust (burn then close).
  * Processes one account per transaction to avoid "owner does not match" (0x4).
- * @param expectedOwner - Wallet address that owns the accounts. Must match keypair.publicKey. Pass claimData.publicKey or publicKey from scan.
+ * @param expectedOwner - Wallet address that owns the accounts. Must match keypair.publicKey.
  */
 export async function closeEmptyTokenAccounts(
   keypair: Keypair,
@@ -383,24 +386,95 @@ export async function closeEmptyTokenAccounts(
   const errors: string[] = []
   const succeededAccounts: ClaimableAccount[] = []
 
-  // Conservative: only empty Token Program
-  const toProcess = accountsToClose.filter(
-    a => a.balance === 0 && (a.programIdStr === TOKEN_PROGRAM_ID.toString() || !a.programIdStr)
-  )
+  // Process: empty Token Program + Token-2022, and dust (balance>0, isDust) Token Program only
+  const isTokenProgram = (a: ClaimableAccount) =>
+    a.programIdStr === TOKEN_PROGRAM_ID.toString() || !a.programIdStr
 
-  for (let i = 0; i < toProcess.length; i++) {
-    const acc = toProcess[i]
+  for (let i = 0; i < accountsToClose.length; i++) {
+    const acc = accountsToClose[i]
     const accountPubkey = new PublicKey(acc.accountAddress)
+    const mintPubkey = new PublicKey(acc.mintAddress)
     let programId: typeof TOKEN_PROGRAM_ID | typeof TOKEN_2022_PROGRAM_ID
     try {
       programId = await resolveTokenProgram(accountPubkey, acc)
     } catch {
+      errors.push(`Account ${i + 1} (${acc.accountAddress}): could not resolve token program`)
       continue
     }
-    if (programId.equals(TOKEN_2022_PROGRAM_ID)) continue
 
+    // Dust (balance > 0): only Token Program for now (burn+close)
+    if (acc.balance > 0) {
+      if (!acc.isDust || !isTokenProgram(acc)) continue
+      if (programId.equals(TOKEN_2022_PROGRAM_ID)) continue
+
+      try {
+        const rawInfo = await connection.getAccountInfo(accountPubkey, 'confirmed')
+        if (!rawInfo?.data || rawInfo.data.length < 64) {
+          errors.push(`Account ${i + 1} (${acc.accountAddress}): invalid account data`)
+          continue
+        }
+        const rawOwner = new PublicKey(rawInfo.data.subarray(32, 64)).toString()
+        if (rawOwner !== signerAddress) {
+          errors.push(`Account ${i + 1}: owned by ${rawOwner}, your keypair: ${signerAddress}`)
+          continue
+        }
+
+        const accountInfo = await getAccount(connection, accountPubkey, 'confirmed', programId)
+        const liveBalance = Number(accountInfo.amount)
+        if (liveBalance === 0) {
+          // Already empty, fall through to close-only path below (we'll reprocess as empty)
+          // For simplicity, build close-only tx
+        }
+
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
+        const tx = new Transaction({
+          feePayer: keypair.publicKey,
+          blockhash,
+          lastValidBlockHeight
+        })
+        tx.add(
+          ComputeBudgetProgram.setComputeUnitLimit({ units: COMPUTE_UNITS }),
+          ComputeBudgetProgram.setComputeUnitPrice({ microLamports: COMPUTE_PRICE })
+        )
+        if (liveBalance > 0) {
+          tx.add(
+            createBurnInstruction(
+              accountPubkey,
+              mintPubkey,
+              keypair.publicKey,
+              liveBalance,
+              [],
+              programId
+            )
+          )
+        }
+        tx.add(
+          createCloseAccountInstruction(
+            accountPubkey,
+            keypair.publicKey,
+            keypair.publicKey,
+            [],
+            programId
+          )
+        )
+        const sig = await sendAndConfirmTransaction(
+          connection,
+          tx,
+          [keypair],
+          { commitment: 'confirmed', skipPreflight: false }
+        )
+        signatures.push(sig)
+        succeededAccounts.push(acc)
+      } catch (error) {
+        const errDetail = error instanceof Error ? error.message : 'Unknown error'
+        errors.push(`Account ${i + 1} (${acc.accountAddress}): ${errDetail}`)
+        console.error(`Failed to burn+close ${acc.accountAddress}:`, error)
+      }
+      continue
+    }
+
+    // Empty accounts: Token Program and Token-2022
     try {
-      // Double-check owner via raw getAccountInfo (SPL layout: owner at bytes 32-64)
       const rawInfo = await connection.getAccountInfo(accountPubkey, 'confirmed')
       if (!rawInfo?.data || rawInfo.data.length < 64) {
         errors.push(`Account ${i + 1} (${acc.accountAddress}): invalid account data`)
@@ -408,7 +482,7 @@ export async function closeEmptyTokenAccounts(
       }
       const rawOwner = new PublicKey(rawInfo.data.subarray(32, 64)).toString()
       if (rawOwner !== signerAddress) {
-        errors.push(`Account ${i + 1} (${acc.accountAddress}): owned by ${rawOwner}, keypair is ${signerAddress}. Use the correct wallet.`)
+        errors.push(`Account ${i + 1}: owned by ${rawOwner}, your keypair: ${signerAddress}`)
         continue
       }
 
@@ -432,7 +506,6 @@ export async function closeEmptyTokenAccounts(
       succeededAccounts.push(acc)
     } catch (error) {
       const errDetail = error instanceof Error ? error.message : 'Unknown error'
-      // If "owner does not match", fetch on-chain owner to help debug
       let hint = ''
       if (String(errDetail).includes('owner does not match')) {
         try {
@@ -446,6 +519,11 @@ export async function closeEmptyTokenAccounts(
       errors.push(`Account ${i + 1} (${acc.accountAddress}): ${errDetail}${hint}`)
       console.error(`Failed to close ${acc.accountAddress}:`, error)
     }
+  }
+
+  // If we had accounts to close but closed none, ensure we don't report success
+  if (accountsToClose.length > 0 && succeededAccounts.length === 0 && errors.length === 0) {
+    errors.push('No accounts could be closed. They may be Token-2022, or the RPC may be rate-limited.')
   }
 
   return {

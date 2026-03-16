@@ -679,12 +679,19 @@ export default function SolClaimApp() {
       const { closeEmptyTokenAccounts } = await import('@/lib/solana');
       const result = await closeEmptyTokenAccounts(keypair, claimableAccounts, publicKey);
       
-      if (!result.success) {
-        throw new Error(`Failed to close some accounts: ${result.errors.join(', ')}`);
+      if (result.succeededAccounts.length === 0) {
+        throw new Error(result.errors.length > 0 ? result.errors.join(', ') : 'No accounts could be closed.');
       }
 
+      // Use actual closed accounts and amounts (partial success is ok)
+      const closed = result.succeededAccounts
+      const actualRentLamports = closed.reduce((s, a) => s + a.rentAmount, 0)
+      const actualRentSol = actualRentLamports / 1e9
+      const feeAmount = actualRentSol * 0.15
+      const netAmount = actualRentSol - feeAmount
+
       // 2. Save the token accounts to the database
-      const dbAccounts = claimableAccounts.map(acc => ({
+      const dbAccounts = closed.map(acc => ({
         wallet_id: walletId,
         account_address: acc.accountAddress,
         mint_address: acc.mintAddress,
@@ -696,30 +703,27 @@ export default function SolClaimApp() {
 
       await upsertTokenAccounts(dbAccounts)
 
-      // 3. Create a pending transaction record
-      const feeAmount = claimableRent * 0.15 // 15% fee
-      const netAmount = claimableRent - feeAmount
-
+      // 3. Create transaction record (use actual closed amounts)
       await createTransaction({
         wallet_id: walletId,
         signature: result.signatures[0] || ('claim_' + Date.now()), 
         type: 'batch_claim',
-        status: 'confirmed', // It's confirmed now!
+        status: 'confirmed',
         sol_amount: netAmount,
-        accounts_closed: claimableAccounts.length,
+        accounts_closed: closed.length,
         fee_amount: feeAmount
       })
 
-      // 4. Update user stats (increment)
+      // 4. Update user stats (use actual closed counts)
       const stats = await getUserStats(user.id)
       const prevSol = stats ? Number(stats.total_sol_claimed) : 0
       const prevAccounts = stats ? Number(stats.total_accounts_closed) : 0
       await updateUserStats(user.id, {
         total_sol_claimed: prevSol + netAmount,
-        total_accounts_closed: prevAccounts + claimableAccounts.length
+        total_accounts_closed: prevAccounts + closed.length
       })
 
-      setSuccess(`Successfully claimed ${(claimableRent * 0.85).toFixed(4)} SOL!`)
+      setSuccess(`Successfully claimed ${netAmount.toFixed(4)} SOL!`)
       setIsSubmittingKey(false)
       
       // Clear the claimable accounts since they are now "claimed"
