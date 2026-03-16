@@ -1250,46 +1250,51 @@ export default function SolClaimApp() {
           )}
         </div>
 
-        {/* Modals for claim flow on last slide */}
+        {/* Modals for claim flow on last slide - same structure & animations as main app */}
         {isLast && (isSetReceiverModalOpen || isSetReceiverModalClosing) && (
           <div
-            className={`fixed inset-0 z-[210] flex items-center justify-center bg-black/80 p-4 ${isSetReceiverModalClosing ? 'animate-out fade-out' : 'animate-in fade-in'}`}
+            className={`fixed inset-0 z-[210] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 ${isSetReceiverModalClosing ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`}
             onClick={closeSetReceiverModal}
+            onAnimationEnd={(e) => e.animationName === 'modal-backdrop-exit' && finishSetReceiverClose()}
           >
             <div
-              className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4"
+              className={`bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl relative overflow-hidden ${isSetReceiverModalClosing ? 'modal-content-exit' : 'modal-content-enter'}`}
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="font-black text-lg">Set receiver wallet</h3>
-              <p className="text-sm text-muted-foreground">Where to receive claimed SOL. Required before first claim.</p>
-              <Input
-                placeholder="Solana address..."
-                value={setReceiverInput}
-                onChange={(e) => setSetReceiverInput(e.target.value)}
-                className="h-12 rounded-xl"
-              />
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Wallet className="w-6 h-6 text-primary" />
+              </div>
+              <h3 className="text-xl font-black text-foreground tracking-tight">Set your receiver wallet</h3>
+              <p className="text-xs text-muted-foreground">
+                Your claimed SOL will be sent here. You control this address. You can change it anytime in Settings.
+              </p>
+              <div className="space-y-2">
+                <Label className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">Solana Address</Label>
+                <Input
+                  placeholder="Paste your receiver address..."
+                  value={setReceiverInput}
+                  onChange={(e) => setSetReceiverInput(e.target.value)}
+                  className="h-12 bg-secondary/50 border-2 border-border rounded-xl font-mono text-base"
+                />
+              </div>
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1 rounded-xl" onClick={closeSetReceiverModal}>Cancel</Button>
+                <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold border-2" onClick={closeSetReceiverModal}>
+                  CANCEL
+                </Button>
                 <Button
-                  className="flex-1 rounded-xl font-black"
-                  onClick={async () => {
-                    if (!user?.telegram_id || !setReceiverInput.trim()) return
-                    setSetReceiverSaving(true)
-                    try {
-                      await updateReceiverWallet(user.telegram_id, setReceiverInput.trim())
-                      await refreshUser()
-                      setIsSetReceiverModalOpen(false)
-                      setPendingClaimAction(null)
-                      if (pendingClaimAction) pendingClaimAction()
-                    } catch (e: any) {
-                      toast.error(e?.message || 'Failed to save')
-                    } finally {
-                      setSetReceiverSaving(false)
-                    }
-                  }}
-                  disabled={setReceiverSaving}
+                  className="flex-1 h-12 rounded-xl bg-primary text-primary-foreground font-black"
+                  onClick={handleSetReceiverSave}
+                  disabled={setReceiverSaving || !setReceiverInput.trim()}
                 >
-                  {setReceiverSaving ? 'Saving...' : 'Save'}
+                  {setReceiverSaving ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                      SAVING...
+                    </div>
+                  ) : (
+                    'Save & Continue'
+                  )}
                 </Button>
               </div>
             </div>
