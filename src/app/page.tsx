@@ -53,6 +53,7 @@ import {
 import { toast } from 'sonner'
 import { executeClaimOnServer, closeTokenAccountsOnServer } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
+import { getLeaderboardAction } from '@/app/actions/stats'
 
 interface ClaimableAccount {
   accountAddress: string
@@ -96,6 +97,7 @@ export default function SolClaimApp() {
   
   // Stats State
   const [userStats, setUserStats] = useState<any>(null)
+  const [leaderboard, setLeaderboard] = useState<{ rank: number; userId: string; totalSol: number; accountsClosed: number; displayName: string }[]>([])
 
   // Video modal
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
@@ -180,6 +182,9 @@ export default function SolClaimApp() {
     if (user && (activeTab === 'stats' || activeTab === 'home')) {
       loadUserStats()
     }
+    if (user && activeTab === 'stats') {
+      getLeaderboardAction(10).then(setLeaderboard).catch(() => setLeaderboard([]))
+    }
   }, [user, activeTab])
 
   // Populate Settings receiver input when tab is active
@@ -217,6 +222,15 @@ export default function SolClaimApp() {
       setUserStats(stats)
     } catch (err) {
       console.error('Failed to load stats:', err)
+    }
+  }
+
+  const loadLeaderboard = async () => {
+    try {
+      const list = await getLeaderboardAction(10)
+      setLeaderboard(list)
+    } catch (err) {
+      console.error('Failed to load leaderboard:', err)
     }
   }
 
@@ -1370,70 +1384,54 @@ export default function SolClaimApp() {
           </TabsContent>
 
           {/* Stats Tab */}
-          <TabsContent value="stats" className="space-y-6 mt-0 outline-none">
-            <div className="px-1 flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-foreground tracking-tight">Statistics</h2>
-                <p className="text-sm font-medium text-muted-foreground mt-1">Your claiming performance</p>
-              </div>
+          <TabsContent value="stats" className="space-y-4 mt-0 outline-none">
+            <div className="px-1">
+              <h2 className="text-base font-black text-foreground uppercase tracking-widest">Statistics</h2>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Your claiming performance</p>
             </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-card border-2 border-border p-6 rounded-3xl shadow-sm flex flex-col items-center justify-center text-center space-y-3 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-16 h-16 bg-primary/10 rounded-full blur-xl -mr-8 -mt-8" />
-                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-1 relative z-10">
-                  <Coins className="w-6 h-6 text-primary" />
-                </div>
-                <p className="text-xs font-bold text-primary uppercase tracking-widest relative z-10">Total Claimed</p>
-                <p className="text-3xl font-black text-foreground relative z-10">
-                  {userStats ? Number(userStats.total_sol_claimed).toFixed(4) : '0.00'} <span className="text-sm font-bold text-primary">SOL</span>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-gradient-to-b from-card to-secondary/30 border-2 border-border py-3 px-4 flex flex-col items-center text-center">
+                <Coins className="w-5 h-5 text-primary mb-1" />
+                <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">Total Claimed</p>
+                <p className="text-xl font-black text-foreground">
+                  {userStats ? Number(userStats.total_sol_claimed).toFixed(4) : '0.00'} <span className="text-xs font-bold text-primary">SOL</span>
                 </p>
               </div>
-              
-              <div className="bg-card border-2 border-border p-6 rounded-3xl shadow-sm flex flex-col items-center justify-center text-center space-y-3 relative overflow-hidden">
-                <div className="absolute bottom-0 left-0 w-16 h-16 bg-primary/10 rounded-full blur-xl -ml-8 -mb-8" />
-                <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center mb-1 relative z-10">
-                  <Trash2 className="w-6 h-6 text-foreground" />
-                </div>
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest relative z-10">Accounts Closed</p>
-                <p className="text-3xl font-black text-foreground relative z-10">
+              <div className="rounded-2xl bg-gradient-to-b from-card to-secondary/30 border-2 border-border py-3 px-4 flex flex-col items-center text-center">
+                <Trash2 className="w-5 h-5 text-muted-foreground mb-1" />
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-0.5">Accounts Closed</p>
+                <p className="text-xl font-black text-foreground">
                   {userStats ? userStats.total_accounts_closed : '0'}
                 </p>
               </div>
             </div>
-            
-            <div className="bg-card border-2 border-border rounded-3xl p-6 shadow-sm relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -mr-16 -mt-16" />
-              <h3 className="font-black text-xl mb-5 relative z-10 text-foreground">Global Leaderboard</h3>
-              <div className="space-y-3 relative z-10">
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-primary/20 to-secondary rounded-2xl border border-primary/20 hover:border-primary/40 transition-colors shadow-sm">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-black text-base shadow-md">
-                      1
+
+            <div className="rounded-2xl bg-card border-2 border-border p-4 shadow-sm">
+              <h3 className="text-xs font-black text-foreground uppercase tracking-widest mb-3">Leaderboard</h3>
+              {leaderboard.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">No claims yet. Be the first!</p>
+              ) : (
+                <div className="space-y-2">
+                  {leaderboard.map((entry) => (
+                    <div
+                      key={entry.userId}
+                      className={`flex items-center justify-between py-2 px-3 rounded-xl border transition-colors ${
+                        user?.id === entry.userId ? 'bg-primary/10 border-primary/20' : 'bg-secondary/30 border-transparent'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-lg bg-background border border-border flex items-center justify-center text-[10px] font-black text-foreground">
+                          {entry.rank}
+                        </span>
+                        <span className="text-xs font-bold text-foreground truncate max-w-[120px]">{entry.displayName}</span>
+                        {user?.id === entry.userId && <span className="text-[9px] font-black text-primary uppercase">You</span>}
+                      </div>
+                      <span className="text-xs font-black text-primary">{entry.totalSol.toFixed(4)} SOL</span>
                     </div>
-                    <span className="font-bold text-base text-foreground">Wallet 7x...9p</span>
-                  </div>
-                  <span className="font-black text-lg text-primary drop-shadow-sm">14.2 SOL</span>
+                  ))}
                 </div>
-                <div className="flex items-center justify-between p-4 bg-secondary/50 rounded-2xl border border-transparent hover:border-border transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-background border-2 border-border text-foreground flex items-center justify-center font-bold text-base">
-                      2
-                    </div>
-                    <span className="font-bold text-base text-foreground">Wallet 3m...2a</span>
-                  </div>
-                  <span className="font-black text-lg text-foreground">8.5 SOL</span>
-                </div>
-                <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-2xl border border-transparent hover:border-border transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-background border-2 border-border text-foreground flex items-center justify-center font-bold text-base">
-                      3
-                    </div>
-                    <span className="font-bold text-base text-foreground">Wallet 9k...4f</span>
-                  </div>
-                  <span className="font-black text-lg text-foreground">5.1 SOL</span>
-                </div>
-              </div>
+              )}
             </div>
           </TabsContent>
 

@@ -401,6 +401,42 @@ export async function getUserStats(userId: string): Promise<UserStats | null> {
   return data
 }
 
+export interface LeaderboardEntry {
+  rank: number
+  userId: string
+  totalSol: number
+  accountsClosed: number
+  displayName: string
+}
+
+export async function getLeaderboard(limit = 10): Promise<LeaderboardEntry[]> {
+  const { data: statsList, error } = await supabaseAdmin
+    .from('user_stats')
+    .select('user_id, total_sol_claimed, total_accounts_closed')
+    .gt('total_sol_claimed', 0)
+    .order('total_sol_claimed', { ascending: false })
+    .limit(limit)
+
+  if (error) throw error
+  if (!statsList?.length) return []
+
+  const userIds = statsList.map((s) => s.user_id)
+  const { data: users } = await supabaseAdmin
+    .from('users')
+    .select('id, first_name, username')
+    .in('id', userIds)
+
+  const userMap = new Map((users || []).map((u) => [u.id, u]))
+
+  return statsList.map((s, i) => ({
+    rank: i + 1,
+    userId: s.user_id,
+    totalSol: Number(s.total_sol_claimed),
+    accountsClosed: Number(s.total_accounts_closed),
+    displayName: userMap.get(s.user_id)?.first_name || userMap.get(s.user_id)?.username || 'Anon',
+  }))
+}
+
 export async function updateUserStats(userId: string, updates: Partial<UserStats>): Promise<UserStats> {
   const existing = await getUserStats(userId)
 
