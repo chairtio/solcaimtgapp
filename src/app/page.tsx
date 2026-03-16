@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -143,6 +143,9 @@ export default function SolClaimApp() {
   const [settingsReceiverInput, setSettingsReceiverInput] = useState('')
   const [settingsReceiverSaving, setSettingsReceiverSaving] = useState(false)
 
+  // Skip receiver check when we just saved in Set Receiver modal (React state not updated yet)
+  const skipReceiverCheckRef = useRef(false)
+
   // Fetch saved wallets when tab changes to wallets/home or on load; userStats for home (promo) and stats
   useEffect(() => {
     if (user && (activeTab === 'wallets' || activeTab === 'home')) {
@@ -260,12 +263,13 @@ export default function SolClaimApp() {
   const handleAddWalletClaim = async () => {
     if (!user || !addWalletKey.trim() || addWalletModalAccounts.length === 0) return
 
-    if (!user.receiver_wallet?.trim()) {
+    if (!user.receiver_wallet?.trim() && !skipReceiverCheckRef.current) {
       setSetReceiverInput(user.receiver_wallet || '')
       setPendingClaimAction(() => handleAddWalletClaim)
       setIsSetReceiverModalOpen(true)
       return
     }
+    skipReceiverCheckRef.current = false
 
     setAddWalletModalClaiming(true)
     setError('')
@@ -497,12 +501,13 @@ export default function SolClaimApp() {
   const claimAllWallets = async () => {
     if (!batchResults || batchResults.walletsWithClaims.length === 0 || !user) return
 
-    if (!user.receiver_wallet?.trim()) {
+    if (!user.receiver_wallet?.trim() && !skipReceiverCheckRef.current) {
       setSetReceiverInput(user.receiver_wallet || '')
       setPendingClaimAction(() => claimAllWallets)
       setIsSetReceiverModalOpen(true)
       return
     }
+    skipReceiverCheckRef.current = false
 
     setIsBatchClaiming(true)
     setError('')
@@ -657,12 +662,13 @@ export default function SolClaimApp() {
       return
     }
 
-    if (!user.receiver_wallet?.trim()) {
+    if (!user.receiver_wallet?.trim() && !skipReceiverCheckRef.current) {
       setSetReceiverInput('')
       setPendingClaimAction(() => claimRent)
       setIsSetReceiverModalOpen(true)
       return
     }
+    skipReceiverCheckRef.current = false
 
     try {
       // 1. First, make sure the user has a wallet record in the database
@@ -886,6 +892,7 @@ export default function SolClaimApp() {
         setIsSetReceiverModalOpen(false)
         setSetReceiverInput('')
         setPendingClaimAction(null)
+        skipReceiverCheckRef.current = true
         await refreshUser()
         if (action) action()
       } else {
