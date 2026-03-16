@@ -88,6 +88,8 @@ export default function SolClaimApp() {
   // Batch Claiming State
   const [isBatchScanning, setIsBatchScanning] = useState(false)
   const [isBatchClaiming, setIsBatchClaiming] = useState(false)
+  const [batchScanScannedIds, setBatchScanScannedIds] = useState<string[]>([])
+  const [batchScanTotal, setBatchScanTotal] = useState(0)
   const [batchResults, setBatchResults] = useState<{
     totalRent: number,
     totalAccounts: number,
@@ -549,19 +551,22 @@ export default function SolClaimApp() {
 
   const scanAllWallets = async () => {
     if (!savedWallets.length) return
+
+    const walletsToScan = savedWallets.filter((w) => w.has_key)
+    if (walletsToScan.length === 0) return
     
     setIsBatchScanning(true)
+    setBatchScanScannedIds([])
+    setBatchScanTotal(walletsToScan.length)
     
     try {
       let totalRent = 0
       let totalAccounts = 0
       const walletsWithClaims = []
 
-      for (const wallet of savedWallets) {
-        // Only scan wallets that have a saved private key
-        if (!wallet.has_key) continue
-
+      for (const wallet of walletsToScan) {
         const result = await getClaimableRent(new PublicKey(wallet.public_key))
+        setBatchScanScannedIds((prev) => [...prev, wallet.id])
         
         if (result.accounts.length > 0) {
           const rentInSol = result.totalRent / 1000000000
@@ -1801,9 +1806,20 @@ export default function SolClaimApp() {
                     </div>
                   </div>
                 ) : (
-                  <Button className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-sm shadow-md shadow-primary/20 active:scale-[0.98] border border-primary-foreground/10" onClick={scanAllWallets} disabled={isBatchScanning}>
-                    {isBatchScanning ? <div className="flex items-center gap-2"><div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground"></div>SCANNING...</div> : 'SCAN ALL WALLETS'}
-                  </Button>
+                  <div className="space-y-3">
+                    {isBatchScanning && batchScanTotal > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                          <span>Scanning wallets</span>
+                          <span>{batchScanScannedIds.length}/{batchScanTotal}</span>
+                        </div>
+                        <Progress value={(batchScanScannedIds.length / batchScanTotal) * 100} className="h-2" />
+                      </div>
+                    )}
+                    <Button className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-sm shadow-md shadow-primary/20 active:scale-[0.98] border border-primary-foreground/10" onClick={scanAllWallets} disabled={isBatchScanning}>
+                      {isBatchScanning ? <div className="flex items-center gap-2"><div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground"></div>SCANNING...</div> : 'SCAN ALL WALLETS'}
+                    </Button>
+                  </div>
                 )}
               </div>
             )}
@@ -1822,7 +1838,7 @@ export default function SolClaimApp() {
                 </div>
               ) : (
                 savedWallets.map((wallet) => (
-                  <div key={wallet.id} className="w-full rounded-2xl bg-card border-2 border-border p-4 shadow-sm hover:border-primary/30 transition-all">
+                  <div key={wallet.id} className={`w-full rounded-2xl border-2 p-4 shadow-sm hover:border-primary/30 transition-all ${batchScanScannedIds.includes(wallet.id) ? 'bg-green-500/10 border-green-500/30' : 'bg-card border-border'}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center shrink-0">
