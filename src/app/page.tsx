@@ -27,7 +27,8 @@ import {
   Trash2,
   ShieldAlert,
   BarChart3,
-  PlayCircle
+  PlayCircle,
+  Settings
 } from 'lucide-react'
 import { getClaimableRent, isValidPublicKey } from '@/lib/solana'
 import { PublicKey, Keypair } from '@solana/web3.js'
@@ -47,6 +48,7 @@ import {
   deactivateWallet
 } from '@/lib/database'
 import { executeClaimOnServer, closeTokenAccountsOnServer } from '@/app/actions/claim'
+import { updateReceiverWallet } from '@/app/actions/user'
 
 interface ClaimableAccount {
   accountAddress: string
@@ -63,7 +65,7 @@ interface ClaimableAccount {
 
 export default function SolClaimApp() {
   const router = useRouter()
-  const { user, isLoading, error: telegramError } = useTelegram()
+  const { user, isLoading, error: telegramError, refreshUser } = useTelegram()
   const [activeTab, setActiveTab] = useState('home')
   const [publicKey, setPublicKey] = useState('')
   const [isScanning, setIsScanning] = useState(false)
@@ -125,6 +127,16 @@ export default function SolClaimApp() {
   const [addKeyWalletId, setAddKeyWalletId] = useState<string | null>(null)
   const [addKeyWalletAddress, setAddKeyWalletAddress] = useState('')
 
+  // Set Receiver modal (required before first claim)
+  const [isSetReceiverModalOpen, setIsSetReceiverModalOpen] = useState(false)
+  const [setReceiverInput, setSetReceiverInput] = useState('')
+  const [setReceiverSaving, setSetReceiverSaving] = useState(false)
+  const [pendingClaimAction, setPendingClaimAction] = useState<(() => void) | null>(null)
+
+  // Settings tab - receiver wallet
+  const [settingsReceiverInput, setSettingsReceiverInput] = useState('')
+  const [settingsReceiverSaving, setSettingsReceiverSaving] = useState(false)
+
   // Fetch saved wallets when tab changes to wallets/home or on load; userStats for home (promo) and stats
   useEffect(() => {
     if (user && (activeTab === 'wallets' || activeTab === 'home')) {
@@ -135,6 +147,13 @@ export default function SolClaimApp() {
     }
   }, [user, activeTab])
 
+  // Populate Settings receiver input when tab is active
+  useEffect(() => {
+    if (activeTab === 'settings' && user?.receiver_wallet) {
+      setSettingsReceiverInput(user.receiver_wallet)
+    }
+  }, [activeTab, user?.receiver_wallet])
+
   // Clear claimable data when scanned address changes - prevents owner mismatch (claiming A's accounts with B's keypair)
   useEffect(() => {
     if (claimableAccounts.length > 0) {
@@ -142,6 +161,13 @@ export default function SolClaimApp() {
       setClaimableRent(0)
     }
   }, [publicKey])
+
+  // Populate Settings receiver input when switching to Settings tab
+  useEffect(() => {
+    if (user && activeTab === 'settings') {
+      setSettingsReceiverInput(user.receiver_wallet || '')
+    }
+  }, [user, activeTab, user?.receiver_wallet])
 
   const loadUserStats = async () => {
     if (!user) return
@@ -227,6 +253,14 @@ export default function SolClaimApp() {
 
   const handleAddWalletClaim = async () => {
     if (!user || !addWalletKey.trim() || addWalletModalAccounts.length === 0) return
+
+    if (!user.receiver_wallet?.trim()) {
+      setSetReceiverInput(user.receiver_wallet || '')
+      setPendingClaimAction(() => handleAddWalletClaim)
+      setIsSetReceiverModalOpen(true)
+      return
+    }
+
     setAddWalletModalClaiming(true)
     setError('')
     try {
@@ -244,6 +278,7 @@ export default function SolClaimApp() {
 
       const result = await closeTokenAccountsOnServer({
         privateKeyBase58: addWalletKey.trim(),
+        userId: user.id,
         claimableAccounts: addWalletModalAccounts.map((a) => ({
           accountAddress: a.accountAddress,
           mintAddress: a.mintAddress,
@@ -432,6 +467,13 @@ export default function SolClaimApp() {
   const claimAllWallets = async () => {
     if (!batchResults || batchResults.walletsWithClaims.length === 0 || !user) return
 
+    if (!user.receiver_wallet?.trim()) {
+      setSetReceiverInput(user.receiver_wallet || '')
+      setPendingClaimAction(() => claimAllWallets)
+      setIsSetReceiverModalOpen(true)
+      return
+    }
+
     setIsBatchClaiming(true)
     setError('')
     
@@ -471,6 +513,7 @@ export default function SolClaimApp() {
 
           const result = await closeTokenAccountsOnServer({
             privateKeyBase58: wallet.encrypted_private_key,
+            userId: user.id,
             claimableAccounts: claimData.accounts.map((a) => ({
               accountAddress: a.accountAddress,
               mintAddress: a.mintAddress,
@@ -581,6 +624,13 @@ export default function SolClaimApp() {
 
     if (claimableAccounts.length === 0) {
       setError('No accounts to claim.')
+      return
+    }
+
+    if (!user.receiver_wallet?.trim()) {
+      setSetReceiverInput('')
+      setPendingClaimAction(() => claimRent)
+      setIsSetReceiverModalOpen(true)
       return
     }
 
@@ -760,6 +810,64 @@ export default function SolClaimApp() {
     setTimeout(() => setCopiedAddress(null), 2000)
   }
 
+  // Populate Settings receiver input when switching to Settings tab
+  useEffect(() => {
+    if (activeTab === 'settings' && user?.receiver_wallet) {
+      setSettingsReceiverInput(user.receiver_wallet)
+    }
+  }, [activeTab, user?.receiver_wallet])
+
+  const handleSaveReceiverWallet = async () => {
+    if (!user?.telegram_id || !settingsReceiverInput.trim()) return
+    if (!isValidPublicKey(settingsReceiverInput.trim())) {
+      setError('Invalid Solana address')
+      return
+    }
+    setSettingsReceiverSaving(true)
+    setError('')
+    try {
+      const result = await updateReceiverWallet(user.telegram_id, settingsReceiverInput.trim())
+      if (result.success) {
+        await refreshUser()
+        setSuccess('Receiver wallet updated')
+        setTimeout(() => setSuccess(''), 2000)
+      } else {
+        setError(result.error || 'Failed to save')
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Failed to save')
+    } finally {
+      setSettingsReceiverSaving(false)
+    }
+  }
+
+  const handleSetReceiverSave = async () => {
+    if (!user?.telegram_id || !setReceiverInput.trim()) return
+    if (!isValidPublicKey(setReceiverInput.trim())) {
+      setError('Invalid Solana address')
+      return
+    }
+    setSetReceiverSaving(true)
+    setError('')
+    try {
+      const result = await updateReceiverWallet(user.telegram_id, setReceiverInput.trim())
+      if (result.success) {
+        const action = pendingClaimAction
+        setIsSetReceiverModalOpen(false)
+        setSetReceiverInput('')
+        setPendingClaimAction(null)
+        await refreshUser()
+        if (action) action()
+      } else {
+        setError(result.error || 'Failed to save')
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Failed to save')
+    } finally {
+      setSetReceiverSaving(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -788,7 +896,7 @@ export default function SolClaimApp() {
                   ) : (
                     <span className="w-5 h-5 rounded-full bg-primary/20 inline-flex items-center justify-center shrink-0 text-[9px] font-black text-primary">{(user.first_name?.[0] || '?').toUpperCase()}</span>
                   )}
-                  Hi, {[user.first_name, user.last_name, user.username && `@${user.username}`].filter(Boolean).join(' ')}
+                  Hi, {user.first_name || 'there'}
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Claim SOL Rent</p>
@@ -1044,7 +1152,7 @@ export default function SolClaimApp() {
                     <div className="p-3 rounded-xl bg-secondary/50 border-2 border-border flex justify-between items-center">
                       <div>
                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-0.5">Total</p>
-                        <p className="font-black text-xl text-foreground">{batchResults.totalRent.toFixed(4)} <span className="text-primary text-sm">SOL</span></p>
+                        <p className="font-black text-xl text-foreground">{(batchResults.totalRent * 0.85).toFixed(4)} <span className="text-primary text-sm">SOL</span></p>
                       </div>
                       <div className="text-right">
                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-0.5">Accounts</p>
@@ -1253,6 +1361,54 @@ export default function SolClaimApp() {
             </div>
           </TabsContent>
 
+          {/* Settings Tab */}
+          <TabsContent value="settings" className="space-y-6 mt-0 outline-none">
+            <div className="px-1">
+              <h2 className="text-xl font-bold text-foreground tracking-tight">Settings</h2>
+              <p className="text-sm font-medium text-muted-foreground mt-1">Manage your receiver wallet</p>
+            </div>
+            <div className="w-full rounded-2xl bg-card border-2 border-border py-5 px-5 shadow-sm space-y-4">
+              <div>
+                <h3 className="font-black text-sm text-foreground uppercase tracking-widest mb-1">Receiver Wallet</h3>
+                <p className="text-xs text-muted-foreground mb-3">Claimed SOL is sent here. You control this address. Change it anytime.</p>
+                <Input
+                  placeholder="Paste your Solana address..."
+                  value={settingsReceiverInput}
+                  onChange={(e) => setSettingsReceiverInput(e.target.value)}
+                  className="h-12 bg-secondary/50 border-2 border-border rounded-xl font-mono text-sm"
+                />
+                {user?.receiver_wallet && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 text-xs"
+                    onClick={() => copyToClipboard(user.receiver_wallet!)}
+                  >
+                    <Copy className="w-3 h-3 mr-1" />
+                    Copy current
+                  </Button>
+                )}
+                <Button
+                  className="mt-4 w-full h-12 rounded-xl bg-primary text-primary-foreground font-black"
+                  onClick={handleSaveReceiverWallet}
+                  disabled={settingsReceiverSaving || !settingsReceiverInput.trim()}
+                >
+                  {settingsReceiverSaving ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                      SAVING...
+                    </div>
+                  ) : (
+                    'SAVE'
+                  )}
+                </Button>
+              </div>
+              <div className="pt-4 border-t border-border">
+                <ThemeToggle />
+              </div>
+            </div>
+          </TabsContent>
+
           {/* Friends Tab */}
           <TabsContent value="friends" className="space-y-6 mt-0 outline-none">
             <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary to-secondary-foreground p-8 text-center shadow-xl border-2 border-primary/20">
@@ -1300,6 +1456,7 @@ export default function SolClaimApp() {
             { id: 'stats', icon: BarChart3, label: 'STATS' },
             { id: 'tasks', icon: Target, label: 'TASKS' },
             { id: 'friends', icon: Users, label: 'INVITE' },
+            { id: 'settings', icon: Settings, label: 'SETTINGS' },
           ].map((tab) => {
             const isActive = activeTab === tab.id
             return (
@@ -1324,14 +1481,68 @@ export default function SolClaimApp() {
         </div>
       </div>
 
+              {/* Set Receiver Modal - shown when claiming without receiver set */}
+      {isSetReceiverModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300 ease-out"
+          onClick={() => { setIsSetReceiverModalOpen(false); setSetReceiverInput(''); setPendingClaimAction(null) }}
+        >
+          <div
+            className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 ease-out relative overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Wallet className="w-6 h-6 text-primary" />
+            </div>
+            <h3 className="text-xl font-black text-foreground tracking-tight">Set your receiver wallet</h3>
+            <p className="text-xs text-muted-foreground">
+              Your claimed SOL will be sent here. You control this address. You can change it anytime in Settings.
+            </p>
+            <div className="space-y-2">
+              <Label className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">Solana Address</Label>
+              <Input
+                placeholder="Paste your receiver address..."
+                value={setReceiverInput}
+                onChange={(e) => setSetReceiverInput(e.target.value)}
+                className="h-12 bg-secondary/50 border-2 border-border rounded-xl font-mono text-sm"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 h-12 rounded-xl font-bold border-2"
+                onClick={() => { setIsSetReceiverModalOpen(false); setSetReceiverInput(''); setPendingClaimAction(null) }}
+              >
+                CANCEL
+              </Button>
+              <Button
+                className="flex-1 h-12 rounded-xl bg-primary text-primary-foreground font-black"
+                onClick={handleSetReceiverSave}
+                disabled={setReceiverSaving || !setReceiverInput.trim()}
+              >
+                {setReceiverSaving ? (
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                    SAVING...
+                  </div>
+                ) : (
+                  'Save & Continue'
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
               {/* Video Modal */}
       {isVideoModalOpen && (
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300 ease-out"
           onClick={() => setIsVideoModalOpen(false)}
         >
           <div 
-            className="bg-card border-2 border-border rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 relative"
+            className="bg-card border-2 border-border rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 ease-out relative"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
@@ -1376,10 +1587,56 @@ export default function SolClaimApp() {
         </div>
       )}
 
+      {/* Set Receiver Modal - shown when claiming without receiver set */}
+      {isSetReceiverModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300 ease-out"
+          onClick={() => { setIsSetReceiverModalOpen(false); setSetReceiverInput(''); setPendingClaimAction(null); }}
+        >
+          <div
+            className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 ease-out relative overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Wallet className="w-6 h-6 text-primary" />
+            </div>
+            <h3 className="text-xl font-black text-foreground tracking-tight">Set your receiver wallet</h3>
+            <p className="text-xs text-muted-foreground">Your claimed SOL will be sent here. You control this address. Change it anytime in Settings.</p>
+            <div className="space-y-2">
+              <Label className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">Solana Address</Label>
+              <Input
+                placeholder="Paste your Solana address..."
+                value={setReceiverInput}
+                onChange={(e) => setSetReceiverInput(e.target.value)}
+                className="h-12 bg-secondary/50 border-2 border-border rounded-xl font-mono text-sm"
+              />
+            </div>
+            <Button
+              className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-black"
+              onClick={handleSetReceiverSave}
+              disabled={setReceiverSaving || !setReceiverInput.trim()}
+            >
+              {setReceiverSaving ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                  SAVING...
+                </div>
+              ) : (
+                'Save & Continue'
+              )}
+            </Button>
+            <Button variant="ghost" className="w-full text-xs text-muted-foreground" onClick={() => { setIsSetReceiverModalOpen(false); setSetReceiverInput(''); setPendingClaimAction(null); }}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
               {/* Add Wallet Modal */}
       {isAddWalletModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200" onClick={closeAddWalletModal}>
-          <div className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl animate-in zoom-in-95 duration-200 relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300 ease-out" onClick={closeAddWalletModal}>
+          <div className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 ease-out relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
               <Plus className="w-6 h-6 text-primary" />
@@ -1450,8 +1707,8 @@ export default function SolClaimApp() {
 
               {/* Private Key Modal */}
       {isKeyModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl animate-in zoom-in-95 duration-200 relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300 ease-out">
+          <div className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 ease-out relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
               <Key className="w-6 h-6 text-primary" />

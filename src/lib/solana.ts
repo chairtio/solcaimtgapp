@@ -15,7 +15,6 @@ import {
   getAssociatedTokenAddress,
   getAccount,
   createCloseAccountInstruction,
-  createBurnInstruction,
   closeAccount as closeAccountHelper
 } from '@solana/spl-token'
 import bs58 from 'bs58'
@@ -111,9 +110,7 @@ export async function getClaimableRent(publicKey: PublicKey): Promise<{
 }> {
   const tokenAccounts = await getWalletTokenAccounts(publicKey)
   
-  // We want to process ALL accounts, not just empty ones
-  // Empty ones can be closed immediately
-  // Non-empty ones need to be checked for value (if < $0.01, they are dust and can be burned)
+  // We process all accounts for metadata; only empty ones (balance=0) are claimable. No burning.
   
   const accountsToProcess = tokenAccounts;
   
@@ -212,8 +209,8 @@ export async function getClaimableRent(publicKey: PublicKey): Promise<{
     }
   })
 
-  // Only return accounts that are empty OR classified as dust
-  const claimableAccounts = accounts.filter(acc => acc.isDust)
+  // Only return EMPTY accounts (balance=0). No burning - close empty only.
+  const claimableAccounts = accounts.filter(acc => acc.balance === 0)
   const totalRent = claimableAccounts.reduce((sum, acc) => sum + acc.rentAmount, 0)
 
   return { totalRent, accounts: claimableAccounts }
@@ -242,9 +239,8 @@ const COMPUTE_UNIT_LIMIT = 100000
 const COMPUTE_UNIT_PRICE_MICROLAMPORTS = 50000
 
 /**
- * Creates a transaction to burn dust tokens and close accounts.
- * Conservative mode (default): only empty Token Program accounts - matches working reference.
- * Set conservativeMode=false to also process Token-2022 and non-empty (burn+close).
+ * Creates a transaction to close empty token accounts (balance=0).
+ * Only empty accounts - no burning.
  */
 export async function createCloseAccountsTransaction(
   walletPublicKey: PublicKey,
@@ -260,14 +256,11 @@ export async function createCloseAccountsTransaction(
     ? accountsToClose.filter(a => a.balance === 0 && (a.programIdStr === TOKEN_PROGRAM_ID.toString() || !a.programIdStr))
     : accountsToClose
 
+  // Only empty accounts - no burning
   const empty = toProcess.filter(a => a.balance === 0)
-  const nonEmpty = toProcess.filter(a => a.balance > 0)
-  // Docs: one CloseAccount per tx - batching multiple can cause "owner does not match"
   const emptyBatches = chunkArray(empty, 1)
-  const nonEmptyBatches = chunkArray(nonEmpty, 1)
-  const allBatches = [...emptyBatches, ...nonEmptyBatches]
 
-  for (const batch of allBatches) {
+  for (const batch of emptyBatches) {
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
     const transaction = new Transaction({
       feePayer: walletPublicKey,
@@ -311,19 +304,8 @@ export async function createCloseAccountsTransaction(
       }
       const liveBalance = Number(accountInfo.amount)
 
-      // If it's not empty, we need to burn the tokens first (use live balance)
-      if (liveBalance > 0) {
-        transaction.add(
-          createBurnInstruction(
-            accountPubkey,
-            mintPubkey,
-            walletPublicKey,
-            liveBalance,
-            [],
-            programId
-          )
-        )
-      }
+      // Only close empty accounts - skip non-empty (no burning)
+      if (liveBalance > 0) continue
 
       // Close: owner = signer (keypair). Docs: "Only the token account owner can execute"
       transaction.add(
@@ -358,7 +340,6 @@ export interface CloseEmptyTokenAccountsResult {
 const COMPUTE_UNITS = 120000
 const COMPUTE_PRICE = 50000
 const BATCH_SIZE_EMPTY = 5  // multiple close instructions per tx
-const BATCH_SIZE_DUST = 2  // burn+close per tx
 
 /** Fee payer keypair from env - pays gas so user wallet can have 0 SOL */
 function getFeePayerKeypair(): Keypair | null {
@@ -375,12 +356,15 @@ function getFeePayerKeypair(): Keypair | null {
 /**
  * Closes token accounts. Batches multiple accounts per tx when possible.
  * Uses fee payer wallet (FEE_PAYER_PRIVATE_KEY) when set - user can have 0 SOL.
+ * Rent is sent to receiverPublicKey (user's receiver wallet), not the keypair.
  * @param expectedOwner - Wallet address that owns the accounts. Must match keypair.publicKey.
+ * @param receiverPublicKey - Where rent lamports are sent. User's receiver wallet from Settings.
  */
 export async function closeEmptyTokenAccounts(
   keypair: Keypair,
   accountsToClose: ClaimableAccount[],
-  expectedOwner?: string
+  expectedOwner: string | undefined,
+  receiverPublicKey: PublicKey
 ): Promise<CloseEmptyTokenAccountsResult> {
   if (accountsToClose.length === 0) {
     return { success: true, signatures: [], errors: [], succeededAccounts: [] }
@@ -439,79 +423,8 @@ export async function closeEmptyTokenAccounts(
       continue
     }
 
-    // Dust (balance > 0): only Token Program for now (burn+close)
-    if (acc.balance > 0) {
-      if (!acc.isDust || !isTokenProgram(acc)) continue
-      if (programId.equals(TOKEN_2022_PROGRAM_ID)) continue
-
-      try {
-        const rawInfo = await connection.getAccountInfo(accountPubkey, 'confirmed')
-        if (!rawInfo?.data || rawInfo.data.length < 64) {
-          errors.push(`Account ${i + 1} (${acc.accountAddress}): invalid account data`)
-          continue
-        }
-        const rawOwner = new PublicKey(rawInfo.data.subarray(32, 64)).toString()
-        if (rawOwner !== signerAddress) {
-          errors.push(`Account ${i + 1}: owned by ${rawOwner}, your keypair: ${signerAddress}`)
-          continue
-        }
-
-        const accountInfo = await getAccount(connection, accountPubkey, 'confirmed', programId)
-        const liveBalance = Number(accountInfo.amount)
-        if (liveBalance === 0) {
-          // Already empty, fall through to close-only path below (we'll reprocess as empty)
-          // For simplicity, build close-only tx
-        }
-
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
-        const tx = new Transaction({
-          feePayer: feePayerPubkey,
-          blockhash,
-          lastValidBlockHeight
-        })
-        tx.add(
-          ComputeBudgetProgram.setComputeUnitLimit({ units: COMPUTE_UNITS }),
-          ComputeBudgetProgram.setComputeUnitPrice({ microLamports: COMPUTE_PRICE })
-        )
-        if (liveBalance > 0) {
-          tx.add(
-            createBurnInstruction(
-              accountPubkey,
-              mintPubkey,
-              keypair.publicKey,
-              liveBalance,
-              [],
-              programId
-            )
-          )
-        }
-        tx.add(
-          createCloseAccountInstruction(
-            accountPubkey,
-            keypair.publicKey,
-            keypair.publicKey,
-            [],
-            programId
-          )
-        )
-        const sig = await sendAndConfirmTransaction(
-          connection,
-          tx,
-          signers,
-          { commitment: 'confirmed', skipPreflight: true }
-        )
-        signatures.push(sig)
-        succeededAccounts.push(acc)
-    } catch (error) {
-      const errDetail = error instanceof Error ? error.message : 'Unknown error'
-      const debitHint = String(errDetail).toLowerCase().includes('attempt to debit') || String(errDetail).toLowerCase().includes('no record of a prior credit')
-        ? ' This usually means your wallet has no SOL for fees. Add ~0.001 SOL to pay for transactions.'
-        : ''
-      errors.push(`Account ${i + 1} (${acc.accountAddress}): ${errDetail}${debitHint}`)
-      console.error(`Failed to burn+close ${acc.accountAddress}:`, error)
-    }
-    continue
-    }
+    // Skip non-empty accounts - we only close empty token accounts (no burning)
+    if (acc.balance > 0) continue
 
     // Empty accounts: collect for batched processing
     const rawInfo = await connection.getAccountInfo(accountPubkey, 'confirmed')
@@ -553,7 +466,7 @@ export async function closeEmptyTokenAccounts(
         tx.add(
           createCloseAccountInstruction(
             accountPubkey,
-            keypair.publicKey,
+            receiverPublicKey,
             keypair.publicKey,
             [],
             programId

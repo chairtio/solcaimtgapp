@@ -156,5 +156,19 @@ export function useTelegram() {
     initTelegram()
   }, [])
 
-  return { user, isLoading, error }
+  const refreshUser = async (): Promise<User | null> => {
+    if (!user?.telegram_id) return null
+    try {
+      const dbUser = await getUser(user.telegram_id)
+      if (dbUser) {
+        setUser(dbUser)
+        return dbUser
+      }
+    } catch (err) {
+      console.error('Error refreshing user:', err)
+    }
+    return null
+  }
+
+  return { user, isLoading, error, refreshUser }
 }

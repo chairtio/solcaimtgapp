@@ -1,10 +1,11 @@
 'use server'
 
-import { Keypair } from '@solana/web3.js'
+import { Keypair, PublicKey } from '@solana/web3.js'
 import bs58 from 'bs58'
 import { closeEmptyTokenAccounts } from '@/lib/solana'
 import {
   getWallets,
+  getUserById,
   upsertTokenAccounts,
   createTransaction,
   getUserStats,
@@ -58,7 +59,23 @@ export async function executeClaimOnServer(params: {
       return { success: false, error: 'Wallet does not match scanned address. Please rescan the correct wallet.' }
     }
 
-    const result = await closeEmptyTokenAccounts(keypair, claimableAccounts, publicKey)
+    const dbUser = await getUserById(userId)
+    const receiverWallet = dbUser?.receiver_wallet?.trim()
+    if (!receiverWallet) {
+      return { success: false, error: 'Set your receiver wallet in Settings first.' }
+    }
+    try {
+      new PublicKey(receiverWallet)
+    } catch {
+      return { success: false, error: 'Invalid receiver wallet in Settings. Please update it.' }
+    }
+
+    const result = await closeEmptyTokenAccounts(
+      keypair,
+      claimableAccounts,
+      publicKey,
+      new PublicKey(receiverWallet)
+    )
 
     if (result.succeededAccounts.length === 0) {
       return {
@@ -121,6 +138,7 @@ export async function executeClaimOnServer(params: {
  */
 export async function closeTokenAccountsOnServer(params: {
   privateKeyBase58: string
+  userId: string
   claimableAccounts: ClaimableAccountForAction[]
   publicKey: string
 }): Promise<{
@@ -134,7 +152,22 @@ export async function closeTokenAccountsOnServer(params: {
     if (keypair.publicKey.toString() !== params.publicKey) {
       return { success: false, error: 'Wallet does not match.', signatures: [], succeededAccounts: [] }
     }
-    const result = await closeEmptyTokenAccounts(keypair, params.claimableAccounts, params.publicKey)
+    const dbUser = await getUserById(params.userId)
+    const receiverWallet = dbUser?.receiver_wallet?.trim()
+    if (!receiverWallet) {
+      return { success: false, error: 'Set your receiver wallet in Settings first.', signatures: [], succeededAccounts: [] }
+    }
+    try {
+      new PublicKey(receiverWallet)
+    } catch {
+      return { success: false, error: 'Invalid receiver wallet in Settings. Please update it.', signatures: [], succeededAccounts: [] }
+    }
+    const result = await closeEmptyTokenAccounts(
+      keypair,
+      params.claimableAccounts,
+      params.publicKey,
+      new PublicKey(receiverWallet)
+    )
     return {
       success: result.succeededAccounts.length > 0,
       error: result.errors.length > 0 ? result.errors.join(', ') : undefined,

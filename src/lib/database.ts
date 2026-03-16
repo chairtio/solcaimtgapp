@@ -12,6 +12,7 @@ export interface User {
   last_name?: string
   photo_url?: string
   is_premium?: boolean
+  receiver_wallet?: string | null
   created_at: string
   updated_at: string
 }
@@ -127,6 +128,20 @@ export async function updateUser(telegramId: string, updates: Partial<User>): Pr
     .single()
 
   if (error) throw error
+  return data
+}
+
+export async function getUserById(userId: string): Promise<User | null> {
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .single()
+
+  if (error && error.code !== 'PGRST116') {
+    throw error
+  }
+
   return data
 }
 
