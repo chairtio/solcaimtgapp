@@ -13,6 +13,46 @@ import {
 } from '@/lib/database'
 import { getCommissionWallet } from '@/lib/config'
 
+/**
+ * Sends a claim notification to the Telegram group claims topic.
+ * Call from all claim paths (home, Add Wallet, batch). Fails silently if env not set.
+ */
+export async function sendClaimNotificationToGroup(params: {
+  userId: string
+  netAmount: number
+  walletCount: number
+}): Promise<void> {
+  const { userId, netAmount, walletCount } = params
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  const chatId = process.env.TELEGRAM_GROUP_CHAT_ID
+  const topicId = parseInt(process.env.TELEGRAM_CLAIM_TOPICS_ID || '247118', 10)
+  if (!token || !chatId) {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('[Claim] TELEGRAM_BOT_TOKEN or TELEGRAM_GROUP_CHAT_ID not set on Vercel – add them in Project Settings → Environment Variables')
+    }
+    return
+  }
+  try {
+    const dbUser = await getUserById(userId)
+    if (!dbUser?.telegram_id) return
+    const icon = netAmount >= 0.1 ? '🟢' : netAmount >= 0.01 ? '🟡' : netAmount >= 0.0015 ? '🟠' : '🔴'
+    const displayName = [dbUser.first_name, dbUser.last_name].filter(Boolean).join(' ').trim() || dbUser.username || 'User'
+    const escapedName = displayName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const walletText = walletCount === 1 ? 'wallet' : 'wallets'
+    const text = `${icon} New claim: ${netAmount.toFixed(4)} SOL from ${walletCount} ${walletText} by <a href="tg://user?id=${dbUser.telegram_id}">${escapedName}</a>`
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, message_thread_id: topicId, text, parse_mode: 'HTML' })
+    })
+    if (!res.ok) {
+      console.error('[Claim] Telegram API error:', res.status, await res.text())
+    }
+  } catch (e) {
+    console.error('[Claim] Failed to send group notification:', e)
+  }
+}
+
 export interface ClaimableAccountForAction {
   accountAddress: string
   mintAddress: string
@@ -138,32 +178,7 @@ export async function executeClaimOnServer(params: {
     }
 
     // Notify group (claims topic) on successful mini app claim
-    if (dbUser?.telegram_id) {
-      try {
-        const token = process.env.TELEGRAM_BOT_TOKEN
-        const chatId = process.env.TELEGRAM_GROUP_CHAT_ID
-        const topicId = parseInt(process.env.TELEGRAM_CLAIM_TOPICS_ID || '247118', 10)
-        if (token && chatId) {
-          const icon = netAmount >= 0.1 ? '🟢' : netAmount >= 0.01 ? '🟡' : netAmount >= 0.0015 ? '🟠' : '🔴'
-          const displayName = [dbUser.first_name, dbUser.last_name].filter(Boolean).join(' ').trim() || dbUser.username || 'User'
-          const escapedName = displayName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-          const walletText = 'wallet' // mini app processes 1 wallet per claim
-          const text = `${icon} New claim: ${netAmount.toFixed(4)} SOL from 1 ${walletText} by <a href="tg://user?id=${dbUser.telegram_id}">${escapedName}</a>`
-          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: chatId,
-              message_thread_id: topicId,
-              text,
-              parse_mode: 'HTML'
-            })
-          })
-        }
-      } catch (e) {
-        console.error('Failed to send claim notification to group:', e)
-      }
-    }
+    await sendClaimNotificationToGroup({ userId, netAmount, walletCount: 1 })
 
     return {
       success: true,

@@ -50,7 +50,7 @@ import {
   deactivateWallet
 } from '@/lib/database'
 import { toast } from 'sonner'
-import { executeClaimOnServer, closeTokenAccountsOnServer } from '@/app/actions/claim'
+import { executeClaimOnServer, closeTokenAccountsOnServer, sendClaimNotificationToGroup } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
 import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardAction, getRecentClaimsAction, getRecentClaimsFreshAction, getUserStatsAction } from '@/app/actions/stats'
 
@@ -411,6 +411,7 @@ export default function SolClaimApp() {
         fee_amount: 0
       })
 
+      sendClaimNotificationToGroup({ userId: user.id, netAmount: succeededRent, walletCount: 1 }).catch(() => {})
       await loadUserStats()
 
       setIsAddWalletModalOpen(false)
@@ -674,7 +675,7 @@ export default function SolClaimApp() {
 
       if (successfulClaims > 0) {
         await loadUserStats()
-
+        sendClaimNotificationToGroup({ userId: user.id, netAmount: totalClaimedSol, walletCount: successfulClaims }).catch(() => {})
         toast.success(`Successfully claimed ${totalClaimedSol.toFixed(4)} SOL from ${successfulClaims} wallets!`)
         setBatchResults(null)
         await loadSavedWallets()
@@ -868,11 +869,9 @@ export default function SolClaimApp() {
       await loadUserStats()
       if (user) getRecentClaimsFreshAction(user.id, 10).then(setRecentClaims).catch(() => {})
 
-      // Clear the claimable accounts since they are now "claimed"
-      setTimeout(() => {
-        setClaimableAccounts([])
-        setClaimableRent(0)
-      }, 3000)
+      // Clear claimable immediately – accounts are now claimed
+      setClaimableAccounts([])
+      setClaimableRent(0)
 
       return true;
     } catch (err: any) {
