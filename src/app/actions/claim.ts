@@ -137,6 +137,34 @@ export async function executeClaimOnServer(params: {
       })
     }
 
+    // Notify group (claims topic) on successful mini app claim
+    if (dbUser?.telegram_id) {
+      try {
+        const token = process.env.TELEGRAM_BOT_TOKEN
+        const chatId = process.env.TELEGRAM_GROUP_CHAT_ID
+        const topicId = parseInt(process.env.TELEGRAM_CLAIM_TOPICS_ID || '247118', 10)
+        if (token && chatId) {
+          const icon = netAmount >= 0.1 ? '🟢' : netAmount >= 0.01 ? '🟡' : netAmount >= 0.0015 ? '🟠' : '🔴'
+          const displayName = [dbUser.first_name, dbUser.last_name].filter(Boolean).join(' ').trim() || dbUser.username || 'User'
+          const escapedName = displayName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          const walletText = 'wallet' // mini app processes 1 wallet per claim
+          const text = `${icon} New claim: ${netAmount.toFixed(4)} SOL from 1 ${walletText} by <a href="tg://user?id=${dbUser.telegram_id}">${escapedName}</a>`
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              message_thread_id: topicId,
+              text,
+              parse_mode: 'HTML'
+            })
+          })
+        }
+      } catch (e) {
+        console.error('Failed to send claim notification to group:', e)
+      }
+    }
+
     return {
       success: true,
       closedCount: closed.length,
