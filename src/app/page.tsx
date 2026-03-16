@@ -45,7 +45,6 @@ import {
   updateWallet,
   upsertTokenAccounts,
   createTransaction,
-  getUserStats,
   getUserWalletsWithStats,
   saveWalletPrivateKey,
   deactivateWallet
@@ -53,7 +52,7 @@ import {
 import { toast } from 'sonner'
 import { executeClaimOnServer, closeTokenAccountsOnServer } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
-import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardAction, getRecentClaimsAction } from '@/app/actions/stats'
+import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardAction, getRecentClaimsAction, getUserStatsAction } from '@/app/actions/stats'
 
 interface ClaimableAccount {
   accountAddress: string
@@ -288,8 +287,7 @@ export default function SolClaimApp() {
     if (!user) return
     setUserStatsLoaded(false)
     try {
-      const { getUserStats } = await import('@/lib/database')
-      const stats = await getUserStats(user.id)
+      const stats = await getUserStatsAction(user.id)
       setUserStats(stats)
     } catch (err) {
       console.error('Failed to load stats:', err)

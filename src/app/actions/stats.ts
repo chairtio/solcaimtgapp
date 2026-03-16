@@ -5,8 +5,29 @@ import {
   getLeaderboard,
   getTotalClaimed,
   getTotalClaimingUsers,
+  getUserStats,
   getUserTransactions,
 } from '@/lib/database'
+
+/** Cached user stats (has claimed?) – used for balance display. Revalidates every 5 min since it only changes on claim. */
+export async function getUserStatsAction(userId: string) {
+  const cached = unstable_cache(
+    () => getUserStats(userId),
+    ['user-stats', userId],
+    { revalidate: 300 }
+  )
+  return cached()
+}
+
+/** Batched stats: one round-trip instead of four when loading the stats tab */
+export async function getStatsPageDataAction() {
+  const [totalClaimed, totalClaimingUsers, leaderboard] = await Promise.all([
+    getTotalClaimedAction(),
+    getTotalClaimingUsersAction(),
+    getLeaderboardAction(10),
+  ])
+  return { totalClaimed, totalClaimingUsers, leaderboard }
+}
 
 /** Exclude #1 (ghost user) and anonymous high-amount users from leaderboard display */
 export async function getLeaderboardAction(limit = 10) {
@@ -42,12 +63,20 @@ export async function getTotalClaimingUsersAction() {
 }
 
 export async function getRecentClaimsAction(userId: string, limit = 10) {
-  const txs = await getUserTransactions(userId, limit)
-  return txs
-    .filter((t) => t.status === 'confirmed' && t.type === 'claim_rent')
-    .map((t) => ({
-      signature: t.signature,
-      sol_amount: Number(t.sol_amount),
-      created_at: t.created_at,
-    }))
+  const cached = unstable_cache(
+    async () => {
+      const txs = await getUserTransactions(userId, limit * 3) // fetch extra since we filter by type
+      return txs
+        .filter((t) => t.status === 'confirmed' && t.type === 'claim_rent')
+        .slice(0, limit)
+        .map((t) => ({
+          signature: t.signature,
+          sol_amount: Number(t.sol_amount),
+          created_at: t.created_at,
+        }))
+    },
+    ['stats-recent-claims', userId, String(limit)],
+    { revalidate: 60 }
+  )
+  return cached()
 }
