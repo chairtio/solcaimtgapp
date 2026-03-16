@@ -38,14 +38,15 @@ import {
   getWalletByPublicKey,
   createWallet, 
   updateWallet,
-  upsertTokenAccounts, 
-  createTransaction, 
-  updateUserStats,
+  upsertTokenAccounts,
+  createTransaction,
   getUserStats,
+  updateUserStats,
   getUserWalletsWithStats,
   saveWalletPrivateKey,
   deactivateWallet
 } from '@/lib/database'
+import { executeClaimOnServer, closeTokenAccountsOnServer } from '@/app/actions/claim'
 
 interface ClaimableAccount {
   accountAddress: string
@@ -57,6 +58,7 @@ interface ClaimableAccount {
   usdValue?: number
   isEmpty?: boolean
   isDust?: boolean
+  programIdStr?: string
 }
 
 export default function SolClaimApp() {
@@ -240,11 +242,21 @@ export default function SolClaimApp() {
         walletId = w.id
       }
 
-      const { closeEmptyTokenAccounts } = await import('@/lib/solana')
-      const result = await closeEmptyTokenAccounts(kp, addWalletModalAccounts, addWalletDerivedAddress)
-      if (!result.success) throw new Error(result.errors.join(', '))
+      const result = await closeTokenAccountsOnServer({
+        privateKeyBase58: addWalletKey.trim(),
+        claimableAccounts: addWalletModalAccounts.map((a) => ({
+          accountAddress: a.accountAddress,
+          mintAddress: a.mintAddress,
+          rentAmount: a.rentAmount,
+          balance: a.balance,
+          isDust: a.isDust,
+          programIdStr: a.programIdStr
+        })),
+        publicKey: addWalletDerivedAddress
+      })
+      if (result.succeededAccounts.length === 0) throw new Error(result.error || 'Claim failed')
 
-      const dbAccounts = addWalletModalAccounts.map(acc => ({
+      const dbAccounts = result.succeededAccounts.map(acc => ({
         wallet_id: walletId,
         account_address: acc.accountAddress,
         mint_address: acc.mintAddress,
@@ -255,16 +267,17 @@ export default function SolClaimApp() {
       }))
       await upsertTokenAccounts(dbAccounts)
 
-      const feeAmount = addWalletModalRent * 0.15
-      const netAmount = addWalletModalRent - feeAmount
-      const txSig = result.signatures[0]
+      const succeededRent = result.succeededAccounts.reduce((s, a) => s + a.rentAmount, 0) / 1e9
+      const feeAmount = succeededRent * 0.15
+      const netAmount = succeededRent - feeAmount
+
       await createTransaction({
         wallet_id: walletId,
         signature: result.signatures[0] || ('claim_' + Date.now()),
         type: 'batch_claim',
         status: 'confirmed',
         sol_amount: netAmount,
-        accounts_closed: addWalletModalAccounts.length,
+        accounts_closed: result.succeededAccounts.length,
         fee_amount: feeAmount
       })
 
@@ -273,7 +286,7 @@ export default function SolClaimApp() {
       const prevAccounts = stats ? Number(stats.total_accounts_closed) : 0
       await updateUserStats(user.id, {
         total_sol_claimed: prevSol + netAmount,
-        total_accounts_closed: prevAccounts + addWalletModalAccounts.length
+        total_accounts_closed: prevAccounts + result.succeededAccounts.length
       })
 
       setIsAddWalletModalOpen(false)
@@ -282,7 +295,7 @@ export default function SolClaimApp() {
       setAddWalletModalRent(0)
       setAddWalletDerivedAddress('')
       await loadSavedWallets()
-      setSuccess(`Claimed ${(addWalletModalRent * 0.85).toFixed(4)} SOL & wallet added`)
+      setSuccess(`Claimed ${(netAmount).toFixed(4)} SOL & wallet added`)
       setTimeout(() => setSuccess(''), 3000)
     } catch (e: any) {
       setError(e?.message || 'Claim failed')
@@ -425,7 +438,7 @@ export default function SolClaimApp() {
     let successfulClaims = 0
     let failedClaims = 0
     let totalClaimedSol = 0
-    let firstTxSignature: string | null = null
+    let totalAccountsClosed = 0
 
     try {
       // Re-fetch wallets to get the actual private keys
@@ -456,8 +469,18 @@ export default function SolClaimApp() {
             continue
           }
 
-          const { closeEmptyTokenAccounts } = await import('@/lib/solana')
-          const result = await closeEmptyTokenAccounts(keypair, claimData.accounts, claimData.publicKey)
+          const result = await closeTokenAccountsOnServer({
+            privateKeyBase58: wallet.encrypted_private_key,
+            claimableAccounts: claimData.accounts.map((a) => ({
+              accountAddress: a.accountAddress,
+              mintAddress: a.mintAddress,
+              rentAmount: a.rentAmount,
+              balance: a.balance,
+              isDust: a.isDust,
+              programIdStr: a.programIdStr
+            })),
+            publicKey: claimData.publicKey
+          })
 
           const succeededAccounts = result.succeededAccounts ?? []
           if (succeededAccounts.length > 0) {
@@ -670,60 +693,27 @@ export default function SolClaimApp() {
         }
       }
 
-      // Verify keypair owns claimableAccounts - prevents "owner does not match" (claiming A's accounts with B's keypair)
-      if (keypair.publicKey.toString() !== publicKey) {
-        throw new Error('Wallet does not match scanned address. Please rescan the correct wallet.')
-      }
-
-      // Actually execute the Solana transaction!
-      const { closeEmptyTokenAccounts } = await import('@/lib/solana');
-      const result = await closeEmptyTokenAccounts(keypair, claimableAccounts, publicKey);
-      
-      if (result.succeededAccounts.length === 0) {
-        throw new Error(result.errors.length > 0 ? result.errors.join(', ') : 'No accounts could be closed.');
-      }
-
-      // Use actual closed accounts and amounts (partial success is ok)
-      const closed = result.succeededAccounts
-      const actualRentLamports = closed.reduce((s, a) => s + a.rentAmount, 0)
-      const actualRentSol = actualRentLamports / 1e9
-      const feeAmount = actualRentSol * 0.15
-      const netAmount = actualRentSol - feeAmount
-
-      // 2. Save the token accounts to the database
-      const dbAccounts = closed.map(acc => ({
-        wallet_id: walletId,
-        account_address: acc.accountAddress,
-        mint_address: acc.mintAddress,
-        balance: acc.balance,
-        rent_amount: acc.rentAmount,
-        is_empty: true,
-        last_scanned: new Date().toISOString()
-      }))
-
-      await upsertTokenAccounts(dbAccounts)
-
-      // 3. Create transaction record (use actual closed amounts)
-      await createTransaction({
-        wallet_id: walletId,
-        signature: result.signatures[0] || ('claim_' + Date.now()), 
-        type: 'batch_claim',
-        status: 'confirmed',
-        sol_amount: netAmount,
-        accounts_closed: closed.length,
-        fee_amount: feeAmount
+      // Execute on server so FEE_PAYER_PRIVATE_KEY is available (not exposed to client)
+      const result = await executeClaimOnServer({
+        privateKeyBase58: privateKeyString,
+        walletId,
+        userId: user.id,
+        claimableAccounts: claimableAccounts.map((a) => ({
+          accountAddress: a.accountAddress,
+          mintAddress: a.mintAddress,
+          rentAmount: a.rentAmount,
+          balance: a.balance,
+          isDust: a.isDust,
+          programIdStr: a.programIdStr
+        })),
+        publicKey
       })
 
-      // 4. Update user stats (use actual closed counts)
-      const stats = await getUserStats(user.id)
-      const prevSol = stats ? Number(stats.total_sol_claimed) : 0
-      const prevAccounts = stats ? Number(stats.total_accounts_closed) : 0
-      await updateUserStats(user.id, {
-        total_sol_claimed: prevSol + netAmount,
-        total_accounts_closed: prevAccounts + closed.length
-      })
+      if (!result.success) {
+        throw new Error(result.error)
+      }
 
-      setSuccess(`Successfully claimed ${netAmount.toFixed(4)} SOL!`)
+      setSuccess(`Successfully claimed ${result.netAmount!.toFixed(4)} SOL!`)
       setIsSubmittingKey(false)
       
       // Clear the claimable accounts since they are now "claimed"
