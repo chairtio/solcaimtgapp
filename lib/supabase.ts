@@ -8,9 +8,9 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 // Browser client for client-side operations
 export const supabase = createBrowserClient(supabaseUrl, supabaseKey)
 
-// Server client for server-side operations
-export function createSupabaseServerClient() {
-  const cookieStore = cookies()
+// Server client for server-side operations (Next.js 15+ cookies() is async)
+export async function createSupabaseServerClient() {
+  const cookieStore = await cookies()
 
   return createServerClient(supabaseUrl, supabaseKey, {
     cookies: {

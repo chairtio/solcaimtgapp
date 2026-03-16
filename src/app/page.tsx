@@ -489,8 +489,8 @@ export default function SolClaimApp() {
 
             successfulClaims++
             totalClaimedSol += netAmount
-            if (numSucceeded < claimData.accounts.length) {
-              console.warn(`Partial success: closed ${numSucceeded}/${claimData.accounts.length} accounts for ${claimData.publicKey}`)
+            if (succeededAccounts.length < claimData.accounts.length) {
+              console.warn(`Partial success: closed ${succeededAccounts.length}/${claimData.accounts.length} accounts for ${claimData.publicKey}`)
             }
           } else {
             failedClaims++
