@@ -13,6 +13,7 @@ import {
   Wallet,
   Coins,
   Users,
+  Share2,
   CheckCircle,
   Copy,
   Target,
@@ -2053,29 +2054,42 @@ export default function SolClaimApp() {
 
           {/* Friends Tab */}
           <TabsContent value="friends" className="space-y-6 mt-0 outline-none">
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary to-secondary-foreground p-8 text-center shadow-xl border-2 border-primary/20">
-              <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
-              <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl" />
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary to-secondary-foreground p-5 text-center shadow-lg border-2 border-primary/20">
+              <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay" />
+              <div className="absolute -right-6 -top-6 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
               <div className="relative z-10">
-                <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center mx-auto mb-5 shadow-inner border border-white/20">
-                  <Gift className="w-8 h-8 text-white drop-shadow-md" />
+                <div className="w-12 h-12 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center mx-auto mb-3 shadow-inner border border-white/20">
+                  <Gift className="w-6 h-6 text-white drop-shadow-md" />
                 </div>
-                <h2 className="text-3xl font-black text-white tracking-tight mb-2 drop-shadow-sm">Invite & Earn</h2>
-                <p className="text-white/90 text-sm font-medium mb-8 max-w-[240px] mx-auto leading-relaxed">
-                  Get <span className="font-black text-white bg-white/20 px-2 py-0.5 rounded-md">0.01 SOL</span> for every friend who joins and claims rent.
+                <h2 className="text-xl font-black text-white tracking-tight mb-1 drop-shadow-sm">Invite & Earn</h2>
+                <p className="text-white/90 text-xs font-medium mb-4 max-w-[260px] mx-auto leading-relaxed">
+                  {referralStatsLoaded && (referralStats?.commission_percentage ?? 10) > 0
+                    ? `Get ${referralStats?.commission_percentage ?? 10}% profit share when friends claim rent.`
+                    : 'Get 10% profit share when friends claim rent.'}
                 </p>
-                <Button
-                  className="w-full h-14 rounded-2xl bg-white text-primary hover:bg-gray-50 font-black text-lg shadow-xl active:scale-[0.98] transition-all"
-                  onClick={async () => {
-                    const inviteUrl = `https://t.me/solclaimxbot?start=${user?.telegram_id || ''}`
-                    await copyToClipboard(inviteUrl)
-                    toast.success('Invite link copied!')
-                  }}
-                  disabled={!user?.telegram_id}
-                >
-                  <Copy className="w-5 h-5 mr-2" />
-                  COPY INVITE LINK
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-11 rounded-xl bg-white/10 border-white/30 text-white hover:bg-white/20 font-bold text-sm active:scale-[0.98] transition-all"
+                    onClick={openSharePopup}
+                    disabled={!user?.telegram_id}
+                  >
+                    <Share2 className="w-4 h-4 mr-1.5" />
+                    Share with friends
+                  </Button>
+                  <Button
+                    className="flex-1 h-11 rounded-xl bg-white text-primary hover:bg-gray-50 font-bold text-sm shadow-lg active:scale-[0.98] transition-all"
+                    onClick={async () => {
+                      const inviteUrl = `https://t.me/solclaimxbot?start=${user?.telegram_id || ''}`
+                      await copyToClipboard(inviteUrl)
+                      toast.success('Invite link copied!')
+                    }}
+                    disabled={!user?.telegram_id}
+                  >
+                    <Copy className="w-4 h-4 mr-1.5" />
+                    Copy Link
+                  </Button>
+                </div>
               </div>
             </div>
 
