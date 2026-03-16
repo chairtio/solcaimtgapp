@@ -415,17 +415,20 @@ export async function getReferrerByReferee(
 
   const { data: referrerUser, error: userError } = await supabaseAdmin
     .from('users')
-    .select('telegram_id, receiver_wallet')
+    .select('telegram_id, receiver_wallet, referrer_commission_percent')
     .eq('id', ref.referrer_id)
     .single()
 
   if (userError || !referrerUser?.receiver_wallet?.trim()) return null
 
+  const effectiveCommission =
+    referrerUser.referrer_commission_percent ?? ref.commission_percentage ?? 10
+
   return {
     referrerId: ref.referrer_id,
     referrerTelegramId: referrerUser.telegram_id,
     receiverWallet: referrerUser.receiver_wallet,
-    commissionPercentage: ref.commission_percentage ?? 10
+    commissionPercentage: effectiveCommission
   }
 }
 
@@ -440,6 +443,26 @@ export async function createReferralPayout(
 
   if (error) throw error
   return row
+}
+
+/** Referral payout stats for Invite tab – total earned, referral count, etc. */
+export async function getReferralPayoutStats(telegramId: string): Promise<{
+  total_ref_payout_amount: number
+  total_referred_users: number
+  num_referred_users_made_claims: number
+  commission_percentage: number
+}> {
+  const { data, error } = await supabaseAdmin.rpc('get_ref_payout_stats', {
+    p_telegram_id: String(telegramId),
+  })
+  if (error) throw error
+  const row = Array.isArray(data) && data[0] ? data[0] : null
+  return {
+    total_ref_payout_amount: row ? Number(row.total_ref_payout_amount ?? 0) : 0,
+    total_referred_users: row ? Number(row.total_referred_users ?? 0) : 0,
+    num_referred_users_made_claims: row ? Number(row.num_referred_users_made_claims ?? 0) : 0,
+    commission_percentage: row ? Number(row.commission_percentage ?? 10) : 10,
+  }
 }
 
 // User stats (computed on-the-fly from transactions)
