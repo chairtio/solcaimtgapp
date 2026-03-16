@@ -1163,7 +1163,7 @@ export default function SolClaimApp() {
                             className="h-12 rounded-xl font-mono text-sm"
                           />
                           <Button
-                            onClick={scanWallet}
+                            onClick={() => scanWallet()}
                             disabled={isScanning || !publicKey}
                             className="w-full h-12 rounded-xl bg-primary font-black"
                           >
@@ -1597,7 +1597,7 @@ export default function SolClaimApp() {
               </div>
 
               <Button
-                onClick={scanWallet}
+                onClick={() => scanWallet()}
                 disabled={isScanning || !publicKey}
                 className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-base shadow-md shadow-primary/20 transition-all active:scale-[0.98] border border-primary-foreground/10"
               >
