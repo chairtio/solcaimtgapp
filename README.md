@@ -247,6 +247,7 @@ Visit `http://localhost:3000` (or the port shown in terminal).
    - Add:
      - `NEXT_PUBLIC_SUPABASE_URL` – from Supabase Dashboard → Settings → API
      - `SUPABASE_SERVICE_ROLE_KEY` – from Supabase Dashboard → Settings → API (use Service Role, not anon)
+   - **Fee payer (recommended):** `FEE_PAYER_PRIVATE_KEY` – base58 private key of a wallet that pays gas. Lets users claim with 0 SOL.
    - Also add other vars from `.env.example` as needed (Solana RPC, Telegram, etc.)
 3. **Deploy** – Vercel will build and deploy on every push.
 

@@ -357,10 +357,24 @@ export interface CloseEmptyTokenAccountsResult {
 
 const COMPUTE_UNITS = 120000
 const COMPUTE_PRICE = 50000
+const BATCH_SIZE_EMPTY = 5  // multiple close instructions per tx
+const BATCH_SIZE_DUST = 2  // burn+close per tx
+
+/** Fee payer keypair from env - pays gas so user wallet can have 0 SOL */
+function getFeePayerKeypair(): Keypair | null {
+  const key = process.env.FEE_PAYER_PRIVATE_KEY
+  if (!key?.trim()) return null
+  try {
+    return Keypair.fromSecretKey(bs58.decode(key.trim()))
+  } catch {
+    console.warn('FEE_PAYER_PRIVATE_KEY invalid, using user wallet for fees')
+    return null
+  }
+}
 
 /**
- * Closes token accounts. Handles both empty accounts and dust (burn then close).
- * Processes one account per transaction to avoid "owner does not match" (0x4).
+ * Closes token accounts. Batches multiple accounts per tx when possible.
+ * Uses fee payer wallet (FEE_PAYER_PRIVATE_KEY) when set - user can have 0 SOL.
  * @param expectedOwner - Wallet address that owns the accounts. Must match keypair.publicKey.
  */
 export async function closeEmptyTokenAccounts(
@@ -382,29 +396,37 @@ export async function closeEmptyTokenAccounts(
     }
   }
 
-  // Wallet needs SOL to pay for tx fees. "Attempt to debit... no prior credit" = 0 or very low balance.
-  const MIN_LAMPORTS_FOR_FEES = 2_000_000 // ~0.002 SOL - need enough for multiple tx fees
-  const solBalance = await connection.getBalance(keypair.publicKey)
-  if (solBalance < MIN_LAMPORTS_FOR_FEES) {
-    return {
-      success: false,
-      signatures: [],
-      errors: [
-        `Insufficient SOL for transaction fees. Your wallet has ${(solBalance / 1e9).toFixed(6)} SOL. ` +
-        `You need at least ~0.002 SOL to pay for closing. Add a small amount of SOL to this wallet and try again.`
-      ],
-      succeededAccounts: []
+  const feePayer = getFeePayerKeypair()
+  const useFeePayer = !!feePayer
+
+  // When no fee payer, user wallet must have SOL for fees
+  if (!useFeePayer) {
+    const MIN_LAMPORTS_FOR_FEES = 2_000_000
+    const solBalance = await connection.getBalance(keypair.publicKey)
+    if (solBalance < MIN_LAMPORTS_FOR_FEES) {
+      return {
+        success: false,
+        signatures: [],
+        errors: [
+          `Insufficient SOL for fees. Your wallet has ${(solBalance / 1e9).toFixed(6)} SOL. ` +
+          `Need ~0.002 SOL, or add FEE_PAYER_PRIVATE_KEY to enable gas sponsorship.`
+        ],
+        succeededAccounts: []
+      }
     }
   }
 
   const signatures: string[] = []
   const errors: string[] = []
   const succeededAccounts: ClaimableAccount[] = []
+  const feePayerPubkey = useFeePayer ? feePayer!.publicKey : keypair.publicKey
+  const signers = useFeePayer ? [feePayer!, keypair] : [keypair]
 
-  // Process: empty Token Program + Token-2022, and dust (balance>0, isDust) Token Program only
   const isTokenProgram = (a: ClaimableAccount) =>
     a.programIdStr === TOKEN_PROGRAM_ID.toString() || !a.programIdStr
 
+  // --- Phase 1: Collect valid empty accounts (batch into txs) ---
+  const emptyAccounts: { acc: ClaimableAccount; programId: typeof TOKEN_PROGRAM_ID | typeof TOKEN_2022_PROGRAM_ID }[] = []
   for (let i = 0; i < accountsToClose.length; i++) {
     const acc = accountsToClose[i]
     const accountPubkey = new PublicKey(acc.accountAddress)
@@ -443,7 +465,7 @@ export async function closeEmptyTokenAccounts(
 
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
         const tx = new Transaction({
-          feePayer: keypair.publicKey,
+          feePayer: feePayerPubkey,
           blockhash,
           lastValidBlockHeight
         })
@@ -475,7 +497,7 @@ export async function closeEmptyTokenAccounts(
         const sig = await sendAndConfirmTransaction(
           connection,
           tx,
-          [keypair],
+          signers,
           { commitment: 'confirmed', skipPreflight: true }
         )
         signatures.push(sig)
@@ -487,58 +509,72 @@ export async function closeEmptyTokenAccounts(
         : ''
       errors.push(`Account ${i + 1} (${acc.accountAddress}): ${errDetail}${debitHint}`)
       console.error(`Failed to burn+close ${acc.accountAddress}:`, error)
-      }
+    }
+    continue
+    }
+
+    // Empty accounts: collect for batched processing
+    const rawInfo = await connection.getAccountInfo(accountPubkey, 'confirmed')
+    if (!rawInfo?.data || rawInfo.data.length < 64) {
+      errors.push(`Account ${i + 1} (${acc.accountAddress}): invalid account data`)
+      continue
+    }
+    const rawOwner = new PublicKey(rawInfo.data.subarray(32, 64)).toString()
+    if (rawOwner !== signerAddress) {
+      errors.push(`Account ${i + 1}: owned by ${rawOwner}, your keypair: ${signerAddress}`)
       continue
     }
 
-    // Empty accounts: Token Program and Token-2022
+    const accountInfo = await getAccount(connection, accountPubkey, 'confirmed', programId)
+    if (Number(accountInfo.amount) > 0) {
+      errors.push(`Account ${i + 1} (${acc.accountAddress}): balance must be 0 before close`)
+      continue
+    }
+
+    emptyAccounts.push({ acc, programId })
+  }
+
+  // --- Phase 2: Batch and send empty account closes ---
+  const emptyBatches = chunkArray(emptyAccounts, BATCH_SIZE_EMPTY)
+  for (const batch of emptyBatches) {
     try {
-      const rawInfo = await connection.getAccountInfo(accountPubkey, 'confirmed')
-      if (!rawInfo?.data || rawInfo.data.length < 64) {
-        errors.push(`Account ${i + 1} (${acc.accountAddress}): invalid account data`)
-        continue
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
+      const tx = new Transaction({
+        feePayer: feePayerPubkey,
+        blockhash,
+        lastValidBlockHeight
+      })
+      tx.add(
+        ComputeBudgetProgram.setComputeUnitLimit({ units: COMPUTE_UNITS * batch.length }),
+        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: COMPUTE_PRICE })
+      )
+      for (const { acc, programId } of batch) {
+        const accountPubkey = new PublicKey(acc.accountAddress)
+        tx.add(
+          createCloseAccountInstruction(
+            accountPubkey,
+            keypair.publicKey,
+            keypair.publicKey,
+            [],
+            programId
+          )
+        )
       }
-      const rawOwner = new PublicKey(rawInfo.data.subarray(32, 64)).toString()
-      if (rawOwner !== signerAddress) {
-        errors.push(`Account ${i + 1}: owned by ${rawOwner}, your keypair: ${signerAddress}`)
-        continue
-      }
-
-      const accountInfo = await getAccount(connection, accountPubkey, 'confirmed', programId)
-      if (Number(accountInfo.amount) > 0) {
-        errors.push(`Account ${i + 1} (${acc.accountAddress}): balance must be 0 before close`)
-        continue
-      }
-
-      const sig = await closeAccountHelper(
+      const sig = await sendAndConfirmTransaction(
         connection,
-        keypair,
-        accountPubkey,
-        keypair.publicKey,
-        keypair,
-        [],
-        { commitment: 'confirmed', skipPreflight: true },
-        programId
+        tx,
+        signers,
+        { commitment: 'confirmed', skipPreflight: true }
       )
       signatures.push(sig)
-      succeededAccounts.push(acc)
+      for (const { acc } of batch) succeededAccounts.push(acc)
     } catch (error) {
       const errDetail = error instanceof Error ? error.message : 'Unknown error'
-      let hint = ''
-      if (String(errDetail).includes('owner does not match')) {
-        try {
-          const raw = await connection.getAccountInfo(accountPubkey, 'confirmed')
-          if (raw?.data && raw.data.length >= 64) {
-            const onChainOwner = new PublicKey(raw.data.subarray(32, 64)).toString()
-            hint = ` On-chain owner: ${onChainOwner}. Your keypair: ${signerAddress}.`
-          }
-        } catch (_) {}
-      }
-      if (String(errDetail).toLowerCase().includes('attempt to debit') || String(errDetail).toLowerCase().includes('no record of a prior credit')) {
-        hint = ' Your wallet needs SOL for fees. Add ~0.001 SOL and try again.'
-      }
-      errors.push(`Account ${i + 1} (${acc.accountAddress}): ${errDetail}${hint}`)
-      console.error(`Failed to close ${acc.accountAddress}:`, error)
+      const hint = String(errDetail).toLowerCase().includes('attempt to debit') || String(errDetail).toLowerCase().includes('no record of a prior credit')
+        ? ' Fee payer may need more SOL.'
+        : ''
+      errors.push(`Batch of ${batch.length} empty accounts: ${errDetail}${hint}`)
+      console.error('Batch close failed:', error)
     }
   }
 
