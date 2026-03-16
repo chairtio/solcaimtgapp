@@ -7,6 +7,7 @@ import {
   getTotalClaimingUsers,
   getRecentClaims,
   getUserStats,
+  getReferralPayoutStats,
 } from '@/lib/database'
 
 /** Cached user stats (has claimed?) – used for balance display. Revalidates every 5 min since it only changes on claim. */
@@ -75,4 +76,9 @@ export async function getRecentClaimsAction(userId: string, limit = 10) {
 /** Recent claims – no cache. Use after successful claim for immediate refresh. */
 export async function getRecentClaimsFreshAction(userId: string, limit = 10) {
   return getRecentClaims(userId, limit)
+}
+
+/** Referral payout stats for Invite tab – total earned, referral count, etc. */
+export async function getReferralStatsAction(telegramId: string) {
+  return getReferralPayoutStats(telegramId)
 }
