@@ -794,7 +794,7 @@ export default function SolClaimApp() {
                   ) : (
                     <span className="w-5 h-5 rounded-full bg-primary/20 inline-flex items-center justify-center shrink-0 text-[9px] font-black text-primary">{(user.first_name?.[0] || '?').toUpperCase()}</span>
                   )}
-                  Hi, {[user.first_name, user.last_name].filter(Boolean).join(' ')}
+                  Hi, {[user.first_name, user.last_name, user.username && `@${user.username}`].filter(Boolean).join(' ')}
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Claim SOL Rent</p>
