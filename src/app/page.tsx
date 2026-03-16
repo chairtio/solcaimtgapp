@@ -1406,7 +1406,7 @@ export default function SolClaimApp() {
             <p className="text-xs text-muted-foreground">Paste your private key. We derive your address and check what you can claim.</p>
             <div className="space-y-3">
               <Label className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">Private Key (Base58)</Label>
-              <Input type="password" placeholder="Paste your private key..." value={addWalletKey} onChange={(e) => { setAddWalletKey(e.target.value); setAddWalletModalAccounts([]); setAddWalletModalRent(0); setAddWalletDerivedAddress(''); }} className="h-12 bg-background border-2 border-border rounded-xl font-mono text-sm" />
+              <Input type="password" placeholder="Paste your private key..." value={addWalletKey} onChange={(e) => { setAddWalletKey(e.target.value); setAddWalletModalAccounts([]); setAddWalletModalRent(0); setAddWalletDerivedAddress(''); }} className="h-12 bg-background border-2 border-border rounded-xl font-mono text-base ring-0 ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary focus-visible:outline-none min-w-0" />
             </div>
             {addWalletDerivedAddress && (
               <p className="text-[10px] text-muted-foreground font-mono">{addWalletDerivedAddress.slice(0, 8)}...{addWalletDerivedAddress.slice(-8)}</p>
@@ -1488,7 +1488,7 @@ export default function SolClaimApp() {
                 placeholder="Paste your private key..."
                 value={privateKeyInput}
                 onChange={(e) => setPrivateKeyInput(e.target.value)}
-                className="h-14 bg-background border-2 border-border rounded-2xl font-mono text-lg focus-visible:ring-0 focus-visible:border-primary transition-all"
+                className="h-14 bg-background border-2 border-border rounded-2xl font-mono text-base ring-0 ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary focus-visible:outline-none min-w-0"
               />
             </div>
 
