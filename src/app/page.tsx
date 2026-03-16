@@ -1267,7 +1267,7 @@ export default function SolClaimApp() {
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
                 <Wallet className="w-6 h-6 text-primary" />
               </div>
-              <h3 className="text-xl font-black text-foreground tracking-tight">Set your receiver wallet</h3>
+              <h3 className="text-xl font-black text-foreground uppercase tracking-widest">Set your receiver wallet</h3>
               <p className="text-xs text-muted-foreground">
                 Your claimed SOL will be sent here. You control this address. You can change it anytime in Settings.
               </p>
@@ -1317,7 +1317,7 @@ export default function SolClaimApp() {
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
                 <Key className="w-6 h-6 text-primary" />
               </div>
-              <h3 className="text-xl font-black text-foreground tracking-tight">Enter Your Private Key</h3>
+              <h3 className="text-xl font-black text-foreground uppercase tracking-widest">Enter Your Private Key</h3>
               <div className="space-y-2">
                 <div className="p-3 rounded-xl bg-primary/10 border-2 border-primary/20">
                   <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">You&apos;re about to claim</p>
@@ -1743,7 +1743,7 @@ export default function SolClaimApp() {
             </div>
 
             <div className="space-y-4">
-              <h3 className="font-black text-xl px-1 text-foreground">Daily Tasks</h3>
+              <h3 className="text-base font-black text-foreground uppercase tracking-widest px-1">Daily Tasks</h3>
               
               <div className="space-y-3">
                 {[
@@ -1833,8 +1833,8 @@ export default function SolClaimApp() {
           {/* Settings Tab */}
           <TabsContent value="settings" className="space-y-6 mt-0 outline-none">
             <div className="px-1">
-              <h2 className="text-xl font-bold text-foreground tracking-tight">Settings</h2>
-              <p className="text-sm font-medium text-muted-foreground mt-1">Manage your receiver wallet</p>
+              <h2 className="text-base font-black text-foreground uppercase tracking-widest">Settings</h2>
+              <p className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-wider font-medium">Manage your receiver wallet</p>
             </div>
             <div className="w-full rounded-2xl bg-card border-2 border-border py-5 px-5 shadow-sm space-y-4">
               <div>
@@ -1850,11 +1850,11 @@ export default function SolClaimApp() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="mt-2 text-xs"
+                    className="mt-2 text-xs font-bold uppercase tracking-wider"
                     onClick={() => copyToClipboard(user.receiver_wallet!)}
                   >
                     <Copy className="w-3 h-3 mr-1" />
-                    Copy current
+                    Copy
                   </Button>
                 )}
                 <Button
@@ -1900,7 +1900,7 @@ export default function SolClaimApp() {
 
             <div className="bg-card rounded-3xl p-6 border-2 border-border shadow-sm">
               <div className="flex items-center justify-between mb-8">
-                <h3 className="font-black text-xl text-foreground">Your Referrals</h3>
+                <h3 className="text-base font-black text-foreground uppercase tracking-widest">Your Referrals</h3>
                 <Badge variant="secondary" className="font-bold bg-primary/10 text-primary border-0 px-3 py-1">0 TOTAL</Badge>
               </div>
               
@@ -1965,7 +1965,7 @@ export default function SolClaimApp() {
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
               <Wallet className="w-6 h-6 text-primary" />
             </div>
-            <h3 className="text-xl font-black text-foreground tracking-tight">Set your receiver wallet</h3>
+            <h3 className="text-xl font-black text-foreground uppercase tracking-widest">Set your receiver wallet</h3>
             <p className="text-xs text-muted-foreground">
               Your claimed SOL will be sent here. You control this address. You can change it anytime in Settings.
             </p>
@@ -2066,7 +2066,7 @@ export default function SolClaimApp() {
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
               <Plus className="w-6 h-6 text-primary" />
             </div>
-            <h3 className="text-xl font-black text-foreground tracking-tight">Add Wallet</h3>
+            <h3 className="text-xl font-black text-foreground uppercase tracking-widest">Add Wallet</h3>
             <p className="text-xs text-muted-foreground">Paste your private key. We derive your address and check what you can claim.</p>
             <div className="space-y-3">
               <Label className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">Private Key (Base58)</Label>
@@ -2143,7 +2143,7 @@ export default function SolClaimApp() {
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
               <Key className="w-6 h-6 text-primary" />
             </div>
-            <h3 className="text-xl font-black text-foreground tracking-tight">
+            <h3 className="text-xl font-black text-foreground uppercase tracking-widest">
               {addKeyWalletId ? 'Add Private Key' : 'Enter Your Private Key'}
             </h3>
             {addKeyWalletId ? (

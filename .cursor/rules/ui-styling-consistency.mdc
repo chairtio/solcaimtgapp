@@ -1,0 +1,47 @@
+---
+description: UI typography and styling consistency for SolClaim app
+globs: **/*.tsx
+alwaysApply: false
+---
+
+# UI Styling Consistency
+
+When adding or modifying UI in the SolClaim app, follow these typography patterns for consistency.
+
+## Tab Page Headers
+
+- **Title**: `text-base font-black text-foreground uppercase tracking-widest`
+- **Subtitle**: `text-[10px] text-muted-foreground mt-0.5 uppercase tracking-wider font-medium`
+
+Example: Wallets ("Saved Wallets"), Settings ("SETTINGS")
+
+## Card Section Headers
+
+- **Standard**: `font-black text-sm text-foreground uppercase tracking-widest`
+- **Small** (e.g. Leaderboard): `text-xs font-black text-foreground uppercase tracking-widest`
+
+Example: "Receiver Wallet", "Batch Claim", "Leaderboard"
+
+## Modal Titles
+
+- **Modal title**: `text-xl font-black text-foreground uppercase tracking-widest`
+
+Example: Set Receiver, Add Wallet, Enter Your Private Key
+
+## Labels (form fields)
+
+- **Label**: `text-[11px] font-black text-muted-foreground uppercase tracking-widest`
+
+## Stat Labels (small labels above values)
+
+- **Primary**: `text-[10px] font-bold text-primary uppercase tracking-widest`
+- **Secondary**: `text-[10px] font-bold text-muted-foreground uppercase tracking-widest`
+
+## Buttons
+
+- **Primary CTAs**: `font-black` with rounded corners
+- **Copy/outline buttons**: `font-bold uppercase tracking-wider` for action text
+
+## Copy Buttons
+
+Use "Copy" for copy-to-clipboard buttons (not "Copy current").
