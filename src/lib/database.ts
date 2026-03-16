@@ -417,3 +417,12 @@ export async function getLeaderboard(limit = 10): Promise<LeaderboardEntry[]> {
     displayName: row.display_name || 'Anon',
   }))
 }
+
+/** Platform-wide total SOL claimed by all users */
+export async function getTotalClaimed(): Promise<number> {
+  const { data, error } = await supabaseAdmin.rpc('get_total_claimed')
+
+  if (error) throw error
+  const row = Array.isArray(data) && data.length > 0 ? data[0] : null
+  return row ? Number(row.total_sol) : 0
+}

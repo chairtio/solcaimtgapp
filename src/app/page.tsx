@@ -53,7 +53,7 @@ import {
 import { toast } from 'sonner'
 import { executeClaimOnServer, closeTokenAccountsOnServer } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
-import { getLeaderboardAction } from '@/app/actions/stats'
+import { getLeaderboardAction, getTotalClaimedAction } from '@/app/actions/stats'
 
 interface ClaimableAccount {
   accountAddress: string
@@ -97,6 +97,7 @@ export default function SolClaimApp() {
   
   // Stats State
   const [userStats, setUserStats] = useState<any>(null)
+  const [totalClaimed, setTotalClaimed] = useState<number | null>(null)
   const [leaderboard, setLeaderboard] = useState<{ rank: number; userId: string; totalSol: number; accountsClosed: number; displayName: string }[]>([])
 
   // Video modal
@@ -191,6 +192,7 @@ export default function SolClaimApp() {
       loadUserStats()
     }
     if (user && activeTab === 'stats') {
+      getTotalClaimedAction().then(setTotalClaimed).catch(() => setTotalClaimed(null))
       getLeaderboardAction(10).then(setLeaderboard).catch(() => setLeaderboard([]))
     }
   }, [user, activeTab])
@@ -1795,6 +1797,14 @@ export default function SolClaimApp() {
                   {userStats ? userStats.total_accounts_closed : '0'}
                 </p>
               </div>
+            </div>
+
+            <div className="rounded-2xl bg-gradient-to-b from-primary/15 to-primary/5 border-2 border-primary/20 py-3 px-4 flex flex-col items-center text-center">
+              <BarChart3 className="w-5 h-5 text-primary mb-1" />
+              <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">Total Reclaimed (Platform)</p>
+              <p className="text-xl font-black text-foreground">
+                {totalClaimed != null ? Number(totalClaimed).toFixed(4) : '—'} <span className="text-xs font-bold text-primary">SOL</span>
+              </p>
             </div>
 
             <div className="rounded-2xl bg-card border-2 border-border p-4 shadow-sm">
