@@ -19,6 +19,7 @@ import {
   Gift,
   ChevronRight,
   ArrowUpRight,
+  ArrowLeftRight,
   ChevronDown,
   Key,
   Lock,
@@ -28,7 +29,9 @@ import {
   BarChart3,
   PlayCircle,
   Settings,
-  X
+  X,
+  Package,
+  Sparkles
 } from 'lucide-react'
 import { getClaimableRent, isValidPublicKey } from '@/lib/solana'
 import { PublicKey, Keypair } from '@solana/web3.js'
@@ -140,7 +143,7 @@ export default function SolClaimApp() {
   const [settingsReceiverSaving, setSettingsReceiverSaving] = useState(false)
 
   // Promo banner - 0% fees (dismissible, persisted)
-  const [promoBannerDismissed, setPromoBannerDismissed] = useState(true) // default true so no flash, then useEffect loads real value
+  const [promoBannerDismissed, setPromoBannerDismissed] = useState(true)
   useEffect(() => {
     setPromoBannerDismissed(typeof localStorage !== 'undefined' && localStorage.getItem('solclaim_promo_banner_dismissed') === '1')
   }, [])
@@ -148,6 +151,23 @@ export default function SolClaimApp() {
     setPromoBannerDismissed(true)
     if (typeof localStorage !== 'undefined') localStorage.setItem('solclaim_promo_banner_dismissed', '1')
   }
+
+  // Story-style onboarding (first visit only)
+  const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null)
+  const [onboardingStep, setOnboardingStep] = useState(0)
+  useEffect(() => {
+    const seen = typeof localStorage !== 'undefined' && localStorage.getItem('solclaim_onboarding_seen') === '1'
+    setShowOnboarding(!seen)
+  }, [])
+  const finishOnboarding = () => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem('solclaim_onboarding_seen', '1')
+    setShowOnboarding(false)
+  }
+  const ONBOARDING_STEPS = [
+    { title: 'You trade tokens on Solana', desc: 'Every token account pays a rent fee to the blockchain.', icon: ArrowLeftRight, bg: 'from-violet-600 via-purple-600 to-indigo-700' },
+    { title: 'When you sell, those token accounts become empty', desc: 'Leftover SOL stays locked in those abandoned token accounts.', icon: Package, bg: 'from-indigo-600 via-blue-600 to-cyan-600' },
+    { title: 'Claim your SOL back', desc: 'Recover 100% of your rent from the Solana blockchain.', icon: Sparkles, bg: 'from-emerald-600 via-teal-600 to-cyan-600' },
+  ]
 
   // Skip receiver check when we just saved in Set Receiver modal (React state not updated yet)
   const skipReceiverCheckRef = useRef(false)
@@ -188,11 +208,6 @@ export default function SolClaimApp() {
   useEffect(() => {
     if (telegramError) toast.error(telegramError)
   }, [telegramError])
-
-  const dismissPromoBanner = () => {
-    setPromoBannerDismissed(true)
-    if (typeof window !== 'undefined') localStorage.setItem('solclaim_promo_banner_dismissed', '1')
-  }
 
   const loadUserStats = async () => {
     if (!user) return
@@ -903,6 +918,61 @@ export default function SolClaimApp() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
+  // Story-style onboarding (first visit only)
+  if (showOnboarding === true) {
+    const step = ONBOARDING_STEPS[onboardingStep]
+    const StepIcon = step.icon
+    const isLast = onboardingStep === ONBOARDING_STEPS.length - 1
+    return (
+      <div className={`fixed inset-0 z-[200] bg-gradient-to-br ${step.bg} flex flex-col`}>
+        {/* Progress bars */}
+        <div className="flex gap-1.5 px-4 pt-[max(1.5rem,env(safe-area-inset-top))]">
+          {ONBOARDING_STEPS.map((_, i) => (
+            <div
+              key={i}
+              className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                i <= onboardingStep ? 'bg-white/90' : 'bg-white/25'
+              }`}
+            />
+          ))}
+        </div>
+        <button
+          onClick={finishOnboarding}
+          className="absolute right-4 top-[max(1.5rem,env(safe-area-inset-top))] p-2 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+          aria-label="Skip"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+          <div className="w-24 h-24 rounded-3xl bg-white/15 backdrop-blur flex items-center justify-center mb-8 shadow-2xl">
+            <StepIcon className="w-12 h-12 text-white" />
+          </div>
+          <p className="text-white/60 text-sm font-bold mb-4">
+            {onboardingStep + 1} of {ONBOARDING_STEPS.length}
+          </p>
+          <h2 className="text-2xl font-black text-white mb-3 leading-tight">
+            {step.title}
+          </h2>
+          <p className="text-white/90 text-base font-medium max-w-sm leading-relaxed">
+            {step.desc}
+          </p>
+        </div>
+        <div className="px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <Button
+            onClick={() => {
+              if (isLast) finishOnboarding()
+              else setOnboardingStep((s) => s + 1)
+            }}
+            className="w-full h-14 rounded-2xl bg-white text-primary font-black text-base shadow-xl hover:bg-white/95 active:scale-[0.98]"
+          >
+            {isLast ? 'Get Started' : 'Next'}
+            {!isLast && <ChevronRight className="w-5 h-5 ml-1" />}
+          </Button>
+        </div>
       </div>
     )
   }
