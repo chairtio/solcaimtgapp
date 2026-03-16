@@ -13,8 +13,8 @@ const getConversionRateEmoji = (rate) => {
 export const referralButton = async (ctx) => {
     const userId = ctx.from.id;
     const referralLink = `https://t\\.me/solclaimxbot?start\\=${userId}`;
-    // const referralWebappLink = `https://app\\.solclaim\\.io/${userId}`;
     try {
+        await ctx.answerCbQuery?.();
         // Fetch user's referral earnings and total affiliates earnings
         const userEarningsResponse = await fetchDataReferral(`${urlRefPayout}/${userId}`);
 
@@ -81,6 +81,8 @@ Claim FREE Sol With SolClaim!
         });
     } catch (error) {
         console.error('Error fetching referral data:', error.message);
+        await ctx.answerCbQuery?.().catch(() => {});
+        await ctx.reply('We\'re having trouble loading your referral data. Please try again later.').catch(() => {});
     }
 };
 
