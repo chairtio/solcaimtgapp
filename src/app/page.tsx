@@ -810,7 +810,7 @@ export default function SolClaimApp() {
 
       setIsSubmittingKey(false)
       const sig = result.signatures?.[0]
-      toast.success(`Claimed ${(result.netAmount! / 1e9).toFixed(4)} SOL`, {
+      toast.success(`Claimed ${result.netAmount!.toFixed(4)} SOL`, {
         action: sig ? { label: 'View on Solscan', onClick: () => window.open(`https://solscan.io/tx/${sig}`) } : undefined
       })
 
