@@ -206,6 +206,9 @@ export async function closeTokenAccountsOnServer(params: {
   error?: string
   signatures: string[]
   succeededAccounts: ClaimableAccountForAction[]
+  feeAmount?: number
+  referrerAmount?: number
+  referrerId?: string
 }> {
   try {
     const keypair = Keypair.fromSecretKey(bs58.decode(params.privateKeyBase58.trim()))
@@ -222,24 +225,40 @@ export async function closeTokenAccountsOnServer(params: {
     } catch {
       return { success: false, error: 'Invalid receiver wallet in Settings. Please update it.', signatures: [], succeededAccounts: [] }
     }
+
+    const referrer = dbUser?.telegram_id ? await getReferrerByReferee(dbUser.telegram_id) : null
+    const commissionWallet = getCommissionWallet()
+    const options =
+      referrer != null || commissionWallet != null
+        ? {
+            referrerWallet: referrer?.receiverWallet != null ? new PublicKey(referrer.receiverWallet) : undefined,
+            referralPercent: referrer?.commissionPercentage ?? 10,
+            commissionWallet: commissionWallet ?? undefined,
+          }
+        : undefined
+
     const result = await closeEmptyTokenAccounts(
       keypair,
       params.claimableAccounts,
       params.publicKey,
-      new PublicKey(receiverWallet)
+      new PublicKey(receiverWallet),
+      options
     )
     return {
       success: result.succeededAccounts.length > 0,
       error: result.errors.length > 0 ? result.errors.join(', ') : undefined,
       signatures: result.signatures,
-      succeededAccounts: result.succeededAccounts
+      succeededAccounts: result.succeededAccounts,
+      feeAmount: result.feeAmount,
+      referrerAmount: result.referrerAmount,
+      referrerId: referrer?.referrerId,
     }
   } catch (err: unknown) {
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Unknown error',
       signatures: [],
-      succeededAccounts: []
+      succeededAccounts: [],
     }
   }
 }
