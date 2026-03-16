@@ -105,12 +105,14 @@ export default function SolClaimApp() {
   // Only show promo to users who have never claimed before
   const hasClaimedBefore = userStats && (Number(userStats.total_sol_claimed) > 0 || Number(userStats.total_accounts_closed) > 0)
   const isPromoDisplay = claimableRent === 0 && claimableAccounts.length === 0 && !hasClaimedBefore
-  // Gross (before fee) for display; net (85%) is what user receives
+  // Full claim amount (no fees)
   const displayClaimableGross = hasClaimedBefore ? claimableRent : (isPromoDisplay ? PROMO_CLAIMABLE : claimableRent)
-  const displayClaimableNet = displayClaimableGross * 0.85
+  const displayClaimableNet = displayClaimableGross
 
   // Transaction signature for success link (Solscan)
   const [successTxSignature, setSuccessTxSignature] = useState<string | null>(null)
+  // Claim success toast (amount + signature for Solscan link)
+  const [claimSuccessToast, setClaimSuccessToast] = useState<{ amount: number; signature: string } | null>(null)
 
   // Add Wallet modal - private key only, derive pubkey, scan & claim in popup
   const [isAddWalletModalOpen, setIsAddWalletModalOpen] = useState(false)
@@ -313,24 +315,23 @@ export default function SolClaimApp() {
       await upsertTokenAccounts(dbAccounts)
 
       const succeededRent = result.succeededAccounts.reduce((s, a) => s + a.rentAmount, 0) / 1e9
-      const feeAmount = succeededRent * 0.15
-      const netAmount = succeededRent - feeAmount
+      const sig = result.signatures[0] || ('claim_' + Date.now())
 
       await createTransaction({
         wallet_id: walletId,
-        signature: result.signatures[0] || ('claim_' + Date.now()),
+        signature: sig,
         type: 'batch_claim',
         status: 'confirmed',
-        sol_amount: netAmount,
+        sol_amount: succeededRent,
         accounts_closed: result.succeededAccounts.length,
-        fee_amount: feeAmount
+        fee_amount: 0
       })
 
       const stats = await getUserStats(user.id)
       const prevSol = stats ? Number(stats.total_sol_claimed) : 0
       const prevAccounts = stats ? Number(stats.total_accounts_closed) : 0
       await updateUserStats(user.id, {
-        total_sol_claimed: prevSol + netAmount,
+        total_sol_claimed: prevSol + succeededRent,
         total_accounts_closed: prevAccounts + result.succeededAccounts.length
       })
 
@@ -340,8 +341,7 @@ export default function SolClaimApp() {
       setAddWalletModalRent(0)
       setAddWalletDerivedAddress('')
       await loadSavedWallets()
-      setSuccess(`Claimed ${(netAmount).toFixed(4)} SOL & wallet added`)
-      setTimeout(() => setSuccess(''), 3000)
+      setClaimSuccessToast({ amount: succeededRent, signature: sig })
     } catch (e: any) {
       setError(e?.message || 'Claim failed')
     } finally {
@@ -562,10 +562,8 @@ export default function SolClaimApp() {
 
           const succeededAccounts = result.succeededAccounts ?? []
           if (succeededAccounts.length > 0) {
-            // Partial or full success: save only the accounts we actually closed
             const succeededRent = succeededAccounts.reduce((s, a) => s + a.rentAmount, 0) / 1e9
-            const feeAmount = succeededRent * 0.15
-            const netAmount = succeededRent - feeAmount
+            const sig = result.signatures[0] || ('batch_claim_' + Date.now())
 
             const dbAccounts = succeededAccounts.map(acc => ({
               wallet_id: wallet.id,
@@ -581,16 +579,16 @@ export default function SolClaimApp() {
 
             await createTransaction({
               wallet_id: wallet.id,
-              signature: result.signatures[0] || ('batch_claim_' + Date.now()),
+              signature: sig,
               type: 'batch_claim',
               status: 'confirmed',
-              sol_amount: netAmount,
+              sol_amount: succeededRent,
               accounts_closed: succeededAccounts.length,
-              fee_amount: feeAmount
+              fee_amount: 0
             })
 
             successfulClaims++
-            totalClaimedSol += netAmount
+            totalClaimedSol += succeededRent
             if (succeededAccounts.length < claimData.accounts.length) {
               console.warn(`Partial success: closed ${succeededAccounts.length}/${claimData.accounts.length} accounts for ${claimData.publicKey}`)
             }
@@ -799,9 +797,11 @@ export default function SolClaimApp() {
         throw new Error(result.error)
       }
 
-      setSuccess(`Successfully claimed ${result.netAmount!.toFixed(4)} SOL!`)
+      setClaimSuccessToast({ amount: result.netAmount!, signature: result.signatures?.[0] || '' })
+      setSuccessTxSignature(result.signatures?.[0] || null)
       setIsSubmittingKey(false)
-      
+      setTimeout(() => setClaimSuccessToast(null), 6000)
+
       // Clear the claimable accounts since they are now "claimed"
       setTimeout(() => {
         setClaimableAccounts([])
@@ -977,7 +977,6 @@ export default function SolClaimApp() {
                 ) : (
                   <p className="text-[10px] font-bold text-secondary-foreground bg-secondary px-2 py-1 rounded-md border border-primary/20 shadow-sm relative z-10">
                     ≈ ${(displayClaimableNet * 150).toFixed(2)}
-                    <span className="text-[9px] ml-1 opacity-80">(85% after fee)</span>
                   </p>
                 )}
               </div>
@@ -1189,7 +1188,7 @@ export default function SolClaimApp() {
                     <div className="p-3 rounded-xl bg-secondary/50 border-2 border-border flex justify-between items-center">
                       <div>
                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-0.5">Total</p>
-                        <p className="font-black text-xl text-foreground">{(batchResults.totalRent * 0.85).toFixed(4)} <span className="text-primary text-sm">SOL</span></p>
+                        <p className="font-black text-xl text-foreground">{batchResults.totalRent.toFixed(4)} <span className="text-primary text-sm">SOL</span></p>
                       </div>
                       <div className="text-right">
                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-0.5">Accounts</p>
@@ -1679,7 +1678,7 @@ export default function SolClaimApp() {
                   </div>
                 )}
                 <Button className="w-full h-12 rounded-xl bg-primary font-black shadow-md shadow-primary/20" onClick={handleAddWalletClaim} disabled={addWalletModalClaiming}>
-                  {addWalletModalClaiming ? <div className="flex items-center gap-2"><div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground" />CLAIMING...</div> : <>CLAIM {(addWalletModalRent * 0.85).toFixed(4)} SOL</>}
+                  {addWalletModalClaiming ? <div className="flex items-center gap-2"><div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground" />CLAIMING...</div> : <>CLAIM {addWalletModalRent.toFixed(4)} SOL</>}
                 </Button>
               </div>
             )}

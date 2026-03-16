@@ -87,8 +87,7 @@ export async function executeClaimOnServer(params: {
     const closed = result.succeededAccounts
     const actualRentLamports = closed.reduce((s, a) => s + a.rentAmount, 0)
     const actualRentSol = actualRentLamports / 1e9
-    const feeAmount = actualRentSol * 0.15
-    const netAmount = actualRentSol - feeAmount
+    const netAmount = actualRentSol
 
     const dbAccounts = closed.map((acc) => ({
       wallet_id: walletId,
@@ -109,7 +108,7 @@ export async function executeClaimOnServer(params: {
       status: 'confirmed',
       sol_amount: netAmount,
       accounts_closed: closed.length,
-      fee_amount: feeAmount
+      fee_amount: 0
     })
 
     const stats = await getUserStats(userId)
