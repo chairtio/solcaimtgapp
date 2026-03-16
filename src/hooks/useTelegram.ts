@@ -1,0 +1,136 @@
+import { useState, useEffect } from 'react'
+import { getUser, createUser, updateUser, type User } from '@/lib/database'
+
+interface TelegramUser {
+  id: number
+  first_name: string
+  last_name?: string
+  username?: string
+  language_code?: string
+  is_premium?: boolean
+  photo_url?: string
+}
+
+interface TelegramWebApp {
+  initData: string
+  initDataUnsafe: {
+    user?: TelegramUser
+    auth_date: number
+    hash: string
+  }
+  version: string
+  platform: string
+  close(): void
+  expand(): void
+  ready(): void
+}
+
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp?: TelegramWebApp
+    }
+  }
+}
+
+export function useTelegram() {
+  const [user, setUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const initTelegram = async () => {
+      try {
+        // Mock user for local development outside of Telegram
+        const isLocalDev = process.env.NODE_ENV === 'development' && (!window.Telegram || !window.Telegram.WebApp)
+        
+        let telegramUser: TelegramUser
+        let webApp: TelegramWebApp | null = null
+
+        if (isLocalDev) {
+          console.log('Running in local dev mode, using mock Telegram user')
+          telegramUser = {
+            id: 123456789,
+            first_name: 'Local',
+            last_name: 'Tester',
+            username: 'local_tester',
+            is_premium: true
+          }
+        } else {
+          // Check if running in Telegram WebApp
+          if (typeof window === 'undefined' || !window.Telegram?.WebApp) {
+            setError('This app must be opened from Telegram')
+            setIsLoading(false)
+            return
+          }
+
+          webApp = window.Telegram.WebApp
+          const initData = webApp.initDataUnsafe
+
+          if (!initData.user) {
+            setError('Unable to get user information from Telegram')
+            setIsLoading(false)
+            return
+          }
+
+          telegramUser = initData.user
+          
+          // Expand the WebApp to full height
+          webApp.expand()
+          webApp.ready()
+        }
+
+        // Check if user exists in database
+        let dbUser = await getUser(telegramUser.id.toString())
+
+        if (!dbUser) {
+          // Create new user
+          dbUser = await createUser({
+            telegram_id: telegramUser.id.toString(),
+            username: telegramUser.username,
+            first_name: telegramUser.first_name,
+            last_name: telegramUser.last_name,
+            photo_url: telegramUser.photo_url,
+            is_premium: telegramUser.is_premium || false
+          })
+        } else {
+          // Update user info if needed
+          const needsUpdate =
+            dbUser.username !== telegramUser.username ||
+            dbUser.first_name !== telegramUser.first_name ||
+            dbUser.last_name !== telegramUser.last_name ||
+            dbUser.photo_url !== telegramUser.photo_url ||
+            dbUser.is_premium !== (telegramUser.is_premium || false)
+
+          if (needsUpdate) {
+            dbUser = await updateUser(telegramUser.id.toString(), {
+              username: telegramUser.username,
+              first_name: telegramUser.first_name,
+              last_name: telegramUser.last_name,
+              photo_url: telegramUser.photo_url,
+              is_premium: telegramUser.is_premium || false
+            })
+          }
+        }
+
+        setUser(dbUser)
+        setIsLoading(false)
+
+        // Expand the WebApp to full height (only in Telegram)
+        if (webApp) {
+          webApp.expand()
+          webApp.ready()
+        }
+
+      } catch (err) {
+        console.error('Error initializing Telegram:', err)
+        setError('Failed to initialize Telegram integration')
+        setIsLoading(false)
+      }
+    }
+
+    initTelegram()
+  }, [])
+
+  return { user, isLoading, error }
+}
