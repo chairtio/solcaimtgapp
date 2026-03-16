@@ -14,7 +14,6 @@ import {
   Coins,
   Users,
   CheckCircle,
-  AlertCircle,
   Copy,
   Target,
   Gift,
@@ -28,7 +27,8 @@ import {
   ShieldAlert,
   BarChart3,
   PlayCircle,
-  Settings
+  Settings,
+  X
 } from 'lucide-react'
 import { getClaimableRent, isValidPublicKey } from '@/lib/solana'
 import { PublicKey, Keypair } from '@solana/web3.js'
@@ -47,6 +47,7 @@ import {
   saveWalletPrivateKey,
   deactivateWallet
 } from '@/lib/database'
+import { toast } from 'sonner'
 import { executeClaimOnServer, closeTokenAccountsOnServer } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
 
@@ -72,8 +73,6 @@ export default function SolClaimApp() {
   const [claimableRent, setClaimableRent] = useState(0)
   const [claimableAccounts, setClaimableAccounts] = useState<ClaimableAccount[]>([])
   const [isAccountsExpanded, setIsAccountsExpanded] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
 
   // Wallet Management State
@@ -99,8 +98,8 @@ export default function SolClaimApp() {
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
 
   const TELEGRAM_VIDEO_URL = 'https://t.me/solclaim/162'
-  const PROMO_CLAIMABLE = 0.002 // Teaser shown to new users who've never claimed
-  const UNLOCK_THRESHOLD = 0.002 // Shown as "unlocks when balance reaches this"
+  const PROMO_CLAIMABLE = 0.001 // Teaser shown to new users who've never claimed
+  const UNLOCK_THRESHOLD = 0.001 // Shown as "unlocks when balance reaches this"
 
   // Only show promo to users who have never claimed before
   const hasClaimedBefore = userStats && (Number(userStats.total_sol_claimed) > 0 || Number(userStats.total_accounts_closed) > 0)
@@ -108,11 +107,6 @@ export default function SolClaimApp() {
   // Full claim amount (no fees)
   const displayClaimableGross = hasClaimedBefore ? claimableRent : (isPromoDisplay ? PROMO_CLAIMABLE : claimableRent)
   const displayClaimableNet = displayClaimableGross
-
-  // Transaction signature for success link (Solscan)
-  const [successTxSignature, setSuccessTxSignature] = useState<string | null>(null)
-  // Claim success toast (amount + signature for Solscan link)
-  const [claimSuccessToast, setClaimSuccessToast] = useState<{ amount: number; signature: string } | null>(null)
 
   // Add Wallet modal - private key only, derive pubkey, scan & claim in popup
   const [isAddWalletModalOpen, setIsAddWalletModalOpen] = useState(false)
@@ -144,6 +138,16 @@ export default function SolClaimApp() {
   // Settings tab - receiver wallet
   const [settingsReceiverInput, setSettingsReceiverInput] = useState('')
   const [settingsReceiverSaving, setSettingsReceiverSaving] = useState(false)
+
+  // Promo banner - 0% fees (dismissible, persisted)
+  const [promoBannerDismissed, setPromoBannerDismissed] = useState(true) // default true so no flash, then useEffect loads real value
+  useEffect(() => {
+    setPromoBannerDismissed(typeof localStorage !== 'undefined' && localStorage.getItem('solclaim_promo_banner_dismissed') === '1')
+  }, [])
+  const dismissPromoBanner = () => {
+    setPromoBannerDismissed(true)
+    if (typeof localStorage !== 'undefined') localStorage.setItem('solclaim_promo_banner_dismissed', '1')
+  }
 
   // Skip receiver check when we just saved in Set Receiver modal (React state not updated yet)
   const skipReceiverCheckRef = useRef(false)
@@ -180,6 +184,16 @@ export default function SolClaimApp() {
     }
   }, [user, activeTab, user?.receiver_wallet])
 
+  // Show Telegram init errors as toast
+  useEffect(() => {
+    if (telegramError) toast.error(telegramError)
+  }, [telegramError])
+
+  const dismissPromoBanner = () => {
+    setPromoBannerDismissed(true)
+    if (typeof window !== 'undefined') localStorage.setItem('solclaim_promo_banner_dismissed', '1')
+  }
+
   const loadUserStats = async () => {
     if (!user) return
     try {
@@ -207,10 +221,9 @@ export default function SolClaimApp() {
     try {
       await deactivateWallet(walletId)
       await loadSavedWallets()
-      setSuccess('Wallet removed successfully')
-      setTimeout(() => setSuccess(''), 2000)
+      toast.success('Wallet removed successfully')
     } catch (err) {
-      setError('Failed to remove wallet')
+      toast.error('Failed to remove wallet')
     }
   }
 
@@ -222,13 +235,11 @@ export default function SolClaimApp() {
     setAddWalletModalExpanded(false)
     setAddWalletDerivedAddress('')
     setAddWalletModalWalletId(null)
-    setError('')
   }
 
   const handleAddWalletScan = async () => {
     if (!user || !addWalletKey.trim()) return
     setAddWalletModalScanning(true)
-    setError('')
     try {
       const kp = Keypair.fromSecretKey(bs58.decode(addWalletKey.trim()))
       const derivedPubkey = kp.publicKey.toString()
@@ -237,7 +248,7 @@ export default function SolClaimApp() {
       const existingByKey = await getWalletByPublicKey(user.id, derivedPubkey)
       if (existingByKey) {
         if (existingByKey.status === 'active') {
-          setError('This wallet is already added')
+          toast.error('This wallet is already added')
           setAddWalletModalScanning(false)
           return
         }
@@ -256,7 +267,7 @@ export default function SolClaimApp() {
       setAddWalletModalAccounts(result.accounts)
       setAddWalletModalExpanded(result.accounts.length > 0)
     } catch (e: any) {
-      setError(e?.message?.includes('decode') ? 'Invalid private key format (Base58)' : (e?.message || 'Failed to scan'))
+      toast.error(e?.message?.includes('decode') ? 'Invalid private key format (Base58)' : (e?.message || 'Failed to scan'))
     } finally {
       setAddWalletModalScanning(false)
     }
@@ -274,7 +285,6 @@ export default function SolClaimApp() {
     skipReceiverCheckRef.current = false
 
     setAddWalletModalClaiming(true)
-    setError('')
     try {
       const kp = Keypair.fromSecretKey(bs58.decode(addWalletKey.trim()))
       const derivedPubkey = kp.publicKey.toString()
@@ -341,9 +351,9 @@ export default function SolClaimApp() {
       setAddWalletModalRent(0)
       setAddWalletDerivedAddress('')
       await loadSavedWallets()
-      setClaimSuccessToast({ amount: succeededRent, signature: sig })
+      toast.success(`Claimed ${succeededRent.toFixed(4)} SOL`, { action: { label: 'View on Solscan', onClick: () => window.open(`https://solscan.io/tx/${sig}`) } })
     } catch (e: any) {
-      setError(e?.message || 'Claim failed')
+      toast.error(e?.message || 'Claim failed')
     } finally {
       setAddWalletModalClaiming(false)
     }
@@ -358,8 +368,7 @@ export default function SolClaimApp() {
     setAddWalletDerivedAddress('')
     setAddWalletModalWalletId(null)
     await loadSavedWallets()
-    setSuccess('Wallet added. Use Scan All to check claimable.')
-    setTimeout(() => setSuccess(''), 3000)
+    toast.success('Wallet added. Use Scan All to check claimable.')
   }
 
   const closeSetReceiverModal = () => {
@@ -392,14 +401,12 @@ export default function SolClaimApp() {
     setAddWalletModalExpanded(false)
     setAddWalletDerivedAddress('')
     setAddWalletModalWalletId(null)
-    setError('')
   }
 
   const openAddKeyModal = (wallet: { id: string; public_key: string }) => {
     setAddKeyWalletId(wallet.id)
     setAddKeyWalletAddress(wallet.public_key)
     setPrivateKeyInput('')
-    setError('')
     setIsKeyModalOpen(true)
   }
 
@@ -408,7 +415,6 @@ export default function SolClaimApp() {
     setIsKeyModalClosing(false)
     setIsKeyModalOpen(false)
     setPrivateKeyInput('')
-    setError('')
     setAddKeyWalletId(null)
     setAddKeyWalletAddress('')
   }
@@ -417,7 +423,6 @@ export default function SolClaimApp() {
     if (!addKeyWalletId || !privateKeyInput) return
 
     setIsSubmittingKey(true)
-    setError('')
 
     try {
       let kp: Keypair
@@ -436,10 +441,9 @@ export default function SolClaimApp() {
       setAddKeyWalletAddress('')
       setPrivateKeyInput('')
       await loadSavedWallets()
-      setSuccess('Private key saved. You can now use Scan All.')
-      setTimeout(() => setSuccess(''), 2000)
+      toast.success('Private key saved. You can now use Scan All.')
     } catch (err: any) {
-      setError(err.message || 'Failed to save key')
+      toast.error(err.message || 'Failed to save key')
     } finally {
       setIsSubmittingKey(false)
     }
@@ -449,8 +453,6 @@ export default function SolClaimApp() {
     if (!savedWallets.length) return
     
     setIsBatchScanning(true)
-    setError('')
-    setSuccess('')
     
     try {
       let totalRent = 0
@@ -484,15 +486,13 @@ export default function SolClaimApp() {
       })
 
       if (totalAccounts === 0) {
-        setSuccess('No claimable accounts found across your saved wallets.')
+        toast.success('No claimable accounts found across your saved wallets.')
       } else {
-        setSuccess(`Found ${totalAccounts} accounts worth ${totalRent.toFixed(4)} SOL across ${walletsWithClaims.length} wallets!`)
+        toast.success(`Found ${totalAccounts} accounts worth ${totalRent.toFixed(4)} SOL across ${walletsWithClaims.length} wallets!`)
       }
-      setTimeout(() => setSuccess(''), 4000)
-
     } catch (err: any) {
       console.error('Error scanning all wallets:', err)
-      setError('Failed to scan all wallets. Please try again.')
+      toast.error('Failed to scan all wallets. Please try again.')
     } finally {
       setIsBatchScanning(false)
     }
@@ -510,7 +510,6 @@ export default function SolClaimApp() {
     skipReceiverCheckRef.current = false
 
     setIsBatchClaiming(true)
-    setError('')
     
     let successfulClaims = 0
     let failedClaims = 0
@@ -611,16 +610,16 @@ export default function SolClaimApp() {
           total_accounts_closed: prevAccounts + batchResults.totalAccounts
         })
 
-        setSuccess(`Successfully claimed ${totalClaimedSol.toFixed(4)} SOL from ${successfulClaims} wallets!`)
+        toast.success(`Successfully claimed ${totalClaimedSol.toFixed(4)} SOL from ${successfulClaims} wallets!`)
         setBatchResults(null)
         await loadSavedWallets()
       } else {
-        setError(`Failed to claim from any wallets. (${failedClaims} failed)`)
+        toast.error(`Failed to claim from any wallets. (${failedClaims} failed)`)
       }
 
     } catch (err: any) {
       console.error('Error in batch claim:', err)
-      setError('A critical error occurred during batch claiming.')
+      toast.error('A critical error occurred during batch claiming.')
     } finally {
       setIsBatchClaiming(false)
     }
@@ -628,21 +627,19 @@ export default function SolClaimApp() {
 
   const scanWallet = async () => {
     if (!isValidPublicKey(publicKey)) {
-      setError('Invalid Solana public key')
+      toast.error('Invalid Solana public key')
       return
     }
 
     setIsScanning(true)
-    setError('')
-    setSuccess('')
 
     try {
       const result = await getClaimableRent(new PublicKey(publicKey))
       setClaimableRent(result.totalRent / 1000000000) // Convert lamports to SOL
       setClaimableAccounts(result.accounts)
-      setSuccess(`Found ${result.accounts.length} claimable accounts`)
+      toast.success(`Found ${result.accounts.length} claimable accounts`)
     } catch (err) {
-      setError('Failed to scan wallet. Please check the public key.')
+      toast.error('Failed to scan wallet. Please check the public key.')
       console.error(err)
     } finally {
       setIsScanning(false)
@@ -651,12 +648,12 @@ export default function SolClaimApp() {
 
   const claimRent = async () => {
     if (!user) {
-      setError('You must be logged in via Telegram to claim rent.')
+      toast.error('You must be logged in via Telegram to claim rent.')
       return
     }
 
     if (claimableAccounts.length === 0) {
-      setError('No accounts to claim.')
+      toast.error('No accounts to claim.')
       return
     }
 
@@ -705,7 +702,7 @@ export default function SolClaimApp() {
 
     } catch (err: any) {
       console.error('Error claiming rent:', err)
-      setError(err.message || 'Failed to process claim. Please try again.')
+      toast.error(err.message || 'Failed to process claim. Please try again.')
     }
   }
 
@@ -713,7 +710,6 @@ export default function SolClaimApp() {
     if (!privateKeyInput || !currentWalletId) return
     
     setIsSubmittingKey(true)
-    setError('')
     
     try {
       // Validate private key matches public key
@@ -743,7 +739,7 @@ export default function SolClaimApp() {
       // Reset submitting state is now handled inside executeClaim
     } catch (err: any) {
       console.error('Error saving private key:', err)
-      setError(err.message || 'Failed to save private key')
+      toast.error(err.message || 'Failed to save private key')
       setIsSubmittingKey(false)
     }
   }
@@ -797,10 +793,11 @@ export default function SolClaimApp() {
         throw new Error(result.error)
       }
 
-      setClaimSuccessToast({ amount: result.netAmount!, signature: result.signatures?.[0] || '' })
-      setSuccessTxSignature(result.signatures?.[0] || null)
       setIsSubmittingKey(false)
-      setTimeout(() => setClaimSuccessToast(null), 6000)
+      const sig = result.signatures?.[0]
+      toast.success(`Claimed ${(result.netAmount! / 1e9).toFixed(4)} SOL`, {
+        action: sig ? { label: 'View on Solscan', onClick: () => window.open(`https://solscan.io/tx/${sig}`) } : undefined
+      })
 
       // Clear the claimable accounts since they are now "claimed"
       setTimeout(() => {
@@ -811,7 +808,7 @@ export default function SolClaimApp() {
       return true;
     } catch (err: any) {
       console.error('Error executing claim:', err)
-      setError(err.message || 'Failed to execute claim.')
+      toast.error(err.message || 'Failed to execute claim.')
       setIsSubmittingKey(false)
       return false;
     }
@@ -856,22 +853,20 @@ export default function SolClaimApp() {
   const handleSaveReceiverWallet = async () => {
     if (!user?.telegram_id || !settingsReceiverInput.trim()) return
     if (!isValidPublicKey(settingsReceiverInput.trim())) {
-      setError('Invalid Solana address')
+      toast.error('Invalid Solana address')
       return
     }
     setSettingsReceiverSaving(true)
-    setError('')
     try {
       const result = await updateReceiverWallet(user.telegram_id, settingsReceiverInput.trim())
       if (result.success) {
         await refreshUser()
-        setSuccess('Receiver wallet updated')
-        setTimeout(() => setSuccess(''), 2000)
+        toast.success('Receiver wallet updated')
       } else {
-        setError(result.error || 'Failed to save')
+        toast.error(result.error || 'Failed to save')
       }
     } catch (e: any) {
-      setError(e?.message || 'Failed to save')
+      toast.error(e?.message || 'Failed to save')
     } finally {
       setSettingsReceiverSaving(false)
     }
@@ -880,11 +875,10 @@ export default function SolClaimApp() {
   const handleSetReceiverSave = async () => {
     if (!user?.telegram_id || !setReceiverInput.trim()) return
     if (!isValidPublicKey(setReceiverInput.trim())) {
-      setError('Invalid Solana address')
+      toast.error('Invalid Solana address')
       return
     }
     setSetReceiverSaving(true)
-    setError('')
     try {
       const result = await updateReceiverWallet(user.telegram_id, setReceiverInput.trim())
       if (result.success) {
@@ -896,10 +890,10 @@ export default function SolClaimApp() {
         await refreshUser()
         if (action) action()
       } else {
-        setError(result.error || 'Failed to save')
+        toast.error(result.error || 'Failed to save')
       }
     } catch (e: any) {
-      setError(e?.message || 'Failed to save')
+      toast.error(e?.message || 'Failed to save')
     } finally {
       setSetReceiverSaving(false)
     }
@@ -950,6 +944,30 @@ export default function SolClaimApp() {
           </div>
         </div>
       </div>
+
+      {/* Promo Banner - 0% fees */}
+      {!promoBannerDismissed && (
+        <div className="mx-4 mt-3 max-w-md mx-auto">
+          <div className="relative flex items-center gap-3 rounded-xl bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 border-2 border-amber-500/30 py-3 px-4 shadow-lg">
+            <button
+              onClick={dismissPromoBanner}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 transition-colors"
+              aria-label="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <span className="text-xl">🔥</span>
+            <div className="flex-1 pr-8">
+              <p className="text-sm font-black text-foreground leading-tight">
+                🔥 0% fees on claims — keep 100% of your SOL
+              </p>
+              <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-0.5">
+                Limited time only. Don&apos;t miss out! 🔥
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="px-4 py-6 space-y-6 max-w-md mx-auto">
         {/* Main Content Area */}
@@ -1037,26 +1055,6 @@ export default function SolClaimApp() {
                 )}
               </Button>
 
-              {(telegramError || error) && (
-                <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 flex items-start gap-3">
-                  <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-                  <p className="text-sm font-medium text-destructive">{telegramError || error}</p>
-                </div>
-              )}
-
-              {success && (
-                <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20 flex flex-col gap-2 dark:bg-green-500/20 dark:border-green-500/30">
-                  <div className="flex items-start gap-3">
-                    <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
-                    <p className="text-sm font-medium text-green-700 dark:text-green-300">{success}</p>
-                  </div>
-                  {successTxSignature && (
-                    <a href={`https://solscan.io/tx/${successTxSignature}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs font-bold text-green-600 dark:text-green-400 hover:underline mt-1">
-                      View on Solscan <ArrowUpRight className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* Results List */}
@@ -1162,7 +1160,7 @@ export default function SolClaimApp() {
                 <p className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-wider font-medium">Manage and batch claim</p>
               </div>
               <Button
-                onClick={() => { setIsAddWalletModalOpen(true); setAddWalletKey(''); setAddWalletModalAccounts([]); setAddWalletModalRent(0); setAddWalletDerivedAddress(''); setAddWalletModalWalletId(null); setError(''); }}
+                onClick={() => { setIsAddWalletModalOpen(true); setAddWalletKey(''); setAddWalletModalAccounts([]); setAddWalletModalRent(0); setAddWalletDerivedAddress(''); setAddWalletModalWalletId(null); ; }}
                 className="h-10 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs px-4 shadow-md shadow-primary/20 border border-primary-foreground/10 flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
@@ -1209,27 +1207,6 @@ export default function SolClaimApp() {
                   <Button className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-sm shadow-md shadow-primary/20 active:scale-[0.98] border border-primary-foreground/10" onClick={scanAllWallets} disabled={isBatchScanning}>
                     {isBatchScanning ? <div className="flex items-center gap-2"><div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground"></div>SCANNING...</div> : 'SCAN ALL WALLETS'}
                   </Button>
-                )}
-              </div>
-            )}
-
-            {(telegramError || error) && (
-              <div className="p-3 rounded-xl bg-destructive/10 border-2 border-destructive/20 flex items-start gap-3">
-                <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-                <p className="text-sm font-medium text-destructive">{telegramError || error}</p>
-              </div>
-            )}
-
-            {success && (
-              <div className="p-3 rounded-xl bg-green-500/10 border-2 border-green-500/20 flex flex-col gap-2 dark:bg-green-500/20 dark:border-green-500/30">
-                <div className="flex items-start gap-3">
-                  <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
-                  <p className="text-sm font-medium text-green-700 dark:text-green-300">{success}</p>
-                </div>
-                {successTxSignature && (
-                  <a href={`https://solscan.io/tx/${successTxSignature}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs font-bold text-green-600 dark:text-green-400 hover:underline mt-1">
-                    View on Solscan <ArrowUpRight className="w-3.5 h-3.5" />
-                  </a>
                 )}
               </div>
             )}
@@ -1690,7 +1667,6 @@ export default function SolClaimApp() {
                 </Button>
               </div>
             )}
-            {(telegramError || error) && <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20"><p className="text-sm font-medium text-destructive">{telegramError || error}</p></div>}
             <Button variant="outline" className="w-full h-12 rounded-xl font-bold border-2" onClick={closeAddWalletModal}>CANCEL</Button>
           </div>
         </div>
@@ -1746,13 +1722,6 @@ export default function SolClaimApp() {
                 <img src="https://framerusercontent.com/images/AwTsKmlC3D7Q0nXT1xH0qt3jHkI.png?width=505&height=278" alt="Privy" className="h-5 w-auto object-contain" />
               </div>
             </div>
-
-            {(telegramError || error) && (
-              <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 flex items-start gap-3">
-                <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-                <p className="text-sm font-medium text-destructive">{telegramError || error}</p>
-              </div>
-            )}
 
             <Button
               className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-black shadow-md shadow-primary/20 active:scale-[0.98] transition-all border border-primary-foreground/10"
