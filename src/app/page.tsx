@@ -1484,11 +1484,11 @@ export default function SolClaimApp() {
               {/* Set Receiver Modal - shown when claiming without receiver set */}
       {isSetReceiverModalOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300 ease-out"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 modal-backdrop-enter"
           onClick={() => { setIsSetReceiverModalOpen(false); setSetReceiverInput(''); setPendingClaimAction(null) }}
         >
           <div
-            className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 ease-out relative overflow-hidden"
+            className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl modal-content-enter relative overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
@@ -1538,11 +1538,11 @@ export default function SolClaimApp() {
               {/* Video Modal */}
       {isVideoModalOpen && (
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300 ease-out"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 modal-backdrop-enter"
           onClick={() => setIsVideoModalOpen(false)}
         >
           <div 
-            className="bg-card border-2 border-border rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 ease-out relative"
+            className="bg-card border-2 border-border rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl modal-content-enter relative"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
@@ -1590,11 +1590,11 @@ export default function SolClaimApp() {
       {/* Set Receiver Modal - shown when claiming without receiver set */}
       {isSetReceiverModalOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300 ease-out"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 modal-backdrop-enter"
           onClick={() => { setIsSetReceiverModalOpen(false); setSetReceiverInput(''); setPendingClaimAction(null); }}
         >
           <div
-            className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 ease-out relative overflow-hidden"
+            className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl modal-content-enter relative overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
@@ -1635,8 +1635,8 @@ export default function SolClaimApp() {
 
               {/* Add Wallet Modal */}
       {isAddWalletModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300 ease-out" onClick={closeAddWalletModal}>
-          <div className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 ease-out relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 modal-backdrop-enter" onClick={closeAddWalletModal}>
+          <div className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl modal-content-enter relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
               <Plus className="w-6 h-6 text-primary" />
@@ -1707,8 +1707,8 @@ export default function SolClaimApp() {
 
               {/* Private Key Modal */}
       {isKeyModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300 ease-out">
-          <div className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 ease-out relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 modal-backdrop-enter">
+          <div className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl modal-content-enter relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
               <Key className="w-6 h-6 text-primary" />

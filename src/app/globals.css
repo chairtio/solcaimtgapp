@@ -109,6 +109,28 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
+/* Modal popup animations - smooth open */
+@keyframes modal-backdrop-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-content-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.modal-backdrop-enter {
+  animation: modal-backdrop-enter 0.25s ease-out forwards;
+}
+.modal-content-enter {
+  animation: modal-content-enter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 @layer utilities {
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
