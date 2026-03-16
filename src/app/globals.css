@@ -131,6 +131,28 @@ body {
   animation: modal-content-enter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Modal popup animations - smooth close */
+@keyframes modal-backdrop-exit {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes modal-content-exit {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(12px);
+  }
+}
+.modal-backdrop-exit {
+  animation: modal-backdrop-exit 0.2s ease-in forwards;
+}
+.modal-content-exit {
+  animation: modal-content-exit 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
 @layer utilities {
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);

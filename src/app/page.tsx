@@ -129,9 +129,15 @@ export default function SolClaimApp() {
 
   // Set Receiver modal (required before first claim)
   const [isSetReceiverModalOpen, setIsSetReceiverModalOpen] = useState(false)
+  const [isSetReceiverModalClosing, setIsSetReceiverModalClosing] = useState(false)
   const [setReceiverInput, setSetReceiverInput] = useState('')
   const [setReceiverSaving, setSetReceiverSaving] = useState(false)
   const [pendingClaimAction, setPendingClaimAction] = useState<(() => void) | null>(null)
+
+  // Modal closing states for smooth exit animations
+  const [isVideoModalClosing, setIsVideoModalClosing] = useState(false)
+  const [isAddWalletModalClosing, setIsAddWalletModalClosing] = useState(false)
+  const [isKeyModalClosing, setIsKeyModalClosing] = useState(false)
 
   // Settings tab - receiver wallet
   const [settingsReceiverInput, setSettingsReceiverInput] = useState('')
@@ -352,7 +358,29 @@ export default function SolClaimApp() {
     setTimeout(() => setSuccess(''), 3000)
   }
 
+  const closeSetReceiverModal = () => {
+    if (setReceiverSaving) return
+    setIsSetReceiverModalClosing(true)
+  }
+  const finishSetReceiverClose = () => {
+    setIsSetReceiverModalClosing(false)
+    setIsSetReceiverModalOpen(false)
+    setSetReceiverInput('')
+    setPendingClaimAction(null)
+  }
+
+  const closeVideoModal = () => setIsVideoModalClosing(true)
+  const finishVideoClose = () => {
+    setIsVideoModalClosing(false)
+    setIsVideoModalOpen(false)
+  }
+
   const closeAddWalletModal = () => {
+    if (addWalletModalClaiming) return
+    setIsAddWalletModalClosing(true)
+  }
+  const finishAddWalletClose = () => {
+    setIsAddWalletModalClosing(false)
     setIsAddWalletModalOpen(false)
     setAddWalletKey('')
     setAddWalletModalAccounts([])
@@ -371,7 +399,9 @@ export default function SolClaimApp() {
     setIsKeyModalOpen(true)
   }
 
-  const closeKeyModal = () => {
+  const closeKeyModal = () => setIsKeyModalClosing(true)
+  const finishKeyClose = () => {
+    setIsKeyModalClosing(false)
     setIsKeyModalOpen(false)
     setPrivateKeyInput('')
     setError('')
@@ -1482,13 +1512,14 @@ export default function SolClaimApp() {
       </div>
 
               {/* Set Receiver Modal - shown when claiming without receiver set */}
-      {isSetReceiverModalOpen && (
+      {(isSetReceiverModalOpen || isSetReceiverModalClosing) && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 modal-backdrop-enter"
-          onClick={() => { setIsSetReceiverModalOpen(false); setSetReceiverInput(''); setPendingClaimAction(null) }}
+          className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 ${isSetReceiverModalClosing ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`}
+          onClick={closeSetReceiverModal}
+          onAnimationEnd={(e) => e.animationName === 'modal-backdrop-exit' && finishSetReceiverClose()}
         >
           <div
-            className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl modal-content-enter relative overflow-hidden"
+            className={`bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl relative overflow-hidden ${isSetReceiverModalClosing ? 'modal-content-exit' : 'modal-content-enter'}`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
@@ -1512,7 +1543,7 @@ export default function SolClaimApp() {
               <Button
                 variant="outline"
                 className="flex-1 h-12 rounded-xl font-bold border-2"
-                onClick={() => { setIsSetReceiverModalOpen(false); setSetReceiverInput(''); setPendingClaimAction(null) }}
+                onClick={closeSetReceiverModal}
               >
                 CANCEL
               </Button>
@@ -1536,13 +1567,14 @@ export default function SolClaimApp() {
       )}
 
               {/* Video Modal */}
-      {isVideoModalOpen && (
+      {(isVideoModalOpen || isVideoModalClosing) && (
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 modal-backdrop-enter"
-          onClick={() => setIsVideoModalOpen(false)}
+          className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 ${isVideoModalClosing ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`}
+          onClick={closeVideoModal}
+          onAnimationEnd={(e) => e.animationName === 'modal-backdrop-exit' && finishVideoClose()}
         >
           <div 
-            className="bg-card border-2 border-border rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl modal-content-enter relative"
+            className={`bg-card border-2 border-border rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl relative ${isVideoModalClosing ? 'modal-content-exit' : 'modal-content-enter'}`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
@@ -1567,7 +1599,7 @@ export default function SolClaimApp() {
                 <Button
                   variant="outline"
                   className="flex-1 rounded-2xl font-bold border-2"
-                  onClick={() => setIsVideoModalOpen(false)}
+                  onClick={closeVideoModal}
                 >
                   CLOSE
                 </Button>
@@ -1587,56 +1619,10 @@ export default function SolClaimApp() {
         </div>
       )}
 
-      {/* Set Receiver Modal - shown when claiming without receiver set */}
-      {isSetReceiverModalOpen && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 modal-backdrop-enter"
-          onClick={() => { setIsSetReceiverModalOpen(false); setSetReceiverInput(''); setPendingClaimAction(null); }}
-        >
-          <div
-            className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl modal-content-enter relative overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Wallet className="w-6 h-6 text-primary" />
-            </div>
-            <h3 className="text-xl font-black text-foreground tracking-tight">Set your receiver wallet</h3>
-            <p className="text-xs text-muted-foreground">Your claimed SOL will be sent here. You control this address. Change it anytime in Settings.</p>
-            <div className="space-y-2">
-              <Label className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">Solana Address</Label>
-              <Input
-                placeholder="Paste your Solana address..."
-                value={setReceiverInput}
-                onChange={(e) => setSetReceiverInput(e.target.value)}
-                className="h-12 bg-secondary/50 border-2 border-border rounded-xl font-mono text-sm"
-              />
-            </div>
-            <Button
-              className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-black"
-              onClick={handleSetReceiverSave}
-              disabled={setReceiverSaving || !setReceiverInput.trim()}
-            >
-              {setReceiverSaving ? (
-                <div className="flex items-center gap-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground" />
-                  SAVING...
-                </div>
-              ) : (
-                'Save & Continue'
-              )}
-            </Button>
-            <Button variant="ghost" className="w-full text-xs text-muted-foreground" onClick={() => { setIsSetReceiverModalOpen(false); setSetReceiverInput(''); setPendingClaimAction(null); }}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
-
               {/* Add Wallet Modal */}
-      {isAddWalletModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 modal-backdrop-enter" onClick={closeAddWalletModal}>
-          <div className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl modal-content-enter relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      {(isAddWalletModalOpen || isAddWalletModalClosing) && (
+        <div className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 ${isAddWalletModalClosing ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`} onClick={closeAddWalletModal} onAnimationEnd={(e) => e.animationName === 'modal-backdrop-exit' && finishAddWalletClose()}>
+          <div className={`bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl relative overflow-hidden ${isAddWalletModalClosing ? 'modal-content-exit' : 'modal-content-enter'}`} onClick={(e) => e.stopPropagation()}>
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
               <Plus className="w-6 h-6 text-primary" />
@@ -1706,9 +1692,15 @@ export default function SolClaimApp() {
       )}
 
               {/* Private Key Modal */}
-      {isKeyModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 modal-backdrop-enter">
-          <div className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl modal-content-enter relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      {(isKeyModalOpen || isKeyModalClosing) && (
+        <div
+          className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 ${isKeyModalClosing ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`}
+          onAnimationEnd={(e) => e.animationName === 'modal-backdrop-exit' && finishKeyClose()}
+        >
+          <div
+            className={`bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl relative overflow-hidden ${isKeyModalClosing ? 'modal-content-exit' : 'modal-content-enter'}`}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
               <Key className="w-6 h-6 text-primary" />
@@ -1750,7 +1742,7 @@ export default function SolClaimApp() {
               <Button 
                 variant="outline" 
                 className="w-full h-12 rounded-xl font-bold border-2"
-                onClick={addKeyWalletId ? closeKeyModal : () => { setIsKeyModalOpen(false); setPrivateKeyInput(''); setError(''); setAddKeyWalletId(null); setAddKeyWalletAddress(''); }}
+                onClick={closeKeyModal}
               >
                 CANCEL
               </Button>
