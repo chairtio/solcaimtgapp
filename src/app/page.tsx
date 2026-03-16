@@ -1101,16 +1101,75 @@ export default function SolClaimApp() {
                           )}
                         </div>
                         {claimableAccounts.length > 0 && (
-                          <div className="space-y-2 max-h-[180px] overflow-y-auto">
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase">Token accounts</p>
-                            {claimableAccounts.slice(0, 5).map((acc, idx) => (
-                              <div key={idx} className="flex justify-between items-center p-2 rounded-lg bg-secondary/30 text-xs">
-                                <span className="font-mono truncate max-w-[120px]">{acc.mintAddress.slice(0, 4)}...{acc.mintAddress.slice(-4)}</span>
-                                <span className="font-black text-primary">+{(acc.rentAmount / 1e9).toFixed(4)} SOL</span>
+                          <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <button
+                              onClick={() => setIsAccountsExpanded(!isAccountsExpanded)}
+                              className="w-full flex items-center justify-between px-3 py-2.5 bg-secondary/50 rounded-xl border border-transparent hover:border-border transition-all active:scale-[0.98]"
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-md bg-background flex items-center justify-center shadow-sm">
+                                  <Coins className="w-3 h-3 text-primary" />
+                                </div>
+                                <h3 className="font-bold text-xs text-foreground uppercase tracking-widest">Accounts</h3>
+                                <Badge variant="secondary" className="font-black bg-primary text-primary-foreground border-0 text-[10px] px-1.5 py-0">{claimableAccounts.length}</Badge>
                               </div>
-                            ))}
-                            {claimableAccounts.length > 5 && (
-                              <p className="text-[10px] text-muted-foreground">+{claimableAccounts.length - 5} more</p>
+                              <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-300 ${isAccountsExpanded ? 'rotate-180' : ''}`} />
+                            </button>
+                            {isAccountsExpanded && (
+                              <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
+                                {claimableAccounts.map((account, index) => (
+                                  <div key={index} className="flex items-center justify-between p-3 bg-card rounded-xl border-2 border-border hover:border-primary/30 transition-all group">
+                                    <div className="flex items-center gap-3">
+                                      {account.tokenImage ? (
+                                        <img
+                                          src={account.tokenImage}
+                                          alt={account.tokenName}
+                                          className="w-8 h-8 rounded-full bg-secondary object-cover shadow-sm"
+                                          onError={(e) => {
+                                            e.currentTarget.style.display = 'none'
+                                            e.currentTarget.nextElementSibling?.classList.remove('hidden')
+                                          }}
+                                        />
+                                      ) : null}
+                                      <div className={`w-8 h-8 rounded-full bg-secondary flex items-center justify-center shadow-sm ${account.tokenImage ? 'hidden' : ''}`}>
+                                        <Coins className="w-4 h-4 text-muted-foreground" />
+                                      </div>
+                                      <div>
+                                        <div className="font-bold text-xs text-foreground flex items-center gap-2">
+                                          {account.tokenName}
+                                          {!account.isEmpty && account.isDust && (
+                                            <Badge variant="destructive" className="text-[8px] px-1 py-0 h-3 bg-destructive/10 text-destructive border-0 uppercase tracking-widest font-black">DUST</Badge>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                          <div className="font-mono text-[10px] text-muted-foreground font-medium">
+                                            {account.mintAddress.slice(0, 4)}...{account.mintAddress.slice(-4)}
+                                          </div>
+                                          <div className="text-[10px] font-black text-primary">
+                                            +{(account.rentAmount / 1000000000).toFixed(4)} SOL
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg h-8 w-8 transition-all active:scale-90"
+                                      onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        copyToClipboard(account.mintAddress)
+                                      }}
+                                    >
+                                      {copiedAddress === account.mintAddress ? (
+                                        <CheckCircle className="w-3.5 h-3.5 text-primary" />
+                                      ) : (
+                                        <Copy className="w-3.5 h-3.5" />
+                                      )}
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
                             )}
                           </div>
                         )}
