@@ -117,14 +117,18 @@ export default function SolClaimApp() {
   const TELEGRAM_VIDEO_URL = 'https://t.me/solclaim/162'
   const PROMO_CLAIMABLE = 0.001 // Teaser shown to new users who've never claimed
 
-  const SHARE_TEXT = `Claim FREE Sol With SolClaim!
+  const getShareText = (telegramId: string) => `Claim FREE Sol With SolClaim!
+
 💰 Free SOL for every trader
 🆕 First SOL trader rewards bot
 🔐 Secure and safe (approved by Privy)
-👉 Start getting free SOL with SolClaim today.`
+
+👉 Start getting free SOL with SolClaim today.
+
+t.me/solclaimxbot?start=${telegramId}`
   const openSharePopup = () => {
     if (!user?.telegram_id) return
-    const shareUrl = `https://t.me/share/url?url=t.me/solclaimxbot?start=${user.telegram_id}&text=${encodeURIComponent(SHARE_TEXT)}`
+    const shareUrl = `https://t.me/share/url?url=t.me/solclaimxbot?start=${user.telegram_id}&text=${encodeURIComponent(getShareText(user.telegram_id))}`
     window.open(shareUrl, '_blank', 'noopener,noreferrer')
   }
   const UNLOCK_THRESHOLD = 0.001 // Shown as "unlocks when balance reaches this"

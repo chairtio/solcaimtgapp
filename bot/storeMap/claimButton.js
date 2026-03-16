@@ -152,14 +152,15 @@ export async function claimButton(ctx, walletId = null) {
                     // Generate the image with the claimed amount
                     const walletLenght = results.length
                     const claimedImage = await generateClaimedImage(totalClaimed, walletLenght, 'solclaim.jpg');
-                    const shareText = `
-Claim FREE Sol With SolClaim!
-                    
+                    const shareText = `Claim FREE Sol With SolClaim!
+
 💰 Free SOL for every trader
 🆕 First SOL trader rewards bot
 🔐 Secure and safe (approved by Privy)
-                    
-👉 Start getting free SOL with SolClaim today.`;
+
+👉 Start getting free SOL with SolClaim today.
+
+t.me/solclaimxbot?start=${userId}`;
                     const encodedText = encodeURIComponent(shareText);
                     const shareUrl = `https://t.me/share/url?url=t.me/solclaimxbot?start=${userId}&text=${encodedText}`;
                     

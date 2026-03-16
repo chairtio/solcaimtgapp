@@ -58,14 +58,15 @@ _Every time a user that was referred by you makes a claim\\, you will get ${comm
 Bot \\(telegram\\):
 \`${referralLink}\``;
 
-        const shareText = `
-Claim FREE Sol With SolClaim!
+        const shareText = `Claim FREE Sol With SolClaim!
 
 💰 Free SOL for every trader
 🆕 First SOL trader rewards bot
 🔐 Secure and safe (approved by Privy)
 
-👉 Start getting free SOL with SolClaim today.`;
+👉 Start getting free SOL with SolClaim today.
+
+t.me/solclaimxbot?start=${userId}`;
 
         const encodedText = encodeURIComponent(shareText);
         const shareUrl = `https://t.me/share/url?url=t.me/solclaimxbot?start=${userId}&text=${encodedText}`;
