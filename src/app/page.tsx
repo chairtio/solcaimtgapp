@@ -1719,10 +1719,10 @@ export default function SolClaimApp() {
                     const diffDays = Math.floor(diffMs / 86400000)
                     const timeAgo =
                       diffMins < 1 ? 'Just now' :
-                      diffMins < 60 ? `${diffMins}m ago` :
-                      diffHours < 24 ? `${diffHours}h ago` :
-                      diffDays < 7 ? `${diffDays}d ago` :
-                      d.toLocaleDateString()
+                      diffMins < 60 ? `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago` :
+                      diffHours < 24 ? `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago` :
+                      diffDays < 7 ? `${diffDays} day${diffDays !== 1 ? 's' : ''} ago` :
+                      d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
                     return (
                       <a
                         key={claim.signature}

@@ -63,20 +63,14 @@ export async function getTotalClaimingUsersAction() {
 }
 
 export async function getRecentClaimsAction(userId: string, limit = 10) {
-  const cached = unstable_cache(
-    async () => {
-      const txs = await getUserTransactions(userId, limit * 3) // fetch extra since we filter by type
-      return txs
-        .filter((t) => t.status === 'confirmed' && t.type === 'claim_rent')
-        .slice(0, limit)
-        .map((t) => ({
-          signature: t.signature,
-          sol_amount: Number(t.sol_amount),
-          created_at: t.created_at,
-        }))
-    },
-    ['stats-recent-claims', userId, String(limit)],
-    { revalidate: 60 }
-  )
-  return cached()
+  // No cache: user expects to see new claims immediately after claiming
+  const txs = await getUserTransactions(userId, limit * 3)
+  return txs
+    .filter((t) => t.status === 'confirmed' && (t.type === 'claim_rent' || t.type === 'batch_claim'))
+    .slice(0, limit)
+    .map((t) => ({
+      signature: t.signature,
+      sol_amount: Number(t.sol_amount),
+      created_at: t.created_at,
+    }))
 }
