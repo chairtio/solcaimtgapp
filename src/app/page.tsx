@@ -1777,11 +1777,6 @@ export default function SolClaimApp() {
 
           {/* Stats Tab */}
           <TabsContent value="stats" className="space-y-4 mt-0 outline-none">
-            <div className="px-1">
-              <h2 className="text-base font-black text-foreground uppercase tracking-widest">Statistics</h2>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Your claiming performance</p>
-            </div>
-
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-2xl bg-gradient-to-b from-card to-secondary/30 border-2 border-border py-3 px-4 flex flex-col items-center text-center">
                 <Coins className="w-5 h-5 text-primary mb-1" />
