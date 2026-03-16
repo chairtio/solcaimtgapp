@@ -60,7 +60,7 @@ interface ClaimableAccount {
 
 export default function SolClaimApp() {
   const router = useRouter()
-  const { user, isLoading } = useTelegram()
+  const { user, isLoading, error: telegramError } = useTelegram()
   const [activeTab, setActiveTab] = useState('home')
   const [publicKey, setPublicKey] = useState('')
   const [isScanning, setIsScanning] = useState(false)
@@ -526,13 +526,6 @@ export default function SolClaimApp() {
     }
   }
 
-  // Check if running in Telegram
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !window.Telegram?.WebApp) {
-      setError('This app must be opened from Telegram')
-    }
-  }, [])
-
   const scanWallet = async () => {
     if (!isValidPublicKey(publicKey)) {
       setError('Invalid Solana public key')
@@ -801,6 +794,26 @@ export default function SolClaimApp() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {user && (
+              <div className="flex items-center gap-2 min-w-0">
+                {user.photo_url ? (
+                  <img
+                    src={user.photo_url}
+                    alt=""
+                    className="w-8 h-8 rounded-full object-cover ring-2 ring-primary/20 flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-black text-primary">
+                      {(user.first_name?.[0] || '?').toUpperCase()}
+                    </span>
+                  </div>
+                )}
+                <span className="text-xs font-bold text-foreground truncate max-w-[100px]">
+                  {[user.first_name, user.last_name].filter(Boolean).join(' ')}
+                </span>
+              </div>
+            )}
             {user?.is_premium && (
               <Badge variant="secondary" className="font-black text-[10px] uppercase tracking-widest bg-primary/10 text-primary border-0">
                 PRO
@@ -898,10 +911,10 @@ export default function SolClaimApp() {
                 )}
               </Button>
 
-              {error && (
+              {(telegramError || error) && (
                 <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 flex items-start gap-3">
                   <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-                  <p className="text-sm font-medium text-destructive">{error}</p>
+                  <p className="text-sm font-medium text-destructive">{telegramError || error}</p>
                 </div>
               )}
 
@@ -1074,10 +1087,10 @@ export default function SolClaimApp() {
               </div>
             )}
 
-            {error && (
+            {(telegramError || error) && (
               <div className="p-3 rounded-xl bg-destructive/10 border-2 border-destructive/20 flex items-start gap-3">
                 <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-                <p className="text-sm font-medium text-destructive">{error}</p>
+                <p className="text-sm font-medium text-destructive">{telegramError || error}</p>
               </div>
             )}
 
@@ -1441,7 +1454,7 @@ export default function SolClaimApp() {
                 </Button>
               </div>
             )}
-            {error && <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20"><p className="text-sm font-medium text-destructive">{error}</p></div>}
+            {(telegramError || error) && <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20"><p className="text-sm font-medium text-destructive">{telegramError || error}</p></div>}
             <Button variant="outline" className="w-full h-12 rounded-xl font-bold border-2" onClick={closeAddWalletModal}>CANCEL</Button>
           </div>
         </div>
@@ -1479,10 +1492,10 @@ export default function SolClaimApp() {
               />
             </div>
 
-            {error && (
+            {(telegramError || error) && (
               <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/20 flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-                <p className="text-sm font-bold text-destructive">{error}</p>
+                <p className="text-sm font-bold text-destructive">{telegramError || error}</p>
               </div>
             )}
 

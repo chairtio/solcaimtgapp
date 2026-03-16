@@ -57,9 +57,13 @@ export function useTelegram() {
             is_premium: true
           }
         } else {
-          // Check if running in Telegram WebApp
+          // Wait for Telegram WebApp script to load (can be async in Telegram's WebView)
+          for (let i = 0; i < 50; i++) {
+            if (window.Telegram?.WebApp) break
+            await new Promise((r) => setTimeout(r, 100))
+          }
           if (typeof window === 'undefined' || !window.Telegram?.WebApp) {
-            setError('This app must be opened from Telegram')
+            setError('Open this app from the bot menu (tap the bot, then the menu button)—not from a link.')
             setIsLoading(false)
             return
           }
