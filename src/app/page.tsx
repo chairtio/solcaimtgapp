@@ -221,39 +221,8 @@ export default function SolClaimApp() {
     }
   }, [publicKey])
 
-  // Auto-fill first saved wallet and scan on home load (no user interaction required)
-  const hasAutoFilledRef = useRef(false)
+  // Wallet check on visit disabled - user must manually enter/select wallet to scan
   const skipNextDebounceRef = useRef(false)
-  useEffect(() => {
-    if (!user || activeTab !== 'home' || !walletsLoaded || publicKey) return
-    if (savedWallets.length === 0) return
-    if (hasAutoFilledRef.current) return
-    const first = savedWallets[0]
-    if (first?.public_key) {
-      hasAutoFilledRef.current = true
-      skipNextDebounceRef.current = true
-      setPublicKey(first.public_key)
-      // Run scan after state update - use microtask to avoid stale closure
-      queueMicrotask(() => {
-        // scanWallet reads publicKey from state; we need to pass it
-        const runScan = async () => {
-          const pk = first.public_key
-          if (!pk || !isValidPublicKey(pk)) return
-          setIsScanning(true)
-          try {
-            const result = await getClaimableRent(new PublicKey(pk))
-            setClaimableRent(result.totalRent / 1000000000)
-            setClaimableAccounts(result.accounts)
-          } catch (err) {
-            console.error(err)
-          } finally {
-            setIsScanning(false)
-          }
-        }
-        runScan()
-      })
-    }
-  }, [user, activeTab, walletsLoaded, savedWallets])
 
   // Debounced auto-scan when user types valid address (home + onboarding)
   const debounceScanRef = useRef<ReturnType<typeof setTimeout> | null>(null)
