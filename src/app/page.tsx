@@ -53,7 +53,7 @@ import {
 import { toast } from 'sonner'
 import { executeClaimOnServer, closeTokenAccountsOnServer } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
-import { getStatsPageDataAction, getLeaderboardAction, getRecentClaimsAction } from '@/app/actions/stats'
+import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardAction, getRecentClaimsAction } from '@/app/actions/stats'
 
 interface ClaimableAccount {
   accountAddress: string
@@ -199,15 +199,9 @@ export default function SolClaimApp() {
       getRecentClaimsAction(user.id, 10).then(setRecentClaims).catch(() => setRecentClaims([]))
     }
     if (user && activeTab === 'stats') {
-      getStatsPageDataAction().then(({ totalClaimed, totalClaimingUsers, leaderboard }) => {
-        setTotalClaimed(totalClaimed)
-        setTotalClaimingUsers(totalClaimingUsers)
-        setLeaderboard(leaderboard)
-      }).catch(() => {
-        setTotalClaimed(null)
-        setTotalClaimingUsers(null)
-        setLeaderboard([])
-      })
+      getTotalClaimedAction().then(setTotalClaimed).catch(() => setTotalClaimed(null))
+      getTotalClaimingUsersAction().then(setTotalClaimingUsers).catch(() => setTotalClaimingUsers(null))
+      getLeaderboardAction(10).then(setLeaderboard).catch(() => setLeaderboard([]))
     }
   }, [user, activeTab])
 
