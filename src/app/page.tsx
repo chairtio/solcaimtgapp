@@ -164,9 +164,9 @@ export default function SolClaimApp() {
     setShowOnboarding(false)
   }
   const ONBOARDING_STEPS = [
-    { title: 'You trade tokens on Solana', desc: 'Every token account pays a rent fee to the blockchain.', icon: ArrowLeftRight, bg: 'from-violet-600 via-purple-600 to-indigo-700' },
-    { title: 'When you sell, those token accounts become empty', desc: 'Leftover SOL stays locked in those abandoned token accounts.', icon: Package, bg: 'from-indigo-600 via-blue-600 to-cyan-600' },
-    { title: 'Claim your SOL back', desc: 'Recover 100% of your rent from the Solana blockchain.', icon: Sparkles, bg: 'from-emerald-600 via-teal-600 to-cyan-600' },
+    { title: 'You trade tokens on Solana', desc: 'Every token account pays a rent fee to the blockchain.', icon: ArrowLeftRight },
+    { title: 'When you sell, those token accounts become empty', desc: 'Leftover SOL stays locked in those abandoned token accounts.', icon: Package },
+    { title: 'Claim your SOL back', desc: 'Recover 100% of your rent from the Solana blockchain.', icon: Sparkles },
   ]
 
   // Skip receiver check when we just saved in Set Receiver modal (React state not updated yet)
@@ -922,42 +922,41 @@ export default function SolClaimApp() {
     )
   }
 
-  // Story-style onboarding (first visit only)
+  // Onboarding (first visit only) - matches app design
   if (showOnboarding === true) {
     const step = ONBOARDING_STEPS[onboardingStep]
     const StepIcon = step.icon
     const isLast = onboardingStep === ONBOARDING_STEPS.length - 1
     return (
-      <div className={`fixed inset-0 z-[200] bg-gradient-to-br ${step.bg} flex flex-col`}>
-        {/* Progress bars */}
+      <div className="fixed inset-0 z-[200] bg-background flex flex-col">
         <div className="flex gap-1.5 px-4 pt-[max(1.5rem,env(safe-area-inset-top))]">
           {ONBOARDING_STEPS.map((_, i) => (
             <div
               key={i}
-              className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                i <= onboardingStep ? 'bg-white/90' : 'bg-white/25'
+              className={`h-0.5 flex-1 transition-all duration-300 ${
+                i <= onboardingStep ? 'bg-primary' : 'bg-muted'
               }`}
             />
           ))}
         </div>
         <button
           onClick={finishOnboarding}
-          className="absolute right-4 top-[max(1.5rem,env(safe-area-inset-top))] p-2 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+          className="absolute right-4 top-[max(1.5rem,env(safe-area-inset-top))] p-2 text-muted-foreground hover:text-foreground transition-colors"
           aria-label="Skip"
         >
           <X className="w-5 h-5" />
         </button>
         <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-          <div className="w-24 h-24 rounded-3xl bg-white/15 backdrop-blur flex items-center justify-center mb-8 shadow-2xl">
-            <StepIcon className="w-12 h-12 text-white" />
+          <div className="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center mb-6">
+            <StepIcon className="w-8 h-8 text-primary" />
           </div>
-          <p className="text-white/60 text-sm font-bold mb-4">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">
             {onboardingStep + 1} of {ONBOARDING_STEPS.length}
           </p>
-          <h2 className="text-2xl font-black text-white mb-3 leading-tight">
+          <h2 className="text-xl font-black text-foreground mb-2 leading-tight">
             {step.title}
           </h2>
-          <p className="text-white/90 text-base font-medium max-w-sm leading-relaxed">
+          <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
             {step.desc}
           </p>
         </div>
@@ -967,10 +966,10 @@ export default function SolClaimApp() {
               if (isLast) finishOnboarding()
               else setOnboardingStep((s) => s + 1)
             }}
-            className="w-full h-14 rounded-2xl bg-white text-primary font-black text-base shadow-xl hover:bg-white/95 active:scale-[0.98]"
+            className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-black text-xs hover:bg-primary/90 active:scale-[0.98]"
           >
             {isLast ? 'Get Started' : 'Next'}
-            {!isLast && <ChevronRight className="w-5 h-5 ml-1" />}
+            {!isLast && <ChevronRight className="w-4 h-4 ml-1" />}
           </Button>
         </div>
       </div>
@@ -979,6 +978,24 @@ export default function SolClaimApp() {
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans pb-24 selection:bg-primary/10">
+      {/* Promo Banner - 0% fees, at very top */}
+      {!promoBannerDismissed && (
+        <div className="bg-primary/10 border-b border-border">
+          <div className="max-w-md mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
+            <p className="text-xs font-bold text-foreground">
+              0% fees on claims — keep 100% of your SOL. Limited time.
+            </p>
+            <button
+              onClick={dismissPromoBanner}
+              className="p-1.5 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              aria-label="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Header */}
       <div className="sticky top-0 z-40 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-3">
         <div className="flex items-center justify-between max-w-md mx-auto">
@@ -1014,30 +1031,6 @@ export default function SolClaimApp() {
           </div>
         </div>
       </div>
-
-      {/* Promo Banner - 0% fees */}
-      {!promoBannerDismissed && (
-        <div className="mx-4 mt-3 max-w-md mx-auto">
-          <div className="relative flex items-center gap-3 rounded-xl bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 border-2 border-amber-500/30 py-3 px-4 shadow-lg">
-            <button
-              onClick={dismissPromoBanner}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 transition-colors"
-              aria-label="Dismiss"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <span className="text-xl">🔥</span>
-            <div className="flex-1 pr-8">
-              <p className="text-sm font-black text-foreground leading-tight">
-                🔥 0% fees on claims — keep 100% of your SOL
-              </p>
-              <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-0.5">
-                Limited time only. Don&apos;t miss out! 🔥
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="px-4 py-6 space-y-6 max-w-md mx-auto">
         {/* Main Content Area */}
