@@ -187,49 +187,60 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
     const allFollowUps = [...followUpsSent.map((f: any) => ({ ...f, status: 'sent' as const })), ...followUpsScheduled.map((f: any) => ({ ...f, status: 'scheduled' as const }))]
 
     return (
-      <div data-admin className="space-y-6 w-full max-w-6xl mx-auto">
+      <div data-admin className="space-y-8 w-full max-w-6xl mx-auto">
         <button type="button" onClick={() => setSelectedUserId(null)} className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-2 transition-colors duration-150">
-          <ArrowLeft className="w-4 h-4" /> Users
+          <ArrowLeft className="w-4 h-4" /> Back to Users
         </button>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <AdminCard title="User Detail">
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Telegram ID</p>
-                <p className="font-mono text-sm">{userDetail.user?.telegram_id}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Username</p>
-                <p>@{userDetail.user?.username || '—'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Name</p>
-                <p>{[userDetail.user?.first_name, userDetail.user?.last_name].filter(Boolean).join(' ') || '—'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Created</p>
-                <p className="text-xs">{userDetail.user?.created_at ? new Date(userDetail.user.created_at).toLocaleString() : '—'}</p>
+        <div className="grid gap-8 lg:grid-cols-2">
+          <AdminCard>
+            <AdminCardHeader>
+              <AdminCardTitle>User Detail</AdminCardTitle>
+            </AdminCardHeader>
+            <AdminCardContent className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Telegram ID</p>
+                  <p className="font-mono text-sm">{userDetail.user?.telegram_id}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Username</p>
+                  <p className="text-sm">@{userDetail.user?.username || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Name</p>
+                  <p className="text-sm">{[userDetail.user?.first_name, userDetail.user?.last_name].filter(Boolean).join(' ') || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Created</p>
+                  <p className="text-sm">{userDetail.user?.created_at ? new Date(userDetail.user.created_at).toLocaleString() : '—'}</p>
+                </div>
               </div>
               {userDetail.user?.bot_blocked_at && (
                 <Badge variant="destructive">Bot blocked</Badge>
               )}
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Stats</p>
-                <p className="text-sm">Claimed: {Number(userDetail.stats?.total_sol_claimed || 0).toFixed(4)} SOL | Accounts: {userDetail.stats?.total_accounts_closed || 0}</p>
+              <div className="pt-4 border-t border-border/20">
+                <p className="text-xs font-medium text-muted-foreground mb-2">Stats</p>
+                <p className="text-sm">Claimed: <span className="font-semibold">{Number(userDetail.stats?.total_sol_claimed || 0).toFixed(4)} SOL</span> | Accounts: <span className="font-semibold">{userDetail.stats?.total_accounts_closed || 0}</span></p>
               </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Wallets</p>
-                <ul className="text-xs font-mono space-y-1">
+              <div className="pt-4 border-t border-border/20">
+                <p className="text-xs font-medium text-muted-foreground mb-2">Wallets</p>
+                <ul className="text-sm font-mono space-y-2">
                   {(userDetail.wallets || []).map((w: any) => (
-                    <li key={w.id}>{w.public_key?.slice(0, 8)}...{w.public_key?.slice(-4)} ({w.status})</li>
+                    <li key={w.id} className="flex items-center justify-between">
+                      <span>{w.public_key?.slice(0, 8)}...{w.public_key?.slice(-4)}</span>
+                      <Badge variant="outline" className="text-[10px]">{w.status}</Badge>
+                    </li>
                   ))}
-                  {(!userDetail.wallets || userDetail.wallets.length === 0) && <li>—</li>}
+                  {(!userDetail.wallets || userDetail.wallets.length === 0) && <li className="text-muted-foreground font-sans">No wallets linked</li>}
                 </ul>
               </div>
-            </div>
+            </AdminCardContent>
           </AdminCard>
-          <AdminCard title="Follow-ups">
-            <div className="space-y-4">
+          <AdminCard>
+            <AdminCardHeader>
+              <AdminCardTitle>Follow-ups</AdminCardTitle>
+            </AdminCardHeader>
+            <AdminCardContent className="space-y-6">
               {allFollowUps.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
@@ -287,28 +298,30 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
               ) : (
                 <p className="text-sm text-muted-foreground">No follow-ups sent or scheduled for this user.</p>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={previewSending}
-                onClick={async () => {
-                  setPreviewSending(true)
-                  try {
-                    await adminFetch('/api/admin/preview', {
-                      method: 'POST',
-                      body: JSON.stringify({ message: 'Test preview from admin dashboard' }),
-                    })
-                    toast.success('Preview sent to your Telegram')
-                  } catch (e) {
-                    toast.error((e as Error).message)
-                  } finally {
-                    setPreviewSending(false)
-                  }
-                }}
-              >
-                {previewSending ? 'Sending...' : 'Send custom preview'}
-              </Button>
-            </div>
+              <div className="pt-4 border-t border-border/20">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={previewSending}
+                  onClick={async () => {
+                    setPreviewSending(true)
+                    try {
+                      await adminFetch('/api/admin/preview', {
+                        method: 'POST',
+                        body: JSON.stringify({ message: 'Test preview from admin dashboard' }),
+                      })
+                      toast.success('Preview sent to your Telegram')
+                    } catch (e) {
+                      toast.error((e as Error).message)
+                    } finally {
+                      setPreviewSending(false)
+                    }
+                  }}
+                >
+                  {previewSending ? 'Sending...' : 'Send custom preview'}
+                </Button>
+              </div>
+            </AdminCardContent>
           </AdminCard>
         </div>
       </div>
@@ -326,12 +339,15 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
   return (
     <div data-admin className="flex min-h-0 w-full max-w-6xl mx-auto pb-24">
       {/* Sidebar - desktop: Stripe-style left accent for active */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-60 lg:shrink-0 gap-0.5 lg:border-r lg:border-border/50 lg:pr-6 lg:sticky lg:top-4 lg:self-start">
+      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 gap-1 lg:border-r lg:border-border/50 lg:pr-8 lg:sticky lg:top-4 lg:self-start">
+        <div className="px-4 pb-4 mb-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Admin</p>
+        </div>
         {navTabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setAdminTab(id)}
-            className={`flex items-center gap-3 pl-4 pr-3 py-2.5 text-sm font-medium text-left w-full transition-all duration-200 rounded-r-lg border-l-2 ${
+            className={`flex items-center gap-3 pl-4 pr-3 py-3 text-sm font-medium text-left w-full transition-all duration-200 rounded-r-lg border-l-4 ${
               adminTab === id
                 ? 'bg-primary/10 text-primary border-l-primary'
                 : 'border-l-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground'
@@ -340,7 +356,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             <Icon className="w-4 h-4 shrink-0" /> {label}
           </button>
         ))}
-        <div className="mt-auto pt-4 border-t border-border/50">
+        <div className="mt-6 pt-6 border-t border-border/50">
           <Button variant="ghost" size="sm" onClick={onBack} className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground transition-colors duration-150">
             <ArrowLeft className="w-4 h-4" /> Back
           </Button>
@@ -348,7 +364,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
       </aside>
 
       <Tabs value={adminTab} onValueChange={(v) => { setAdminTab(v); setSelectedUserId(null); }} className="flex flex-col lg:flex-1 lg:min-w-0">
-        <div className="flex gap-2 overflow-x-auto pb-3 lg:hidden custom-scrollbar">
+        <div className="flex gap-2 overflow-x-auto pb-4 lg:hidden custom-scrollbar">
           {[
             { id: 'overview', label: 'Overview', icon: BarChart3 },
             { id: 'users', label: 'Users', icon: Users },
@@ -359,19 +375,18 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             <button
               key={id}
               onClick={() => setAdminTab(id)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
-                adminTab === id ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground'
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                adminTab === id ? 'bg-primary text-primary-foreground' : 'bg-muted/60 text-muted-foreground hover:bg-muted/80'
               }`}
             >
-              <Icon className="w-3.5 h-3.5" /> {label}
+              <Icon className="w-4 h-4" /> {label}
             </button>
           ))}
         </div>
 
-        <TabsContent value="overview" className="mt-4 space-y-6 outline-none">
-          <h3 className="text-lg font-semibold text-foreground">Overview</h3>
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">Date range</p>
+        <TabsContent value="overview" className="mt-4 space-y-8 outline-none">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h3 className="text-xl font-semibold text-foreground">Overview</h3>
             <FilterPills
               value={dateRange}
               onChange={(v) => setDateRange(v as 'today' | '7d' | '30d')}
@@ -383,22 +398,25 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             />
           </div>
           {statsLoading ? (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="space-y-8">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-5">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="rounded-xl border border-border/40 bg-card p-5">
-                    <div className="h-4 w-20 rounded bg-muted/60 animate-pulse mb-3" />
+                  <div key={i} className="rounded-xl border border-border/20 bg-card p-6 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+                    <div className="h-4 w-20 rounded bg-muted/60 animate-pulse mb-4" />
                     <div className="h-8 w-16 rounded bg-muted/60 animate-pulse" />
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-8">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="rounded-xl border border-border/40 bg-card p-5">
-                    <div className="h-4 w-24 rounded bg-muted/60 animate-pulse mb-3" />
-                    <div className="h-8 w-20 rounded bg-muted/60 animate-pulse" />
-                  </div>
-                ))}
+              <div className="space-y-4">
+                <p className="text-sm font-medium text-muted-foreground">All time</p>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="rounded-xl border border-border/20 bg-card p-6 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+                      <div className="h-4 w-24 rounded bg-muted/60 animate-pulse mb-4" />
+                      <div className="h-8 w-20 rounded bg-muted/60 animate-pulse" />
+                    </div>
+                  ))}
+                </div>
               </div>
               <AdminCard>
                 <AdminCardHeader>
@@ -412,25 +430,25 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
           ) : stats ? (
             <>
               {stats.range && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-                  <AdminStatCard label="New signups" value={stats.newSignups ?? 0} />
-                  <AdminStatCard label="New claims" value={stats.newClaims ?? 0} />
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-5">
+                  <AdminStatCard size="primary" label="New signups" value={stats.newSignups ?? 0} />
+                  <AdminStatCard size="primary" label="New claims" value={stats.newClaims ?? 0} />
                   <AdminStatCard label="Campaigns sent" value={stats.campaignsSent ?? 0} />
                   <AdminStatCard label="Campaigns scheduled" value={stats.campaignsScheduled ?? 0} />
                   <AdminStatCard label="Broadcasts sent" value={stats.broadcastsSent ?? 0} />
                   <AdminStatCard label="Follow-ups sent" value={stats.followUpsSent ?? 0} />
                 </div>
               )}
-              <div className="pt-8 mt-8 border-t border-border/50">
-                <p className="text-sm font-medium text-muted-foreground mb-4">All time</p>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="space-y-4">
+                <p className="text-sm font-medium text-muted-foreground">All time</p>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
                   <AdminStatCard label="Total Users" value={stats.totalUsers} />
                   <AdminStatCard label="Wallets" value={stats.totalWallets} />
                   <AdminStatCard label="Claimed" value={stats.usersWhoClaimed} />
                   <AdminStatCard label="Bot Blocked" value={stats.botBlockedCount} />
                 </div>
               </div>
-              <AdminCard className="mt-8">
+              <AdminCard>
                 <AdminCardHeader>
                   <AdminCardTitle>Recent Signups</AdminCardTitle>
                 </AdminCardHeader>
@@ -467,56 +485,59 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
           ) : null}
         </TabsContent>
 
-        <TabsContent value="users" className="mt-4 space-y-6 outline-none">
-          <div className="flex flex-wrap items-center gap-3">
-            <Input
-              placeholder="Search telegram_id or username"
-              value={userSearch}
-              onChange={(e) => setUserSearch(e.target.value)}
-              className="h-10 max-w-[220px] rounded-lg"
-            />
-            <FilterPills
-              value={userFilter}
-              onChange={(v) => setUserFilter(v as 'all' | 'not_claimed' | 'blocked')}
-              options={[
-                { value: 'all', label: 'All' },
-                { value: 'not_claimed', label: 'Not claimed' },
-                { value: 'blocked', label: 'Blocked' },
-              ]}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 rounded-lg"
-              disabled={exportLoading}
-              onClick={async () => {
-                setExportLoading(true)
-                try {
-                  const initData = getInitData()
-                  const params = new URLSearchParams()
-                  if (userFilter === 'not_claimed') params.set('claimed', 'false')
-                  if (userFilter === 'blocked') params.set('blocked', 'true')
-                  const res = await fetch(`/api/admin/users/export?${params}`, {
-                    headers: { 'X-Telegram-Init-Data': initData },
-                  })
-                  if (!res.ok) throw new Error('Export failed')
-                  const blob = await res.blob()
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url
-                  a.download = `users-export-${new Date().toISOString().slice(0, 10)}.csv`
-                  a.click()
-                  URL.revokeObjectURL(url)
-                  toast.success('CSV downloaded')
-                } catch (e) {
-                  toast.error((e as Error).message)
-                } finally {
-                  setExportLoading(false)
-                }
-              }}
-            >
-              <Download className="w-3.5 h-3.5 mr-1" /> {exportLoading ? 'Exporting...' : 'Export CSV'}
-            </Button>
+        <TabsContent value="users" className="mt-4 space-y-8 outline-none">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h3 className="text-xl font-semibold text-foreground">Users</h3>
+            <div className="flex flex-wrap items-center gap-3">
+              <Input
+                placeholder="Search telegram_id or username"
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                className="h-10 w-full sm:w-[240px] rounded-lg"
+              />
+              <FilterPills
+                value={userFilter}
+                onChange={(v) => setUserFilter(v as 'all' | 'not_claimed' | 'blocked')}
+                options={[
+                  { value: 'all', label: 'All' },
+                  { value: 'not_claimed', label: 'Not claimed' },
+                  { value: 'blocked', label: 'Blocked' },
+                ]}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 rounded-lg"
+                disabled={exportLoading}
+                onClick={async () => {
+                  setExportLoading(true)
+                  try {
+                    const initData = getInitData()
+                    const params = new URLSearchParams()
+                    if (userFilter === 'not_claimed') params.set('claimed', 'false')
+                    if (userFilter === 'blocked') params.set('blocked', 'true')
+                    const res = await fetch(`/api/admin/users/export?${params}`, {
+                      headers: { 'X-Telegram-Init-Data': initData },
+                    })
+                    if (!res.ok) throw new Error('Export failed')
+                    const blob = await res.blob()
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `users-export-${new Date().toISOString().slice(0, 10)}.csv`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                    toast.success('CSV downloaded')
+                  } catch (e) {
+                    toast.error((e as Error).message)
+                  } finally {
+                    setExportLoading(false)
+                  }
+                }}
+              >
+                <Download className="w-4 h-4 mr-2" /> {exportLoading ? 'Exporting...' : 'Export CSV'}
+              </Button>
+            </div>
           </div>
           {usersLoading ? (
             <AdminCard>
@@ -562,14 +583,14 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
           )}
         </TabsContent>
 
-        <TabsContent value="campaigns" className="mt-4 space-y-6 outline-none">
+        <TabsContent value="campaigns" className="mt-4 space-y-8 outline-none">
           <AdminPageHeader title="Campaigns" />
           {campaignsLoading ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="rounded-xl border border-border/40 bg-card p-5 h-20">
-                  <div className="h-4 w-32 rounded bg-muted/60 animate-pulse mb-2" />
-                  <div className="h-3 w-24 rounded bg-muted/60 animate-pulse" />
+                <div key={i} className="rounded-xl border border-border/20 bg-card p-6 h-24 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+                  <div className="h-5 w-40 rounded bg-muted/60 animate-pulse mb-3" />
+                  <div className="h-4 w-24 rounded bg-muted/60 animate-pulse" />
                 </div>
               ))}
             </div>
@@ -582,34 +603,38 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
               />
             </AdminCard>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {campaigns.map((c) => (
                 <AdminCard key={c.id}>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-sm">{c.name}</span>
-                    <Badge
-                      variant={c.status === 'sent' ? 'default' : c.status === 'scheduled' ? 'secondary' : c.status === 'cancelled' ? 'destructive' : 'outline'}
-                      className="text-xs"
-                    >
-                      {c.status}
-                    </Badge>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="font-semibold text-base">{c.name}</span>
+                        <Badge
+                          variant={c.status === 'sent' ? 'default' : c.status === 'scheduled' ? 'secondary' : c.status === 'cancelled' ? 'destructive' : 'outline'}
+                          className="text-xs"
+                        >
+                          {c.status}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {c.sent_at ? `Sent ${new Date(c.sent_at).toLocaleString()}` : c.scheduled_at ? `Scheduled ${new Date(c.scheduled_at).toLocaleString()}` : '—'}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {c.sent_at ? `Sent ${new Date(c.sent_at).toLocaleString()}` : c.scheduled_at ? `Scheduled ${new Date(c.scheduled_at).toLocaleString()}` : '—'}
-                  </p>
                 </AdminCard>
               ))}
             </div>
           )}
         </TabsContent>
 
-        <TabsContent value="followups" className="mt-4 space-y-6 outline-none">
+        <TabsContent value="followups" className="mt-4 space-y-8 outline-none">
           {followUpsLoading ? (
-            <div className="space-y-4">
+            <div className="space-y-6">
               {[1, 2].map((i) => (
-                <div key={i} className="rounded-xl border border-border/40 p-6">
-                  <div className="h-5 w-40 rounded bg-muted/60 animate-pulse mb-4" />
-                  <div className="space-y-2">
+                <div key={i} className="rounded-xl border border-border/20 p-6 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+                  <div className="h-5 w-40 rounded bg-muted/60 animate-pulse mb-6" />
+                  <div className="space-y-4">
                     {[1, 2, 3].map((j) => (
                       <div key={j} className="h-16 rounded-lg bg-muted/60 animate-pulse" />
                     ))}
@@ -618,33 +643,32 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
               ))}
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-8">
               {(['not_claimed', 'claimed'] as const).map((segment) => {
                 const items = followUps.filter((f) => (f.segment || 'not_claimed') === segment)
                 const isOpen = followUpExpandedGroups[segment] !== false
                 const label = segment === 'not_claimed' ? 'Not claimed' : 'Claimed'
                 return (
-                  <AdminCard key={segment}>
+                  <AdminCard key={segment} className="p-0 overflow-hidden">
                     <button
                       type="button"
-                      className="w-full flex items-center justify-between p-4 text-left hover:bg-muted/50 transition-colors rounded-t-lg"
+                      className="w-full flex items-center justify-between p-6 text-left hover:bg-muted/30 transition-colors"
                       onClick={() => setFollowUpExpandedGroups((g) => ({ ...g, [segment]: !isOpen }))}
                     >
-                      <span className="text-sm font-semibold flex items-center gap-2">
-                        {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                        {label} ({items.length})
+                      <span className="text-base font-semibold flex items-center gap-3">
+                        {isOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                        {label} <Badge variant="secondary" className="ml-2">{items.length}</Badge>
                       </span>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-7"
                         onClick={(e) => { e.stopPropagation(); setFollowUpAddingSegment(s => s === segment ? null : segment); setFollowUpEditingId(null); }}
                       >
-                        <Plus className="w-3.5 h-3.5 mr-1" /> Add
+                        {followUpAddingSegment === segment ? 'Cancel' : <><Plus className="w-4 h-4 mr-1" /> Add</>}
                       </Button>
                     </button>
                     {isOpen && (
-                      <div className="pt-0 pb-4 space-y-3 px-6">
+                      <div className="px-6 pb-6 space-y-4 border-t border-border/20 pt-6">
                         {followUpAddingSegment === segment && (
                           <FollowUpForm
                             segment={segment}
@@ -804,87 +828,89 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
           )}
         </TabsContent>
 
-        <TabsContent value="broadcast" className="mt-4 space-y-6 outline-none">
+        <TabsContent value="broadcast" className="mt-4 space-y-8 outline-none">
           <AdminCard>
             <AdminCardHeader>
               <AdminCardTitle>Send Broadcast</AdminCardTitle>
             </AdminCardHeader>
-            <AdminCardContent className="space-y-4">{/* BROADCAST_FORM_START */}
-                <p className="text-sm font-medium text-muted-foreground">Audience — preview first, then send.</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Claimed</p>
-                    <FilterPills
-                      value={broadcastAudienceFilters.claimed}
-                      onChange={(v) => {
-                        setBroadcastAudienceFilters((f) => ({ ...f, claimed: v as 'all' | 'yes' | 'no' }))
-                        setBroadcastAudienceCount(null)
-                      }}
-                      options={[
-                        { value: 'all', label: 'All' },
-                        { value: 'yes', label: 'Claimed' },
-                        { value: 'no', label: 'Not claimed' },
-                      ]}
-                    />
+            <AdminCardContent className="space-y-6">
+                <div className="space-y-4">
+                  <p className="text-sm font-medium text-muted-foreground">Audience</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Claimed</p>
+                      <FilterPills
+                        value={broadcastAudienceFilters.claimed}
+                        onChange={(v) => {
+                          setBroadcastAudienceFilters((f) => ({ ...f, claimed: v as 'all' | 'yes' | 'no' }))
+                          setBroadcastAudienceCount(null)
+                        }}
+                        options={[
+                          { value: 'all', label: 'All' },
+                          { value: 'yes', label: 'Claimed' },
+                          { value: 'no', label: 'Not claimed' },
+                        ]}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Referrals</p>
+                      <FilterPills
+                        value={broadcastAudienceFilters.has_referrals}
+                        onChange={(v) => {
+                          setBroadcastAudienceFilters((f) => ({ ...f, has_referrals: v as 'all' | 'yes' | 'no' }))
+                          setBroadcastAudienceCount(null)
+                        }}
+                        options={[
+                          { value: 'all', label: 'All' },
+                          { value: 'yes', label: 'Has invited friends' },
+                          { value: 'no', label: 'No referrals' },
+                        ]}
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Referrals</p>
-                    <FilterPills
-                      value={broadcastAudienceFilters.has_referrals}
-                      onChange={(v) => {
-                        setBroadcastAudienceFilters((f) => ({ ...f, has_referrals: v as 'all' | 'yes' | 'no' }))
-                        setBroadcastAudienceCount(null)
+                  <div className="flex items-center gap-3 min-h-[2rem]">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="min-w-[140px]"
+                      disabled={broadcastAudiencePreviewing}
+                      onClick={async () => {
+                        setBroadcastAudiencePreviewing(true)
+                        try {
+                          const params = new URLSearchParams({
+                            claimed: broadcastAudienceFilters.claimed,
+                            has_referrals: broadcastAudienceFilters.has_referrals,
+                          })
+                          const r = await adminFetch(`/api/admin/broadcast/audience?${params}`)
+                          setBroadcastAudienceCount(r.count ?? 0)
+                          toast.success(`${r.count ?? 0} users will receive this`)
+                        } catch (e) {
+                          toast.error((e as Error).message)
+                          setBroadcastAudienceCount(null)
+                        } finally {
+                          setBroadcastAudiencePreviewing(false)
+                        }
                       }}
-                      options={[
-                        { value: 'all', label: 'All' },
-                        { value: 'yes', label: 'Has invited friends' },
-                        { value: 'no', label: 'No referrals' },
-                      ]}
-                    />
+                    >
+                      {broadcastAudiencePreviewing ? 'Loading...' : 'Preview audience'}
+                    </Button>
+                    <div className="min-w-[220px] text-sm font-semibold text-primary">
+                      {broadcastAudiencePreviewing ? 'Loading...' : broadcastAudienceCount !== null ? `${broadcastAudienceCount.toLocaleString()} users will receive this` : '\u00A0'}
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 min-h-[2rem]">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="min-w-[140px]"
-                    disabled={broadcastAudiencePreviewing}
-                    onClick={async () => {
-                      setBroadcastAudiencePreviewing(true)
-                      try {
-                        const params = new URLSearchParams({
-                          claimed: broadcastAudienceFilters.claimed,
-                          has_referrals: broadcastAudienceFilters.has_referrals,
-                        })
-                        const r = await adminFetch(`/api/admin/broadcast/audience?${params}`)
-                        setBroadcastAudienceCount(r.count ?? 0)
-                        toast.success(`${r.count ?? 0} users will receive this`)
-                      } catch (e) {
-                        toast.error((e as Error).message)
-                        setBroadcastAudienceCount(null)
-                      } finally {
-                        setBroadcastAudiencePreviewing(false)
-                      }
-                    }}
-                  >
-                    {broadcastAudiencePreviewing ? 'Loading...' : 'Preview audience'}
-                  </Button>
-                  <div className="min-w-[220px] text-sm font-semibold text-primary">
-                    {broadcastAudiencePreviewing ? 'Loading...' : broadcastAudienceCount !== null ? `${broadcastAudienceCount.toLocaleString()} users will receive this` : '\u00A0'}
-                  </div>
-                </div>
-              <div>
+              <div className="space-y-2">
                 <Label className="text-sm font-medium text-muted-foreground">Message</Label>
                 <textarea
-                  className="mt-1.5 w-full rounded-xl border border-input/80 bg-background px-3 py-2.5 text-sm min-h-[140px] focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0"
+                  className="w-full rounded-xl border border-input/80 bg-background px-4 py-3 text-sm min-h-[140px] focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0"
                   value={broadcastMessage}
                   onChange={(e) => setBroadcastMessage(e.target.value)}
                   placeholder="Enter message to send to all users (excluding blocked)"
                 />
               </div>
-              <div>
+              <div className="space-y-2">
                 <Label className="text-sm font-medium text-muted-foreground">Media</Label>
-                <div className="mt-1 flex gap-2">
+                <div className="flex gap-2">
                   {(['none', 'image', 'gif'] as const).map((t) => (
                     <Button
                       key={t}
@@ -906,9 +932,9 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   />
                 )}
               </div>
-              <div>
+              <div className="space-y-2">
                 <Label className="text-sm font-medium text-muted-foreground">Buttons (optional)</Label>
-                <div className="mt-1 space-y-2">
+                <div className="space-y-2">
                   {broadcastButtons.map((b, i) => (
                     <div key={i} className="flex gap-2">
                       <Input placeholder="Button text" value={b.text} onChange={(e) => {
@@ -923,7 +949,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   <Button variant="outline" size="sm" onClick={() => setBroadcastButtons([...broadcastButtons, { text: '', url: '' }])}>Add button</Button>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="pt-4 flex flex-col sm:flex-row gap-4">
                 <Button
                   variant="outline"
                   disabled={!broadcastMessage.trim() || previewSending}
@@ -947,50 +973,53 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                     }
                   }}
                 >
-                  {previewSending ? 'Sending...' : 'Preview'}
+                  {previewSending ? 'Sending...' : 'Send Preview'}
                 </Button>
+                <div className="flex-1 flex items-center gap-4">
+                  <Button
+                    size="lg"
+                    className="flex-1 sm:flex-none"
+                    disabled={!broadcastMessage.trim() || broadcastSending || broadcastAudienceCount === null}
+                    onClick={async () => {
+                      if (!confirm(`Send this broadcast to ${broadcastAudienceCount} users?`)) return
+                      setBroadcastSending(true)
+                      try {
+                        const r = await adminFetch('/api/admin/broadcast', {
+                          method: 'POST',
+                          body: JSON.stringify({
+                            message: broadcastMessage.trim(),
+                            media_type: broadcastMediaType !== 'none' ? broadcastMediaType : undefined,
+                            media_url: broadcastMediaType !== 'none' && broadcastMediaUrl ? broadcastMediaUrl : undefined,
+                            buttons: broadcastButtons.filter((b) => b.text.trim() && b.url.trim()).length > 0
+                              ? broadcastButtons.filter((b) => b.text.trim() && b.url.trim())
+                              : undefined,
+                            audienceFilters: broadcastAudienceFilters,
+                          }),
+                        })
+                        setLastBroadcast(r)
+                        setBroadcastAudienceCount(null)
+                        adminFetch('/api/admin/broadcast').then((res) => setBroadcastHistory(res.broadcasts || []))
+                        toast.success(`Sent: ${r.sentCount ?? r.sent_count} | Blocked: ${r.blockedCount ?? r.blocked_count} | Errors: ${r.errorCount ?? r.error_count}`)
+                      } catch (e) {
+                        toast.error((e as Error).message)
+                      } finally {
+                        setBroadcastSending(false)
+                      }
+                    }}
+                  >
+                    {broadcastSending ? 'Sending...' : 'Send Broadcast'}
+                  </Button>
+                  {lastBroadcast && (
+                    <p className="text-xs text-muted-foreground">
+                      Last: sent {lastBroadcast.sentCount ?? lastBroadcast.sent_count} / blocked {lastBroadcast.blockedCount ?? lastBroadcast.blocked_count} / errors {lastBroadcast.errorCount ?? lastBroadcast.error_count}
+                    </p>
+                  )}
+                </div>
               </div>
-              <Button
-                size="lg"
-                disabled={!broadcastMessage.trim() || broadcastSending || broadcastAudienceCount === null}
-                onClick={async () => {
-                  if (!confirm(`Send this broadcast to ${broadcastAudienceCount} users?`)) return
-                  setBroadcastSending(true)
-                  try {
-                    const r = await adminFetch('/api/admin/broadcast', {
-                      method: 'POST',
-                      body: JSON.stringify({
-                        message: broadcastMessage.trim(),
-                        media_type: broadcastMediaType !== 'none' ? broadcastMediaType : undefined,
-                        media_url: broadcastMediaType !== 'none' && broadcastMediaUrl ? broadcastMediaUrl : undefined,
-                        buttons: broadcastButtons.filter((b) => b.text.trim() && b.url.trim()).length > 0
-                          ? broadcastButtons.filter((b) => b.text.trim() && b.url.trim())
-                          : undefined,
-                        audienceFilters: broadcastAudienceFilters,
-                      }),
-                    })
-                    setLastBroadcast(r)
-                    setBroadcastAudienceCount(null)
-                    adminFetch('/api/admin/broadcast').then((res) => setBroadcastHistory(res.broadcasts || []))
-                    toast.success(`Sent: ${r.sentCount ?? r.sent_count} | Blocked: ${r.blockedCount ?? r.blocked_count} | Errors: ${r.errorCount ?? r.error_count}`)
-                  } catch (e) {
-                    toast.error((e as Error).message)
-                  } finally {
-                    setBroadcastSending(false)
-                  }
-                }}
-              >
-                {broadcastSending ? 'Sending...' : 'Send Broadcast'}
-              </Button>
-              {lastBroadcast && (
-                <p className="text-xs text-muted-foreground">
-                  Last: sent {lastBroadcast.sentCount ?? lastBroadcast.sent_count} / blocked {lastBroadcast.blockedCount ?? lastBroadcast.blocked_count} / errors {lastBroadcast.errorCount ?? lastBroadcast.error_count}
-                </p>
-              )}
             </AdminCardContent>
           </AdminCard>
 
-          <AdminCard className="mt-6">
+          <AdminCard>
             <AdminCardHeader>
               <AdminCardTitle className="flex items-center gap-2">
                 <History className="w-4 h-4" /> Broadcast History

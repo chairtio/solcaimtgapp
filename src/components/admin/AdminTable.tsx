@@ -38,7 +38,7 @@ const AdminTableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      'border-b border-border/50 transition-colors duration-150 hover:bg-muted/30',
+      'border-b border-border/50 transition-colors duration-150 hover:bg-muted/20',
       className
     )}
     {...props}
@@ -53,7 +53,7 @@ const AdminTableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      'px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground',
+      'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground',
       className
     )}
     {...props}
@@ -65,7 +65,7 @@ const AdminTableCell = React.forwardRef<
   HTMLTableCellElement,
   React.TdHTMLAttributes<HTMLTableCellElement>
 >(({ className, ...props }, ref) => (
-  <td ref={ref} className={cn('px-6 py-4', className)} {...props} />
+  <td ref={ref} className={cn('px-4 py-3', className)} {...props} />
 ))
 AdminTableCell.displayName = 'AdminTableCell'
 

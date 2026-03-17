@@ -105,8 +105,10 @@
 
 /* Admin dashboard: slightly tighter radius, softer shadows */
 [data-admin] {
-  --admin-card-radius: 0.75rem;
-  --admin-spacing: 1.5rem;
+  --admin-card-radius: 12px;
+  --admin-card-padding: 24px;
+  --admin-spacing: 24px;
+  --admin-section-gap: 32px;
 }
 
 body {
