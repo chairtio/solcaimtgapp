@@ -28,7 +28,7 @@ export function FilterPills<T extends string>({
       {label && (
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
       )}
-      <div className="flex flex-wrap gap-1 rounded-lg bg-muted/50 p-1">
+      <div className="flex flex-wrap gap-0.5 rounded-lg bg-muted/40 p-1">
         {options.map((opt) => (
           <Button
             key={opt.value}
@@ -36,10 +36,10 @@ export function FilterPills<T extends string>({
             variant="ghost"
             size="sm"
             className={cn(
-              'h-8 rounded-md px-3 text-sm font-medium transition-colors',
+              'h-9 rounded-md px-3 text-sm font-medium transition-colors duration-150',
               value === opt.value
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+                ? 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90'
+                : 'text-muted-foreground hover:bg-muted/30 hover:text-foreground'
             )}
             onClick={() => onChange(opt.value)}
           >

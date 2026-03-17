@@ -103,6 +103,12 @@
   border-color: var(--border);
 }
 
+/* Admin dashboard: slightly tighter radius, softer shadows */
+[data-admin] {
+  --admin-card-radius: 0.75rem;
+  --admin-spacing: 1.5rem;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);

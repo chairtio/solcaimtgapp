@@ -1626,7 +1626,7 @@ t.me/solclaimxbot?start=${telegramId}`
           <div className="flex items-center justify-between max-w-7xl mx-auto">
             <div className="flex items-center gap-3 min-w-0">
               <Shield className="w-5 h-5 text-primary shrink-0" />
-              <h1 className="text-base font-semibold text-foreground">SolClaim Admin</h1>
+              <h1 className="text-base font-medium text-foreground">SolClaim Admin</h1>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <Button variant="ghost" size="sm" onClick={() => setActiveTab('home')} className="gap-2">
@@ -2036,7 +2036,9 @@ t.me/solclaimxbot?start=${telegramId}`
                     const openTaskUrl = (url: string) => {
                       const webApp = typeof window !== 'undefined' ? (window as any).Telegram?.WebApp : null
                       if (url?.startsWith('tg://') && webApp?.openTelegramLink) {
-                        webApp.openTelegramLink(url)
+                        // tg://settings often doesn't work in Mini App; use t.me/settings per Telegram docs
+                        const link = url === 'tg://settings' ? 'https://t.me/settings' : url
+                        webApp.openTelegramLink(link)
                       } else if (url) {
                         window.open(url, '_blank', 'noopener,noreferrer')
                       }

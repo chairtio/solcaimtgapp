@@ -4,13 +4,13 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Shield, Users, Wallet, BarChart3, Megaphone, Mail, Send, Image, Film, Download, History, ChevronDown, ChevronRight, Plus, Pencil, Trash2, SendHorizontal } from 'lucide-react'
+import { ArrowLeft, Users, BarChart3, Megaphone, Mail, Send, Image, Film, Download, History, ChevronDown, ChevronRight, Plus, Pencil, Trash2, SendHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 import { FollowUpForm } from './FollowUpForm'
 import { FilterPills } from './ui/filter-pills'
+import { AdminCard, AdminCardHeader, AdminCardTitle, AdminCardContent, AdminStatCard, AdminTable, AdminTableHeader, AdminTableBody, AdminTableRow, AdminTableHead, AdminTableCell, AdminTableSkeleton, AdminEmptyState, AdminPageHeader } from './admin'
 
 const getInitData = () => (typeof window !== 'undefined' ? (window as any).Telegram?.WebApp?.initData : '') || ''
 
@@ -187,16 +187,13 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
     const allFollowUps = [...followUpsSent.map((f: any) => ({ ...f, status: 'sent' as const })), ...followUpsScheduled.map((f: any) => ({ ...f, status: 'scheduled' as const }))]
 
     return (
-      <div className="space-y-6 max-w-4xl mx-auto lg:max-w-6xl">
-        <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(null)} className="gap-2">
-          <ArrowLeft className="w-4 h-4" /> Back to users
-        </Button>
+      <div data-admin className="space-y-6 w-full max-w-6xl mx-auto">
+        <button type="button" onClick={() => setSelectedUserId(null)} className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-2 transition-colors duration-150">
+          <ArrowLeft className="w-4 h-4" /> Users
+        </button>
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="border-border/60 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">User Detail</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <AdminCard title="User Detail">
+            <div className="space-y-4">
               <div>
                 <p className="text-xs font-medium text-muted-foreground">Telegram ID</p>
                 <p className="font-mono text-sm">{userDetail.user?.telegram_id}</p>
@@ -229,13 +226,9 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   {(!userDetail.wallets || userDetail.wallets.length === 0) && <li>—</li>}
                 </ul>
               </div>
-            </CardContent>
-          </Card>
-          <Card className="border-border/60 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Follow-ups</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          </AdminCard>
+          <AdminCard title="Follow-ups">
+            <div className="space-y-4">
               {allFollowUps.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
@@ -314,8 +307,8 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
               >
                 {previewSending ? 'Sending...' : 'Send custom preview'}
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </AdminCard>
         </div>
       </div>
     )
@@ -330,44 +323,31 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
   ]
 
   return (
-    <div className="flex flex-col lg:flex-row lg:gap-8 lg:max-w-7xl mx-auto pb-24">
-      {/* Sidebar - desktop */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 gap-1 lg:border-r lg:border-border/50 lg:pr-6">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <Shield className="w-5 h-5 text-primary" />
-            <h2 className="text-base font-semibold">Admin</h2>
-          </div>
-        </div>
+    <div data-admin className="flex min-h-0 w-full max-w-6xl mx-auto pb-24">
+      {/* Sidebar - desktop: Stripe-style left accent for active */}
+      <aside className="hidden lg:flex lg:flex-col lg:w-60 lg:shrink-0 gap-0.5 lg:border-r lg:border-border/50 lg:pr-6 lg:sticky lg:top-4 lg:self-start">
         {navTabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setAdminTab(id)}
-            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-left w-full transition-colors ${
-              adminTab === id ? 'bg-primary text-primary-foreground' : 'bg-transparent text-muted-foreground hover:bg-muted/50'
+            className={`flex items-center gap-3 pl-4 pr-3 py-2.5 text-sm font-medium text-left w-full transition-all duration-200 rounded-r-lg border-l-2 ${
+              adminTab === id
+                ? 'bg-primary/10 text-primary border-l-primary'
+                : 'border-l-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground'
             }`}
           >
             <Icon className="w-4 h-4 shrink-0" /> {label}
           </button>
         ))}
         <div className="mt-auto pt-4 border-t border-border/50">
-          <Button variant="ghost" size="sm" onClick={onBack} className="w-full justify-start gap-2">
+          <Button variant="ghost" size="sm" onClick={onBack} className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground transition-colors duration-150">
             <ArrowLeft className="w-4 h-4" /> Back
           </Button>
         </div>
       </aside>
 
-      {/* Mobile header + tabs */}
-      <div className="lg:hidden flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Shield className="w-5 h-5 text-primary" />
-          <h2 className="text-base font-semibold">Admin</h2>
-        </div>
-        <Button variant="ghost" size="sm" onClick={onBack}>Back</Button>
-      </div>
-
       <Tabs value={adminTab} onValueChange={(v) => { setAdminTab(v); setSelectedUserId(null); }} className="flex flex-col lg:flex-1 lg:min-w-0">
-        <div className="flex gap-2 overflow-x-auto pb-2 lg:hidden">
+        <div className="flex gap-2 overflow-x-auto pb-3 lg:hidden custom-scrollbar">
           {[
             { id: 'overview', label: 'Overview', icon: BarChart3 },
             { id: 'users', label: 'Users', icon: Users },
@@ -402,124 +382,111 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             />
           </div>
           {statsLoading ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="rounded-xl border border-border/40 bg-card p-5">
+                    <div className="h-4 w-20 rounded bg-muted/60 animate-pulse mb-3" />
+                    <div className="h-8 w-16 rounded bg-muted/60 animate-pulse" />
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-8">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="rounded-xl border border-border/40 bg-card p-5">
+                    <div className="h-4 w-24 rounded bg-muted/60 animate-pulse mb-3" />
+                    <div className="h-8 w-20 rounded bg-muted/60 animate-pulse" />
+                  </div>
+                ))}
+              </div>
+              <AdminCard>
+                <AdminCardHeader>
+                  <AdminCardTitle>Recent Signups</AdminCardTitle>
+                </AdminCardHeader>
+                <AdminCardContent className="p-0">
+                  <AdminTableSkeleton rows={5} cols={5} />
+                </AdminCardContent>
+              </AdminCard>
+            </div>
           ) : stats ? (
             <>
               {stats.range && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-                  <Card className="border-border/60 shadow-sm">
-                    <CardContent className="pt-3 pb-3">
-                      <p className="text-xs font-medium text-muted-foreground">New signups</p>
-                      <p className="text-xl font-semibold">{stats.newSignups ?? 0}</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="border-border/60 shadow-sm">
-                    <CardContent className="pt-3 pb-3">
-                      <p className="text-xs font-medium text-muted-foreground">New claims</p>
-                      <p className="text-xl font-semibold">{stats.newClaims ?? 0}</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="border-border/60 shadow-sm">
-                    <CardContent className="pt-3 pb-3">
-                      <p className="text-xs font-medium text-muted-foreground">Campaigns sent</p>
-                      <p className="text-xl font-semibold">{stats.campaignsSent ?? 0}</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="border-border/60 shadow-sm">
-                    <CardContent className="pt-3 pb-3">
-                      <p className="text-xs font-medium text-muted-foreground">Campaigns scheduled</p>
-                      <p className="text-xl font-semibold">{stats.campaignsScheduled ?? 0}</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="border-border/60 shadow-sm">
-                    <CardContent className="pt-3 pb-3">
-                      <p className="text-xs font-medium text-muted-foreground">Broadcasts sent</p>
-                      <p className="text-xl font-semibold">{stats.broadcastsSent ?? 0}</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="border-border/60 shadow-sm">
-                    <CardContent className="pt-3 pb-3">
-                      <p className="text-xs font-medium text-muted-foreground">Follow-ups sent</p>
-                      <p className="text-xl font-semibold">{stats.followUpsSent ?? 0}</p>
-                    </CardContent>
-                  </Card>
+                  <AdminStatCard label="New signups" value={stats.newSignups ?? 0} />
+                  <AdminStatCard label="New claims" value={stats.newClaims ?? 0} />
+                  <AdminStatCard label="Campaigns sent" value={stats.campaignsSent ?? 0} />
+                  <AdminStatCard label="Campaigns scheduled" value={stats.campaignsScheduled ?? 0} />
+                  <AdminStatCard label="Broadcasts sent" value={stats.broadcastsSent ?? 0} />
+                  <AdminStatCard label="Follow-ups sent" value={stats.followUpsSent ?? 0} />
                 </div>
               )}
-              <div className="border-t border-border/50 pt-6 mt-6">
+              <div className="pt-8 mt-8 border-t border-border/50">
                 <p className="text-sm font-medium text-muted-foreground mb-4">All time</p>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="border-border/60 shadow-sm">
-                  <CardContent className="pt-4">
-                    <p className="text-xs font-medium text-muted-foreground">Total Users</p>
-                    <p className="text-2xl font-semibold">{stats.totalUsers}</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-border/60 shadow-sm">
-                  <CardContent className="pt-4">
-                    <p className="text-xs font-medium text-muted-foreground">Wallets</p>
-                    <p className="text-2xl font-semibold">{stats.totalWallets}</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-border/60 shadow-sm">
-                  <CardContent className="pt-4">
-                    <p className="text-xs font-medium text-muted-foreground">Claimed</p>
-                    <p className="text-2xl font-semibold">{stats.usersWhoClaimed}</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-border/60 shadow-sm">
-                  <CardContent className="pt-4">
-                    <p className="text-xs font-medium text-muted-foreground">Bot Blocked</p>
-                    <p className="text-2xl font-semibold">{stats.botBlockedCount}</p>
-                  </CardContent>
-                </Card>
+                  <AdminStatCard label="Total Users" value={stats.totalUsers} />
+                  <AdminStatCard label="Wallets" value={stats.totalWallets} />
+                  <AdminStatCard label="Claimed" value={stats.usersWhoClaimed} />
+                  <AdminStatCard label="Bot Blocked" value={stats.botBlockedCount} />
+                </div>
               </div>
-              <Card className="border-border/60 shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-base font-semibold">Recent Signups</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border/50">
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">ID</th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">User</th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Created</th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Claimed</th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Blocked</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(stats.recentSignups || []).slice(0, 20).map((u: any) => (
-                          <tr key={u.id} className="border-b border-border/50 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => { setSelectedUserId(u.id); setAdminTab('users'); }}>
-                            <td className="py-3 px-4 font-mono">{u.telegram_id}</td>
-                            <td className="py-3 px-4">@{u.username || '—'}</td>
-                            <td className="py-3 px-4 text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</td>
-                            <td className="py-3 px-4">{u.has_claimed ? 'Yes' : '—'}</td>
-                            <td className="py-3 px-4">{u.bot_blocked_at ? 'Yes' : '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-              </div>
+              <AdminCard className="mt-8">
+                <AdminCardHeader>
+                  <AdminCardTitle>Recent Signups</AdminCardTitle>
+                </AdminCardHeader>
+                <AdminCardContent className="p-0">
+                  <AdminTable>
+                    <AdminTableHeader>
+                      <AdminTableRow>
+                        <AdminTableHead>ID</AdminTableHead>
+                        <AdminTableHead>User</AdminTableHead>
+                        <AdminTableHead>Created</AdminTableHead>
+                        <AdminTableHead>Claimed</AdminTableHead>
+                        <AdminTableHead>Blocked</AdminTableHead>
+                      </AdminTableRow>
+                    </AdminTableHeader>
+                    <AdminTableBody>
+                      {(stats.recentSignups || []).slice(0, 20).map((u: any) => (
+                        <AdminTableRow
+                          key={u.id}
+                          className="cursor-pointer"
+                          onClick={() => { setSelectedUserId(u.id); setAdminTab('users'); }}
+                        >
+                          <AdminTableCell className="font-mono">{u.telegram_id}</AdminTableCell>
+                          <AdminTableCell>@{u.username || '—'}</AdminTableCell>
+                          <AdminTableCell className="text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</AdminTableCell>
+                          <AdminTableCell>{u.has_claimed ? 'Yes' : '—'}</AdminTableCell>
+                          <AdminTableCell>{u.bot_blocked_at ? 'Yes' : '—'}</AdminTableCell>
+                        </AdminTableRow>
+                      ))}
+                    </AdminTableBody>
+                  </AdminTable>
+                </AdminCardContent>
+              </AdminCard>
             </>
           ) : null}
         </TabsContent>
 
-        <TabsContent value="users" className="mt-4 space-y-4 outline-none">
-          <div className="flex gap-2 flex-wrap items-center">
+        <TabsContent value="users" className="mt-4 space-y-6 outline-none">
+          <div className="flex flex-wrap items-center gap-3">
             <Input
               placeholder="Search telegram_id or username"
               value={userSearch}
               onChange={(e) => setUserSearch(e.target.value)}
-              className="max-w-[200px]"
+              className="h-10 max-w-[220px] rounded-lg"
+            />
+            <FilterPills
+              value={userFilter}
+              onChange={(v) => setUserFilter(v as 'all' | 'not_claimed' | 'blocked')}
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'not_claimed', label: 'Not claimed' },
+                { value: 'blocked', label: 'Blocked' },
+              ]}
             />
             <Button
               variant="outline"
               size="sm"
+              className="h-9 rounded-lg"
               disabled={exportLoading}
               onClick={async () => {
                 setExportLoading(true)
@@ -549,119 +516,114 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             >
               <Download className="w-3.5 h-3.5 mr-1" /> {exportLoading ? 'Exporting...' : 'Export CSV'}
             </Button>
-            <FilterPills
-              value={userFilter}
-              onChange={(v) => setUserFilter(v as 'all' | 'not_claimed' | 'blocked')}
-              options={[
-                { value: 'all', label: 'All' },
-                { value: 'not_claimed', label: 'Not claimed' },
-                { value: 'blocked', label: 'Blocked' },
-              ]}
-            />
           </div>
           {usersLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />
-              ))}
-            </div>
+            <AdminCard>
+              <AdminCardContent className="p-0">
+                <AdminTableSkeleton rows={5} cols={4} />
+              </AdminCardContent>
+            </AdminCard>
           ) : users.length === 0 ? (
-            <Card className="border-border/60 shadow-sm">
-              <CardContent className="py-12">
-                <div className="flex flex-col items-center justify-center text-center">
-                  <Users className="w-12 h-12 text-muted-foreground/50 mb-3" />
-                  <p className="text-sm font-medium text-muted-foreground">No users match your filters.</p>
-                  <p className="text-xs text-muted-foreground mt-1">Try adjusting your search or filter criteria.</p>
-                </div>
-              </CardContent>
-            </Card>
+            <AdminEmptyState
+              icon={Users}
+              title="No users match your filters"
+              description="Try adjusting your search or filter criteria."
+            />
           ) : (
-            <Card className="border-border/60 shadow-sm">
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border/50">
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">ID</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">User</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Created</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Blocked</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {users.map((u) => (
-                        <tr key={u.id} className="border-b border-border/50 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setSelectedUserId(u.id)}>
-                          <td className="py-3 px-4 font-mono">{u.telegram_id}</td>
-                          <td className="py-3 px-4">@{u.username || '—'}</td>
-                          <td className="py-3 px-4 text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</td>
-                          <td className="py-3 px-4">{u.bot_blocked_at ? 'Yes' : '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
+            <AdminCard>
+              <AdminCardContent className="p-0">
+                <AdminTable>
+                  <AdminTableHeader>
+                    <AdminTableRow>
+                      <AdminTableHead>ID</AdminTableHead>
+                      <AdminTableHead>User</AdminTableHead>
+                      <AdminTableHead>Created</AdminTableHead>
+                      <AdminTableHead>Blocked</AdminTableHead>
+                    </AdminTableRow>
+                  </AdminTableHeader>
+                  <AdminTableBody>
+                    {users.map((u) => (
+                      <AdminTableRow
+                        key={u.id}
+                        className="cursor-pointer"
+                        onClick={() => setSelectedUserId(u.id)}
+                      >
+                        <AdminTableCell className="font-mono">{u.telegram_id}</AdminTableCell>
+                        <AdminTableCell>@{u.username || '—'}</AdminTableCell>
+                        <AdminTableCell className="text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</AdminTableCell>
+                        <AdminTableCell>{u.bot_blocked_at ? 'Yes' : '—'}</AdminTableCell>
+                      </AdminTableRow>
+                    ))}
+                  </AdminTableBody>
+                </AdminTable>
+              </AdminCardContent>
+            </AdminCard>
           )}
         </TabsContent>
 
-        <TabsContent value="campaigns" className="mt-4 space-y-4 outline-none">
+        <TabsContent value="campaigns" className="mt-4 space-y-6 outline-none">
+          <AdminPageHeader title="Campaigns" />
           {campaignsLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-20 rounded-lg bg-muted animate-pulse" />
+                <div key={i} className="rounded-xl border border-border/40 bg-card p-5 h-20">
+                  <div className="h-4 w-32 rounded bg-muted/60 animate-pulse mb-2" />
+                  <div className="h-3 w-24 rounded bg-muted/60 animate-pulse" />
+                </div>
               ))}
             </div>
+          ) : campaigns.length === 0 ? (
+            <AdminCard>
+              <AdminEmptyState
+                icon={Megaphone}
+                title="No campaigns yet"
+                description="Create campaigns to send scheduled messages and track performance."
+              />
+            </AdminCard>
           ) : (
             <div className="space-y-3">
               {campaigns.map((c) => (
-                <Card key={c.id} className="border-border/60 shadow-sm">
-                  <CardContent className="pt-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-bold">{c.name}</p>
-                      <Badge
-                        variant={c.status === 'sent' ? 'default' : c.status === 'scheduled' ? 'secondary' : c.status === 'cancelled' ? 'destructive' : 'outline'}
-                        className="text-[10px]"
-                      >
-                        {c.status}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {c.sent_at ? `Sent ${new Date(c.sent_at).toLocaleString()}` : c.scheduled_at ? `Scheduled ${new Date(c.scheduled_at).toLocaleString()}` : '—'}
-                    </p>
-                  </CardContent>
-                </Card>
+                <AdminCard key={c.id}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-sm">{c.name}</span>
+                    <Badge
+                      variant={c.status === 'sent' ? 'default' : c.status === 'scheduled' ? 'secondary' : c.status === 'cancelled' ? 'destructive' : 'outline'}
+                      className="text-xs"
+                    >
+                      {c.status}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {c.sent_at ? `Sent ${new Date(c.sent_at).toLocaleString()}` : c.scheduled_at ? `Scheduled ${new Date(c.scheduled_at).toLocaleString()}` : '—'}
+                  </p>
+                </AdminCard>
               ))}
-              {campaigns.length === 0 && (
-                <Card className="border-border/60 shadow-sm">
-                  <CardContent className="py-12">
-                    <div className="flex flex-col items-center justify-center text-center">
-                      <Megaphone className="w-12 h-12 text-muted-foreground/50 mb-3" />
-                      <p className="text-sm font-medium text-muted-foreground">No campaigns yet.</p>
-                      <p className="text-xs text-muted-foreground mt-1">Create campaigns to send scheduled messages and track performance.</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </div>
           )}
         </TabsContent>
 
-        <TabsContent value="followups" className="mt-4 space-y-4 outline-none">
+        <TabsContent value="followups" className="mt-4 space-y-6 outline-none">
           {followUpsLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-20 rounded-lg bg-muted animate-pulse" />
+            <div className="space-y-4">
+              {[1, 2].map((i) => (
+                <div key={i} className="rounded-xl border border-border/40 p-6">
+                  <div className="h-5 w-40 rounded bg-muted/60 animate-pulse mb-4" />
+                  <div className="space-y-2">
+                    {[1, 2, 3].map((j) => (
+                      <div key={j} className="h-16 rounded-lg bg-muted/60 animate-pulse" />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-6">
               {(['not_claimed', 'claimed'] as const).map((segment) => {
                 const items = followUps.filter((f) => (f.segment || 'not_claimed') === segment)
                 const isOpen = followUpExpandedGroups[segment] !== false
                 const label = segment === 'not_claimed' ? 'Not claimed' : 'Claimed'
                 return (
-                  <Card key={segment} className="border-border/60 shadow-sm">
+                  <AdminCard key={segment}>
                     <button
                       type="button"
                       className="w-full flex items-center justify-between p-4 text-left hover:bg-muted/50 transition-colors rounded-t-lg"
@@ -681,7 +643,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                       </Button>
                     </button>
                     {isOpen && (
-                      <CardContent className="pt-0 pb-4 space-y-3">
+                      <div className="pt-0 pb-4 space-y-3 px-6">
                         {followUpAddingSegment === segment && (
                           <FollowUpForm
                             segment={segment}
@@ -832,24 +794,20 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                         {items.length === 0 && !followUpAddingSegment && (
                           <p className="text-sm text-muted-foreground py-4 text-center">No follow-ups in this group.</p>
                         )}
-                      </CardContent>
+                      </div>
                     )}
-                  </Card>
+                  </AdminCard>
                 )
               })}
             </div>
           )}
         </TabsContent>
 
-        <TabsContent value="broadcast" className="mt-4 space-y-4 outline-none">
-          <Card className="border-border/60 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Send Broadcast</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-3">
+        <TabsContent value="broadcast" className="mt-4 space-y-6 outline-none">
+          <AdminCard title="Send Broadcast">
+              <div className="space-y-4">
                 <p className="text-sm font-medium text-muted-foreground">Audience — preview first, then send.</p>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-muted-foreground">Claimed</p>
                     <FilterPills
@@ -880,9 +838,12 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                       ]}
                     />
                   </div>
+                </div>
+                <div className="flex items-center gap-3 min-h-[2rem]">
                   <Button
                     variant="outline"
                     size="sm"
+                    className="min-w-[140px]"
                     disabled={broadcastAudiencePreviewing}
                     onClick={async () => {
                       setBroadcastAudiencePreviewing(true)
@@ -904,9 +865,9 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   >
                     {broadcastAudiencePreviewing ? 'Loading...' : 'Preview audience'}
                   </Button>
-                  {broadcastAudienceCount !== null && (
-                    <span className="text-sm font-semibold text-primary">{broadcastAudienceCount.toLocaleString()} users will receive this</span>
-                  )}
+                  <div className="min-w-[220px] text-sm font-semibold text-primary">
+                    {broadcastAudiencePreviewing ? 'Loading...' : broadcastAudienceCount !== null ? `${broadcastAudienceCount.toLocaleString()} users will receive this` : '\u00A0'}
+                  </div>
                 </div>
               </div>
               <div>
@@ -1023,60 +984,52 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   Last: sent {lastBroadcast.sentCount ?? lastBroadcast.sent_count} / blocked {lastBroadcast.blockedCount ?? lastBroadcast.blocked_count} / errors {lastBroadcast.errorCount ?? lastBroadcast.error_count}
                 </p>
               )}
-            </CardContent>
-          </Card>
+          </AdminCard>
 
-          <Card className="border-border/60 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <AdminCard className="mt-6">
+            <AdminCardHeader>
+              <AdminCardTitle className="flex items-center gap-2">
                 <History className="w-4 h-4" /> Broadcast History
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {broadcastHistoryLoading ? (
-                <div className="space-y-2">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />
+              </AdminCardTitle>
+            </AdminCardHeader>
+            <AdminCardContent className="p-0">
+            {broadcastHistoryLoading ? (
+              <AdminTableSkeleton rows={5} cols={6} />
+            ) : broadcastHistory.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">No broadcasts yet.</p>
+            ) : (
+              <AdminTable>
+                <AdminTableHeader>
+                  <AdminTableRow>
+                    <AdminTableHead>Date</AdminTableHead>
+                    <AdminTableHead>Message</AdminTableHead>
+                    <AdminTableHead>Sent</AdminTableHead>
+                    <AdminTableHead>Blocked</AdminTableHead>
+                    <AdminTableHead>Errors</AdminTableHead>
+                    <AdminTableHead>Status</AdminTableHead>
+                  </AdminTableRow>
+                </AdminTableHeader>
+                <AdminTableBody>
+                  {broadcastHistory.slice(0, 20).map((b: any) => (
+                    <AdminTableRow key={b.id}>
+                      <AdminTableCell className="text-muted-foreground">
+                        {b.finished_at ? new Date(b.finished_at).toLocaleString() : new Date(b.created_at).toLocaleString()}
+                      </AdminTableCell>
+                      <AdminTableCell className="max-w-[140px] truncate">{b.message?.slice(0, 60) || '—'}…</AdminTableCell>
+                      <AdminTableCell>{b.sent_count ?? 0}</AdminTableCell>
+                      <AdminTableCell>{b.blocked_count ?? 0}</AdminTableCell>
+                      <AdminTableCell>{b.error_count ?? 0}</AdminTableCell>
+                      <AdminTableCell>
+                        <Badge variant={b.status === 'finished' ? 'default' : b.status === 'sending' ? 'secondary' : 'outline'} className="text-xs">
+                          {b.status}
+                        </Badge>
+                      </AdminTableCell>
+                    </AdminTableRow>
                   ))}
-                </div>
-              ) : broadcastHistory.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">No broadcasts yet.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border/50">
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Date</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Message</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Sent</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Blocked</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Errors</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {broadcastHistory.slice(0, 20).map((b: any) => (
-                        <tr key={b.id} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
-                          <td className="py-3 px-4 text-muted-foreground">
-                            {b.finished_at ? new Date(b.finished_at).toLocaleString() : new Date(b.created_at).toLocaleString()}
-                          </td>
-                          <td className="py-3 px-4 max-w-[140px] truncate">{b.message?.slice(0, 60) || '—'}…</td>
-                          <td className="py-3 px-4">{b.sent_count ?? 0}</td>
-                          <td className="py-3 px-4">{b.blocked_count ?? 0}</td>
-                          <td className="py-3 px-4">{b.error_count ?? 0}</td>
-                          <td className="py-3 px-4">
-                            <Badge variant={b.status === 'finished' ? 'default' : b.status === 'sending' ? 'secondary' : 'outline'} className="text-[10px]">
-                              {b.status}
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                </AdminTableBody>
+              </AdminTable>
+            )}
+          </AdminCard>
         </TabsContent>
       </Tabs>
     </div>
