@@ -19,6 +19,10 @@ export async function PATCH(
     if (body.buttons != null) updates.buttons = body.buttons
     if (body.enabled != null) updates.enabled = Boolean(body.enabled)
     if (body.sort != null) updates.sort = Number(body.sort)
+    if (body.segment != null && ['not_claimed', 'claimed'].includes(body.segment)) updates.segment = body.segment
+    if (body.name != null) updates.name = body.name === '' ? null : String(body.name)
+    if (body.media_type != null) updates.media_type = body.media_type || null
+    if (body.media_url != null) updates.media_url = body.media_url || null
 
     const { data, error } = await supabaseAdmin
       .from('follow_up_messages')

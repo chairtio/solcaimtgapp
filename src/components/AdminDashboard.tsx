@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Shield, Users, Wallet, BarChart3, Megaphone, Mail, Send, Image, Film, Download, History } from 'lucide-react'
+import { ArrowLeft, Shield, Users, Wallet, BarChart3, Megaphone, Mail, Send, Image, Film, Download, History, ChevronDown, ChevronRight, Plus, Pencil, Trash2, SendHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
+import { FollowUpForm } from './FollowUpForm'
 
 const getInitData = () => (typeof window !== 'undefined' ? (window as any).Telegram?.WebApp?.initData : '') || ''
 
@@ -27,6 +28,15 @@ async function adminFetch(path: string, opts: RequestInit = {}) {
     throw new Error(err.error || `Request failed: ${res.status}`)
   }
   return res.json()
+}
+
+type FollowUpFormData = {
+  name: string
+  message: string
+  delay_minutes: number
+  media_type: 'none' | 'image' | 'gif'
+  media_url: string
+  enabled: boolean
 }
 
 export function AdminDashboard({ onBack }: { onBack: () => void }) {
@@ -69,6 +79,29 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
   // Follow-ups
   const [followUps, setFollowUps] = useState<any[]>([])
   const [followUpsLoading, setFollowUpsLoading] = useState(false)
+  const [followUpEditingId, setFollowUpEditingId] = useState<string | null>(null)
+  const [followUpExpandedGroups, setFollowUpExpandedGroups] = useState<Record<string, boolean>>({ not_claimed: true, claimed: true })
+  const [followUpAddingSegment, setFollowUpAddingSegment] = useState<string | null>(null)
+  const [followUpSaving, setFollowUpSaving] = useState(false)
+  const [followUpForm, setFollowUpForm] = useState<{
+    mode: 'edit'
+    id: string
+    name: string
+    message: string
+    delay_minutes: number
+    media_type: 'none' | 'image' | 'gif'
+    media_url: string
+    enabled: boolean
+  } | {
+    mode: 'add'
+    segment: string
+    name: string
+    message: string
+    delay_minutes: number
+    media_type: 'none' | 'image' | 'gif'
+    media_url: string
+    enabled: boolean
+  } | null>(null)
 
   // Broadcast
   const [broadcastMessage, setBroadcastMessage] = useState('')
@@ -597,20 +630,185 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
               ))}
             </div>
           ) : (
-            <div className="space-y-3">
-              {followUps.map((f) => (
-                <Card key={f.id}>
-                  <CardContent className="pt-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-bold">{f.name || `${f.delay_minutes} min`}</p>
-                      <Badge variant="outline" className="text-[10px]">{f.segment === 'claimed' ? 'Claimed' : 'Not claimed'}</Badge>
-                      <Badge variant={f.enabled ? 'default' : 'secondary'} className="text-[10px]">{f.enabled ? 'Enabled' : 'Disabled'}</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{f.message}</p>
-                  </CardContent>
-                </Card>
-              ))}
-              {followUps.length === 0 && <p className="text-sm text-muted-foreground">No follow-up messages yet.</p>}
+            <div className="space-y-4">
+              {(['not_claimed', 'claimed'] as const).map((segment) => {
+                const items = followUps.filter((f) => (f.segment || 'not_claimed') === segment)
+                const isOpen = followUpExpandedGroups[segment] !== false
+                const label = segment === 'not_claimed' ? 'Not claimed' : 'Claimed'
+                return (
+                  <Card key={segment}>
+                    <button
+                      type="button"
+                      className="w-full flex items-center justify-between p-4 text-left hover:bg-muted/50 transition-colors rounded-t-lg"
+                      onClick={() => setFollowUpExpandedGroups((g) => ({ ...g, [segment]: !isOpen }))}
+                    >
+                      <span className="font-bold text-sm uppercase tracking-wider flex items-center gap-2">
+                        {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        {label} ({items.length})
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7"
+                        onClick={(e) => { e.stopPropagation(); setFollowUpAddingSegment(s => s === segment ? null : segment); setFollowUpEditingId(null); }}
+                      >
+                        <Plus className="w-3.5 h-3.5 mr-1" /> Add
+                      </Button>
+                    </button>
+                    {isOpen && (
+                      <CardContent className="pt-0 pb-4 space-y-3">
+                        {followUpAddingSegment === segment && (
+                          <FollowUpForm
+                            segment={segment}
+                            onSave={async (d) => {
+                              setFollowUpSaving(true)
+                              try {
+                                await adminFetch('/api/admin/follow-ups', {
+                                  method: 'POST',
+                                  body: JSON.stringify({
+                                    segment,
+                                    name: d.name || null,
+                                    message: d.message,
+                                    delay_minutes: d.delay_minutes,
+                                    media_type: d.media_type !== 'none' ? d.media_type : null,
+                                    media_url: d.media_type !== 'none' && d.media_url ? d.media_url : null,
+                                    enabled: d.enabled,
+                                    buttons: d.buttons && d.buttons.length > 0 ? d.buttons : null,
+                                    sort: items.length,
+                                  }),
+                                })
+                                toast.success('Follow-up added')
+                                setFollowUpAddingSegment(null)
+                                adminFetch('/api/admin/follow-ups').then((r) => setFollowUps(r.followUps || []))
+                              } catch (e) {
+                                toast.error((e as Error).message)
+                              } finally {
+                                setFollowUpSaving(false)
+                              }
+                            }}
+                            onCancel={() => setFollowUpAddingSegment(null)}
+                            saving={followUpSaving}
+                            previewSending={previewSending}
+                            onPreview={async (d) => {
+                              setPreviewSending(true)
+                              try {
+                                await adminFetch('/api/admin/preview', {
+                                  method: 'POST',
+                                  body: JSON.stringify({
+                                    message: d.message,
+                                    media_type: d.media_type !== 'none' ? d.media_type : undefined,
+                                    media_url: d.media_type !== 'none' && d.media_url ? d.media_url : undefined,
+                                    buttons: d.buttons && d.buttons.length > 0 ? d.buttons : undefined,
+                                  }),
+                                })
+                                toast.success('Preview sent to your Telegram')
+                              } catch (e) {
+                                toast.error((e as Error).message)
+                              } finally {
+                                setPreviewSending(false)
+                              }
+                            }}
+                          />
+                        )}
+                        {items.map((f) =>
+                          followUpEditingId === f.id ? (
+                            <FollowUpForm
+                              key={f.id}
+                              segment={segment}
+                              initial={f}
+                              onSave={async (d) => {
+                                setFollowUpSaving(true)
+                                try {
+                                  await adminFetch(`/api/admin/follow-ups/${f.id}`, {
+                                    method: 'PATCH',
+                                    body: JSON.stringify({
+                                      name: d.name || null,
+                                      message: d.message,
+                                      delay_minutes: d.delay_minutes,
+                                      media_type: d.media_type !== 'none' ? d.media_type : null,
+                                      media_url: d.media_type !== 'none' && d.media_url ? d.media_url : null,
+                                      enabled: d.enabled,
+                                      buttons: d.buttons && d.buttons.length > 0 ? d.buttons : null,
+                                    }),
+                                  })
+                                  toast.success('Follow-up updated')
+                                  setFollowUpEditingId(null)
+                                  adminFetch('/api/admin/follow-ups').then((r) => setFollowUps(r.followUps || []))
+                                } catch (e) {
+                                  toast.error((e as Error).message)
+                                } finally {
+                                  setFollowUpSaving(false)
+                                }
+                              }}
+                              onCancel={() => setFollowUpEditingId(null)}
+                              saving={followUpSaving}
+                              previewSending={previewSending}
+                              onPreview={async (d) => {
+                                setPreviewSending(true)
+                                try {
+                                  await adminFetch('/api/admin/preview', {
+                                    method: 'POST',
+                                    body: JSON.stringify({
+                                      message: d.message,
+                                      media_type: d.media_type !== 'none' ? d.media_type : undefined,
+                                      media_url: d.media_type !== 'none' && d.media_url ? d.media_url : undefined,
+                                      buttons: d.buttons && d.buttons.length > 0 ? d.buttons : undefined,
+                                    }),
+                                  })
+                                  toast.success('Preview sent to your Telegram')
+                                } catch (e) {
+                                  toast.error((e as Error).message)
+                                } finally {
+                                  setPreviewSending(false)
+                                }
+                              }}
+                            />
+                          ) : (
+                            <div key={f.id} className="flex flex-wrap items-start justify-between gap-2 p-3 rounded-lg border bg-card">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="font-bold text-sm">{f.name || `${f.delay_minutes} min delay`}</p>
+                                  <Badge variant={f.enabled ? 'default' : 'secondary'} className="text-[10px]">{f.enabled ? 'On' : 'Off'}</Badge>
+                                  {f.media_type && <Badge variant="outline" className="text-[10px]">{f.media_type}</Badge>}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{f.message}</p>
+                              </div>
+                              <div className="flex gap-1">
+                                <Button variant="outline" size="sm" className="h-7" disabled={previewSending} onClick={async () => {
+                                  setPreviewSending(true)
+                                  try {
+                                    await adminFetch('/api/admin/preview', { method: 'POST', body: JSON.stringify({ follow_up_id: f.id }) })
+                                    toast.success('Preview sent to your Telegram')
+                                  } catch (e) { toast.error((e as Error).message) }
+                                  finally { setPreviewSending(false) }
+                                }}>
+                                  <SendHorizontal className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button variant="outline" size="sm" className="h-7" onClick={() => { setFollowUpEditingId(f.id); setFollowUpAddingSegment(null); }}>
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-7 text-destructive hover:text-destructive" onClick={async () => {
+                                  if (!confirm('Delete this follow-up?')) return
+                                  try {
+                                    await adminFetch(`/api/admin/follow-ups/${f.id}`, { method: 'DELETE' })
+                                    toast.success('Deleted')
+                                    adminFetch('/api/admin/follow-ups').then((r) => setFollowUps(r.followUps || []))
+                                  } catch (e) { toast.error((e as Error).message) }
+                                }}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          )
+                        )}
+                        {items.length === 0 && !followUpAddingSegment && (
+                          <p className="text-sm text-muted-foreground py-4 text-center">No follow-ups in this group.</p>
+                        )}
+                      </CardContent>
+                    )}
+                  </Card>
+                )
+              })}
             </div>
           )}
         </TabsContent>

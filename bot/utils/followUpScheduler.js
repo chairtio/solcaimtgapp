@@ -62,7 +62,7 @@ async function runFollowUpCycle(bot) {
     if (!followUps || followUps.length === 0) return
 
     const now = new Date()
-    const cutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000) // Only users created in last 48h (covers 24h delay)
+    const cutoff = new Date(now.getTime() - 16 * 24 * 60 * 60 * 1000) // Users created in last 16 days (covers 14-day follow-ups)
 
     const { data: users, error: uError } = await supabase
       .from('users')

@@ -27,7 +27,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json()
-    const { delay_minutes, message, buttons, enabled = true, sort = 0 } = body
+    const { delay_minutes, message, buttons, enabled = true, sort = 0, segment = 'not_claimed', name, media_type, media_url } = body
 
     if (delay_minutes == null || !message) {
       return NextResponse.json({ error: 'delay_minutes and message required' }, { status: 400 })
@@ -41,6 +41,10 @@ export async function POST(request: Request) {
         buttons: buttons || null,
         enabled: Boolean(enabled),
         sort: Number(sort) || 0,
+        segment: String(segment || 'not_claimed'),
+        name: name != null ? String(name) : null,
+        media_type: media_type || null,
+        media_url: media_url || null,
       })
       .select()
       .single()
