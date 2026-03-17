@@ -117,7 +117,7 @@ export default function SolClaimApp() {
   const [tasksLoaded, setTasksLoaded] = useState(false)
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null)
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set())
-  const [shareStoryOpenedIds, setShareStoryOpenedIds] = useState<Set<string>>(new Set())
+  const [linkOpenedTaskIds, setLinkOpenedTaskIds] = useState<Set<string>>(new Set())
 
   // Video modal
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
@@ -1959,7 +1959,9 @@ t.me/solclaimxbot?start=${telegramId}`
                 <div className="space-y-3">
                   {tasksResult?.tasks?.map((task) => {
                     const isShareStory = !!task.media_url
-                    const hasOpenedShareStory = shareStoryOpenedIds.has(task.id)
+                    const isManualWithUrl = task.verification_type === 'manual' && !!task.url && !task.media_url
+                    const needsLinkFirst = isShareStory || isManualWithUrl
+                    const hasOpenedLink = linkOpenedTaskIds.has(task.id)
                     const isExpanded = expandedTaskIds.has(task.id)
                     const toggleExpand = () => setExpandedTaskIds((prev) => {
                       const next = new Set(prev)
@@ -1980,28 +1982,32 @@ t.me/solclaimxbot?start=${telegramId}`
                     const handleAction = async () => {
                       if (task.completed) return
 
-                      // Share-to-story: first click opens shareToStory, second marks done
-                      if (isShareStory) {
-                        const webApp = typeof window !== 'undefined' ? (window as any).Telegram?.WebApp : null
-                        if (webApp?.shareToStory && task.media_url) {
-                          if (!hasOpenedShareStory) {
+                      // Tasks that require opening link first: share-story or manual (Tweet/Retweet/Follow)
+                      if (needsLinkFirst && !hasOpenedLink) {
+                        if (isShareStory && task.media_url) {
+                          const webApp = typeof window !== 'undefined' ? (window as any).Telegram?.WebApp : null
+                          if (webApp?.shareToStory) {
                             try {
                               webApp.shareToStory(task.media_url)
-                              setShareStoryOpenedIds((prev) => new Set(prev).add(task.id))
                               toast.success('Share the video to your story, then tap Done to earn points.')
                             } catch {
                               window.open(task.media_url!, '_blank')
                               toast.success('Share the video, then tap Done.')
                             }
-                            return
+                          } else {
+                            window.open(task.media_url!, '_blank')
                           }
+                        } else if (isManualWithUrl && task.url) {
+                          openTaskUrl(task.url)
+                          toast.success('Complete the action, then tap Done to earn points.')
                         } else if (task.url) {
                           openTaskUrl(task.url)
-                          return
                         }
+                        if (needsLinkFirst) setLinkOpenedTaskIds((prev) => new Set(prev).add(task.id))
+                        return
                       }
 
-                      if (task.canComplete) {
+                      if (task.canComplete || (needsLinkFirst && hasOpenedLink)) {
                         setCompletingTaskId(task.id)
                         try {
                           const result = await verifyAndCompleteTask(user!.id, task.id)
@@ -2022,11 +2028,13 @@ t.me/solclaimxbot?start=${telegramId}`
                       }
                     }
 
-                    const buttonLabel = isShareStory && !hasOpenedShareStory
-                      ? (task.button_text || 'Share Story')
-                      : task.verification_type === 'manual'
+                    const buttonLabel = needsLinkFirst && !hasOpenedLink
+                      ? (task.button_text || 'Open Link')
+                      : needsLinkFirst && hasOpenedLink
                         ? 'Done'
-                        : (task.canComplete ? 'Claim' : (task.button_text || 'Go'))
+                        : task.verification_type === 'manual'
+                          ? 'Done'
+                          : (task.canComplete ? 'Claim' : (task.button_text || 'Go'))
 
                     return (
                       <div
