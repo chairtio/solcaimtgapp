@@ -12,7 +12,7 @@ export type BroadcastRecipient = { id: string; telegram_id: string }
 
 /**
  * Build the list of users eligible for broadcast based on filters.
- * Always excludes users with bot_blocked_at.
+ * Uses RPC to bypass Supabase 1000-row limit. Always excludes users with bot_blocked_at.
  */
 export async function getFilteredBroadcastRecipients(
   filters: AudienceFilters = {}
@@ -20,26 +20,13 @@ export async function getFilteredBroadcastRecipients(
   const claimed = filters.claimed ?? 'all'
   const hasReferrals = filters.has_referrals ?? 'all'
 
-  const [
-    { data: users },
-    { data: claimedRows },
-    { data: referrerRows },
-  ] = await Promise.all([
-    supabaseAdmin.from('users').select('id, telegram_id').is('bot_blocked_at', null),
-    supabaseAdmin.from('user_claim_totals').select('user_id').eq('has_claim_rent', true),
-    supabaseAdmin.from('referrals').select('referrer_id'),
-  ])
+  const { data, error } = await supabaseAdmin.rpc('get_broadcast_recipients', {
+    p_claimed: claimed,
+    p_has_referrals: hasReferrals,
+  })
 
-  const claimedSet = new Set((claimedRows || []).map((r) => r.user_id))
-  const referrerSet = new Set((referrerRows || []).map((r) => r.referrer_id))
+  if (error) throw error
 
-  let filtered = (users || []) as BroadcastRecipient[]
-
-  if (claimed === 'yes') filtered = filtered.filter((u) => claimedSet.has(u.id))
-  else if (claimed === 'no') filtered = filtered.filter((u) => !claimedSet.has(u.id))
-
-  if (hasReferrals === 'yes') filtered = filtered.filter((u) => referrerSet.has(u.id))
-  else if (hasReferrals === 'no') filtered = filtered.filter((u) => !referrerSet.has(u.id))
-
-  return filtered
+  const rows = (data || []) as { id: string; telegram_id: string }[]
+  return rows.map((r) => ({ id: r.id, telegram_id: r.telegram_id }))
 }

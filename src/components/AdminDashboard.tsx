@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Shield, Users, Wallet, BarChart3, Megaphone, Mail, Send, Image, Film, Download, History, ChevronDown, ChevronRight, Plus, Pencil, Trash2, SendHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 import { FollowUpForm } from './FollowUpForm'
+import { FilterPills } from './ui/filter-pills'
 
 const getInitData = () => (typeof window !== 'undefined' ? (window as any).Telegram?.WebApp?.initData : '') || ''
 
@@ -199,34 +200,34 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
         <div className="grid gap-6 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base font-black uppercase tracking-widest">User Detail</CardTitle>
+              <CardTitle className="text-base font-semibold">User Detail</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase">Telegram ID</p>
+                <p className="text-xs font-medium text-muted-foreground">Telegram ID</p>
                 <p className="font-mono text-sm">{userDetail.user?.telegram_id}</p>
               </div>
               <div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase">Username</p>
+                <p className="text-xs font-medium text-muted-foreground">Username</p>
                 <p>@{userDetail.user?.username || '—'}</p>
               </div>
               <div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase">Name</p>
+                <p className="text-xs font-medium text-muted-foreground">Name</p>
                 <p>{[userDetail.user?.first_name, userDetail.user?.last_name].filter(Boolean).join(' ') || '—'}</p>
               </div>
               <div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase">Created</p>
+                <p className="text-xs font-medium text-muted-foreground">Created</p>
                 <p className="text-xs">{userDetail.user?.created_at ? new Date(userDetail.user.created_at).toLocaleString() : '—'}</p>
               </div>
               {userDetail.user?.bot_blocked_at && (
                 <Badge variant="destructive">Bot blocked</Badge>
               )}
               <div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase">Stats</p>
+                <p className="text-xs font-medium text-muted-foreground">Stats</p>
                 <p className="text-sm">Claimed: {Number(userDetail.stats?.total_sol_claimed || 0).toFixed(4)} SOL | Accounts: {userDetail.stats?.total_accounts_closed || 0}</p>
               </div>
               <div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase">Wallets</p>
+                <p className="text-xs font-medium text-muted-foreground">Wallets</p>
                 <ul className="text-xs font-mono space-y-1">
                   {(userDetail.wallets || []).map((w: any) => (
                     <li key={w.id}>{w.public_key?.slice(0, 8)}...{w.public_key?.slice(-4)} ({w.status})</li>
@@ -238,7 +239,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle className="text-base font-black uppercase tracking-widest">Follow-ups</CardTitle>
+              <CardTitle className="text-base font-semibold">Follow-ups</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {allFollowUps.length > 0 ? (
@@ -341,14 +342,14 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-primary" />
-            <h2 className="text-base font-black text-foreground uppercase tracking-widest">Admin</h2>
+            <h2 className="text-base font-semibold">Admin</h2>
           </div>
         </div>
         {navTabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setAdminTab(id)}
-            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-bold text-left w-full ${
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold text-left w-full transition-colors ${
               adminTab === id ? 'bg-primary text-primary-foreground' : 'bg-secondary/50 text-muted-foreground hover:bg-secondary'
             }`}
           >
@@ -364,7 +365,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
       <div className="lg:hidden flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Shield className="w-5 h-5 text-primary" />
-          <h2 className="text-base font-black text-foreground uppercase tracking-widest">Admin</h2>
+          <h2 className="text-base font-semibold">Admin</h2>
         </div>
         <Button variant="ghost" size="sm" onClick={onBack}>Back</Button>
       </div>
@@ -381,7 +382,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             <button
               key={id}
               onClick={() => setAdminTab(id)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
                 adminTab === id ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground'
               }`}
             >
@@ -390,93 +391,93 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
           ))}
         </div>
 
-        <TabsContent value="overview" className="mt-4 space-y-4 outline-none">
-          <div className="flex gap-2">
-            {(['today', '7d', '30d'] as const).map((r) => (
-              <Button
-                key={r}
-                variant={dateRange === r ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setDateRange(r)}
-              >
-                {r === 'today' ? 'Today' : r === '7d' ? '7 days' : '30 days'}
-              </Button>
-            ))}
+        <TabsContent value="overview" className="mt-4 space-y-6 outline-none">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-muted-foreground">Date range</p>
+            <FilterPills
+              value={dateRange}
+              onChange={(v) => setDateRange(v as 'today' | '7d' | '30d')}
+              options={[
+                { value: 'today', label: 'Today' },
+                { value: '7d', label: '7 days' },
+                { value: '30d', label: '30 days' },
+              ]}
+            />
           </div>
           {statsLoading ? (
             <p className="text-sm text-muted-foreground">Loading...</p>
           ) : stats ? (
             <>
               {stats.range && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                  <Card>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                  <Card className="border-border/60 shadow-sm">
                     <CardContent className="pt-3 pb-3">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase">New signups</p>
+                      <p className="text-xs font-medium text-muted-foreground">New signups</p>
                       <p className="text-xl font-black">{stats.newSignups ?? 0}</p>
                     </CardContent>
                   </Card>
-                  <Card>
+                  <Card className="border-border/60 shadow-sm">
                     <CardContent className="pt-3 pb-3">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase">New claims</p>
+                      <p className="text-xs font-medium text-muted-foreground">New claims</p>
                       <p className="text-xl font-black">{stats.newClaims ?? 0}</p>
                     </CardContent>
                   </Card>
-                  <Card>
+                  <Card className="border-border/60 shadow-sm">
                     <CardContent className="pt-3 pb-3">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase">Campaigns sent</p>
+                      <p className="text-xs font-medium text-muted-foreground">Campaigns sent</p>
                       <p className="text-xl font-black">{stats.campaignsSent ?? 0}</p>
                     </CardContent>
                   </Card>
-                  <Card>
+                  <Card className="border-border/60 shadow-sm">
                     <CardContent className="pt-3 pb-3">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase">Campaigns scheduled</p>
+                      <p className="text-xs font-medium text-muted-foreground">Campaigns scheduled</p>
                       <p className="text-xl font-black">{stats.campaignsScheduled ?? 0}</p>
                     </CardContent>
                   </Card>
-                  <Card>
+                  <Card className="border-border/60 shadow-sm">
                     <CardContent className="pt-3 pb-3">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase">Broadcasts sent</p>
+                      <p className="text-xs font-medium text-muted-foreground">Broadcasts sent</p>
                       <p className="text-xl font-black">{stats.broadcastsSent ?? 0}</p>
                     </CardContent>
                   </Card>
-                  <Card>
+                  <Card className="border-border/60 shadow-sm">
                     <CardContent className="pt-3 pb-3">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase">Follow-ups sent</p>
+                      <p className="text-xs font-medium text-muted-foreground">Follow-ups sent</p>
                       <p className="text-xl font-black">{stats.followUpsSent ?? 0}</p>
                     </CardContent>
                   </Card>
                 </div>
               )}
-              <p className="text-[10px] font-bold text-muted-foreground uppercase">All time</p>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <Card>
+              <p className="text-xs font-medium text-muted-foreground">All time</p>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card className="border-border/60 shadow-sm">
                   <CardContent className="pt-4">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">Total Users</p>
+                    <p className="text-xs font-medium text-muted-foreground">Total Users</p>
                     <p className="text-2xl font-black">{stats.totalUsers}</p>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="border-border/60 shadow-sm">
                   <CardContent className="pt-4">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">Wallets</p>
+                    <p className="text-xs font-medium text-muted-foreground">Wallets</p>
                     <p className="text-2xl font-black">{stats.totalWallets}</p>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="border-border/60 shadow-sm">
                   <CardContent className="pt-4">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">Claimed</p>
+                    <p className="text-xs font-medium text-muted-foreground">Claimed</p>
                     <p className="text-2xl font-black">{stats.usersWhoClaimed}</p>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="border-border/60 shadow-sm">
                   <CardContent className="pt-4">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">Bot Blocked</p>
+                    <p className="text-xs font-medium text-muted-foreground">Bot Blocked</p>
                     <p className="text-2xl font-black">{stats.botBlockedCount}</p>
                   </CardContent>
                 </Card>
               </div>
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-sm font-black uppercase tracking-widest">Recent Signups</CardTitle>
+                  <CardTitle className="text-base font-semibold">Recent Signups</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
@@ -549,13 +550,15 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             >
               <Download className="w-3.5 h-3.5 mr-1" /> {exportLoading ? 'Exporting...' : 'Export CSV'}
             </Button>
-            <div className="flex gap-1">
-              {(['all', 'not_claimed', 'blocked'] as const).map((f) => (
-                <Button key={f} variant={userFilter === f ? 'default' : 'outline'} size="sm" onClick={() => setUserFilter(f)}>
-                  {f.replace('_', ' ')}
-                </Button>
-              ))}
-            </div>
+            <FilterPills
+              value={userFilter}
+              onChange={(v) => setUserFilter(v as 'all' | 'not_claimed' | 'blocked')}
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'not_claimed', label: 'Not claimed' },
+                { value: 'blocked', label: 'Blocked' },
+              ]}
+            />
           </div>
           {usersLoading ? (
             <div className="space-y-2">
@@ -822,42 +825,41 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
         <TabsContent value="broadcast" className="mt-4 space-y-4 outline-none">
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-black uppercase tracking-widest">Send Broadcast</CardTitle>
+              <CardTitle className="text-base font-semibold">Send Broadcast</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <Label className="text-[11px] font-black uppercase tracking-widest">Audience</Label>
-                <p className="text-xs text-muted-foreground mt-0.5">Preview audience first, then send.</p>
-                <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs">Claimed</Label>
-                    <select
-                      className="rounded border bg-background px-2 py-1 text-sm"
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-muted-foreground">Audience — preview first, then send.</p>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Claimed</p>
+                    <FilterPills
                       value={broadcastAudienceFilters.claimed}
-                      onChange={(e) => {
-                        setBroadcastAudienceFilters((f) => ({ ...f, claimed: e.target.value as 'all' | 'yes' | 'no' }))
+                      onChange={(v) => {
+                        setBroadcastAudienceFilters((f) => ({ ...f, claimed: v as 'all' | 'yes' | 'no' }))
                         setBroadcastAudienceCount(null)
                       }}
-                    >
-                      <option value="all">All</option>
-                      <option value="yes">Claimed</option>
-                      <option value="no">Not claimed</option>
-                    </select>
+                      options={[
+                        { value: 'all', label: 'All' },
+                        { value: 'yes', label: 'Claimed' },
+                        { value: 'no', label: 'Not claimed' },
+                      ]}
+                    />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs">Referrals</Label>
-                    <select
-                      className="rounded border bg-background px-2 py-1 text-sm"
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Referrals</p>
+                    <FilterPills
                       value={broadcastAudienceFilters.has_referrals}
-                      onChange={(e) => {
-                        setBroadcastAudienceFilters((f) => ({ ...f, has_referrals: e.target.value as 'all' | 'yes' | 'no' }))
+                      onChange={(v) => {
+                        setBroadcastAudienceFilters((f) => ({ ...f, has_referrals: v as 'all' | 'yes' | 'no' }))
                         setBroadcastAudienceCount(null)
                       }}
-                    >
-                      <option value="all">All</option>
-                      <option value="yes">Has invited friends</option>
-                      <option value="no">No referrals</option>
-                    </select>
+                      options={[
+                        { value: 'all', label: 'All' },
+                        { value: 'yes', label: 'Has invited friends' },
+                        { value: 'no', label: 'No referrals' },
+                      ]}
+                    />
                   </div>
                   <Button
                     variant="outline"
@@ -884,21 +886,21 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                     {broadcastAudiencePreviewing ? 'Loading...' : 'Preview audience'}
                   </Button>
                   {broadcastAudienceCount !== null && (
-                    <span className="text-sm font-bold text-primary">{broadcastAudienceCount} users will receive this</span>
+                    <span className="text-sm font-semibold text-primary">{broadcastAudienceCount.toLocaleString()} users will receive this</span>
                   )}
                 </div>
               </div>
               <div>
-                <Label className="text-[11px] font-black uppercase tracking-widest">Message</Label>
+                <Label className="text-sm font-medium text-muted-foreground">Message</Label>
                 <textarea
-                  className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm min-h-[120px]"
+                  className="mt-1.5 w-full rounded-xl border border-input/80 bg-background px-3 py-2.5 text-sm min-h-[140px] focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0"
                   value={broadcastMessage}
                   onChange={(e) => setBroadcastMessage(e.target.value)}
                   placeholder="Enter message to send to all users (excluding blocked)"
                 />
               </div>
               <div>
-                <Label className="text-[11px] font-black uppercase tracking-widest">Media</Label>
+                <Label className="text-sm font-medium text-muted-foreground">Media</Label>
                 <div className="mt-1 flex gap-2">
                   {(['none', 'image', 'gif'] as const).map((t) => (
                     <Button
@@ -922,7 +924,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                 )}
               </div>
               <div>
-                <Label className="text-[11px] font-black uppercase tracking-widest">Buttons (optional)</Label>
+                <Label className="text-sm font-medium text-muted-foreground">Buttons (optional)</Label>
                 <div className="mt-1 space-y-2">
                   {broadcastButtons.map((b, i) => (
                     <div key={i} className="flex gap-2">
@@ -966,6 +968,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                 </Button>
               </div>
               <Button
+                size="lg"
                 disabled={!broadcastMessage.trim() || broadcastSending || broadcastAudienceCount === null}
                 onClick={async () => {
                   if (!confirm(`Send this broadcast to ${broadcastAudienceCount} users?`)) return
@@ -1006,7 +1009,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
                 <History className="w-4 h-4" /> Broadcast History
               </CardTitle>
             </CardHeader>
