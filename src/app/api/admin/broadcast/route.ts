@@ -5,6 +5,28 @@ import { getUser, markUserBotBlocked } from '@/lib/database'
 
 const RATE_LIMIT_MS = 550 // ~2 msg/sec
 
+export async function GET(request: Request) {
+  const auth = await requireAdmin(request)
+  if (!auth.ok) return auth.response
+
+  const { searchParams } = new URL(request.url)
+  const limit = Math.min(Number(searchParams.get('limit')) || 50, 100)
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('broadcast_log')
+      .select('id, message, status, total_recipients, sent_count, blocked_count, error_count, created_at, finished_at')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+
+    if (error) throw error
+    return NextResponse.json({ broadcasts: data || [] })
+  } catch (err) {
+    console.error('[Admin broadcasts list]', err)
+    return NextResponse.json({ error: 'Failed to fetch broadcasts' }, { status: 500 })
+  }
+}
+
 type SendOpts = {
   message: string
   replyMarkup?: { inline_keyboard: { text: string; url?: string; callback_data?: string }[][] }
