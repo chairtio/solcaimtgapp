@@ -188,30 +188,35 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
     return (
       <div data-admin className="flex min-h-screen w-full bg-zinc-50 dark:bg-[#0b0c10]">
         <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 lg:border-r lg:border-zinc-200 dark:lg:border-zinc-800 bg-white dark:bg-zinc-900 lg:fixed lg:inset-y-0 lg:left-0 z-20">
-          <div className="p-6">
+          <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
             <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Admin</p>
           </div>
-          <div className="p-4">
+          <div className="p-4 py-6">
             <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(null)} className="w-full justify-start gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors duration-150">
               <ArrowLeft className="w-4 h-4" /> Back to Users
             </Button>
           </div>
         </aside>
 
-        <main className="flex-1 lg:pl-64 min-w-0 flex flex-col min-h-screen">
-          <div className="lg:hidden bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-20 p-4">
-            <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(null)} className="gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors duration-150">
-              <ArrowLeft className="w-4 h-4" /> Back to Users
-            </Button>
-          </div>
+        <main className="flex-1 lg:pl-64 min-w-0 flex flex-col min-h-screen bg-zinc-50 dark:bg-[#0b0c10] w-full max-w-full">
+        <div className="lg:hidden bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-20 p-4 w-full overflow-hidden max-w-full flex items-center justify-between">
+          <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(null)} className="gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors duration-150 h-8 px-2">
+            <ArrowLeft className="w-4 h-4" /> Back
+          </Button>
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">User Detail</p>
+        </div>
 
-          <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-300">
-            <div className="grid gap-8 lg:grid-cols-2">
-              <AdminCard>
-                <AdminCardHeader>
-                  <AdminCardTitle>User Detail</AdminCardTitle>
+          <div className="flex-1 p-4 sm:p-6 lg:p-8 w-full max-w-full overflow-x-hidden">
+            <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto w-full">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">User Detail</h3>
+              </div>
+              <div className="grid gap-8 lg:grid-cols-2">
+              <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                <AdminCardHeader className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20 px-6 py-4">
+                  <AdminCardTitle>User Profile</AdminCardTitle>
                 </AdminCardHeader>
-                <AdminCardContent className="space-y-6">
+                <AdminCardContent className="space-y-6 p-6">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Telegram ID</p>
@@ -251,11 +256,11 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   </div>
                 </AdminCardContent>
               </AdminCard>
-              <AdminCard>
-                <AdminCardHeader>
+              <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm mt-0 overflow-hidden">
+                <AdminCardHeader className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20 px-6 py-4">
                   <AdminCardTitle>Follow-ups</AdminCardTitle>
                 </AdminCardHeader>
-                <AdminCardContent className="space-y-6">
+                <AdminCardContent className="space-y-6 p-6">
                   {allFollowUps.length > 0 ? (
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
@@ -340,8 +345,9 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
               </AdminCard>
             </div>
           </div>
-        </main>
-      </div>
+        </div>
+      </main>
+    </div>
     )
   }
 
@@ -360,7 +366,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
         <div className="p-6">
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Admin</p>
         </div>
-        <div className="flex-1 px-4 space-y-1 overflow-y-auto">
+        <div className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
           {navTabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -382,9 +388,15 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
         </div>
       </aside>
 
-      <main className="flex-1 lg:pl-64 min-w-0 flex flex-col min-h-screen">
-        <div className="lg:hidden bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-20">
-          <div className="flex gap-2 overflow-x-auto p-4 custom-scrollbar">
+        <main className="flex-1 lg:pl-64 min-w-0 flex flex-col min-h-screen bg-zinc-50 dark:bg-[#0b0c10] w-full max-w-full">
+        <div className="lg:hidden bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-20 w-full overflow-hidden max-w-full">
+          <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800">
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Admin</p>
+            <Button variant="ghost" size="sm" onClick={onBack} className="gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors duration-150 h-8 px-2">
+              <ArrowLeft className="w-4 h-4" /> Exit
+            </Button>
+          </div>
+          <div className="flex gap-2 overflow-x-auto p-4 custom-scrollbar w-full max-w-full">
             {[
               { id: 'overview', label: 'Overview', icon: BarChart3 },
               { id: 'users', label: 'Users', icon: Users },
@@ -405,21 +417,21 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
           </div>
         </div>
 
-        <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+          <div className="flex-1 p-4 sm:p-6 lg:p-8 w-full max-w-full overflow-x-hidden">
           {adminTab === 'overview' && !selectedUserId && (
-            <div className="space-y-8 animate-in fade-in duration-300">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto w-full">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Overview</h3>
-            <FilterPills
-              value={dateRange}
-              onChange={(v) => setDateRange(v as 'today' | '7d' | '30d')}
-              options={[
-                { value: 'today', label: 'Today' },
-                { value: '7d', label: '7 days' },
-                { value: '30d', label: '30 days' },
-              ]}
-            />
-          </div>
+                <FilterPills
+                  value={dateRange}
+                  onChange={(v) => setDateRange(v as 'today' | '7d' | '30d')}
+                  options={[
+                    { value: 'today', label: 'Today' },
+                    { value: '7d', label: '7 days' },
+                    { value: '30d', label: '30 days' },
+                  ]}
+                />
+              </div>
           {statsLoading ? (
             <div className="space-y-8">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-5">
@@ -441,8 +453,8 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   ))}
                 </div>
               </div>
-              <AdminCard>
-                <AdminCardHeader>
+              <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                <AdminCardHeader className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20 px-6 py-4">
                   <AdminCardTitle>Recent Signups</AdminCardTitle>
                 </AdminCardHeader>
                 <AdminCardContent className="p-0">
@@ -471,8 +483,8 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   <AdminStatCard label="Bot Blocked" value={stats.botBlockedCount} />
                 </div>
               </div>
-              <AdminCard>
-                <AdminCardHeader>
+              <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                <AdminCardHeader className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20 px-6 py-4">
                   <AdminCardTitle>Recent Signups</AdminCardTitle>
                 </AdminCardHeader>
                 <AdminCardContent className="p-0">
@@ -510,10 +522,10 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
           )}
 
           {adminTab === 'users' && !selectedUserId && (
-            <div className="space-y-8 animate-in fade-in duration-300">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto w-full">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Users</h3>
-            <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
               <Input
                 placeholder="Search telegram_id or username"
                 value={userSearch}
@@ -565,19 +577,21 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             </div>
           </div>
           {usersLoading ? (
-            <AdminCard>
+            <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
               <AdminCardContent className="p-0">
                 <AdminTableSkeleton rows={5} cols={4} />
               </AdminCardContent>
             </AdminCard>
           ) : users.length === 0 ? (
-            <AdminEmptyState
-              icon={Users}
-              title="No users match your filters"
-              description="Try adjusting your search or filter criteria."
-            />
+            <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+              <AdminEmptyState
+                icon={Users}
+                title="No users match your filters"
+                description="Try adjusting your search or filter criteria."
+              />
+            </AdminCard>
           ) : (
-            <AdminCard>
+            <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
               <AdminCardContent className="p-0">
                 <AdminTable>
                   <AdminTableHeader>
@@ -610,8 +624,10 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
         )}
 
         {adminTab === 'campaigns' && !selectedUserId && (
-          <div className="space-y-8 animate-in fade-in duration-300">
-            <AdminPageHeader title="Campaigns" />
+          <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto w-full">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Campaigns</h3>
+            </div>
           {campaignsLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
@@ -622,7 +638,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
               ))}
             </div>
           ) : campaigns.length === 0 ? (
-            <AdminCard>
+            <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
               <AdminEmptyState
                 icon={Megaphone}
                 title="No campaigns yet"
@@ -632,7 +648,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
           ) : (
             <div className="space-y-4">
               {campaigns.map((c) => (
-                <AdminCard key={c.id}>
+                <AdminCard key={c.id} className="p-6 border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-3 mb-2">
@@ -667,7 +683,10 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
         )}
 
         {adminTab === 'followups' && !selectedUserId && (
-          <div className="space-y-8 animate-in fade-in duration-300">
+          <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto w-full">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Follow-ups</h3>
+            </div>
           {followUpsLoading ? (
             <div className="space-y-6">
               {[1, 2].map((i) => (
@@ -688,7 +707,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                 const isOpen = followUpExpandedGroups[segment] !== false
                 const label = segment === 'not_claimed' ? 'Not claimed' : 'Claimed'
                 return (
-                  <AdminCard key={segment} className="p-0 overflow-hidden">
+                  <AdminCard key={segment} className="p-0 border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
                     <button
                       type="button"
                       className="w-full flex items-center justify-between p-6 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
@@ -815,20 +834,20 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                               }}
                             />
                           ) : (
-                            <div key={f.id} className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20">
+                            <div key={f.id} className="group flex flex-col sm:flex-row sm:items-start justify-between gap-4 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
                               <div className="flex-1 min-w-0">
-                                <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                                <div className="flex flex-wrap items-center gap-2.5 mb-2">
                                   <span className="font-semibold text-sm text-zinc-900 dark:text-zinc-50">{f.name || `${f.delay_minutes} min delay`}</span>
-                                  <Badge variant={f.enabled ? 'default' : 'secondary'} className="text-[10px] uppercase tracking-wider">{f.enabled ? 'On' : 'Off'}</Badge>
-                                  <Badge variant="outline" className="text-[10px] font-mono">
-                                    {f.delay_minutes < 60 ? `${f.delay_minutes}m` : f.delay_minutes < 1440 ? `${Math.round(f.delay_minutes / 60)}h` : `${Math.round(f.delay_minutes / 1440)}d`}
+                                  <Badge variant={f.enabled ? 'default' : 'secondary'} className="text-[10px] uppercase tracking-wider">{f.enabled ? 'Active' : 'Paused'}</Badge>
+                                  <Badge variant="outline" className="text-[10px] font-mono bg-zinc-50 dark:bg-zinc-800/50">
+                                    {f.delay_minutes < 60 ? `${f.delay_minutes}m` : f.delay_minutes < 1440 ? `${Math.round(f.delay_minutes / 60)}h` : `${Math.round(f.delay_minutes / 1440)}d`} delay
                                   </Badge>
-                                  {f.media_type && <Badge variant="outline" className="text-[10px] uppercase tracking-wider">{f.media_type}</Badge>}
+                                  {f.media_type && <Badge variant="outline" className="text-[10px] uppercase tracking-wider bg-zinc-50 dark:bg-zinc-800/50">{f.media_type}</Badge>}
                                 </div>
-                                <p className="text-sm text-zinc-500 dark:text-zinc-400 line-clamp-2">{f.message}</p>
+                                <p className="text-sm text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">{f.message}</p>
                               </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <Button variant="outline" size="sm" disabled={previewSending} onClick={async () => {
+                              <div className="flex items-center gap-2 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                <Button variant="outline" size="sm" className="h-8 px-3" disabled={previewSending} onClick={async () => {
                                   setPreviewSending(true)
                                   try {
                                     await adminFetch('/api/admin/preview', { method: 'POST', body: JSON.stringify({ follow_up_id: f.id }) })
@@ -836,12 +855,12 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                                   } catch (e) { toast.error((e as Error).message) }
                                   finally { setPreviewSending(false) }
                                 }}>
-                                  <SendHorizontal className="w-4 h-4" />
+                                  <SendHorizontal className="w-3.5 h-3.5 mr-1.5" /> Preview
                                 </Button>
-                                <Button variant="outline" size="sm" onClick={() => { setFollowUpEditingId(f.id); setFollowUpAddingSegment(null); }}>
-                                  <Pencil className="w-4 h-4" />
+                                <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => { setFollowUpEditingId(f.id); setFollowUpAddingSegment(null); }}>
+                                  <Pencil className="w-3.5 h-3.5" />
                                 </Button>
-                                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={async () => {
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={async () => {
                                   if (!confirm('Delete this follow-up?')) return
                                   try {
                                     await adminFetch(`/api/admin/follow-ups/${f.id}`, { method: 'DELETE' })
@@ -849,7 +868,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                                     adminFetch('/api/admin/follow-ups').then((r) => setFollowUps(r.followUps || []))
                                   } catch (e) { toast.error((e as Error).message) }
                                 }}>
-                                  <Trash2 className="w-4 h-4" />
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </Button>
                               </div>
                             </div>
@@ -869,17 +888,20 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
         )}
 
         {adminTab === 'broadcast' && !selectedUserId && (
-          <div className="space-y-8 animate-in fade-in duration-300">
-          <AdminCard>
-            <AdminCardHeader>
+          <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto w-full">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Broadcast</h3>
+            </div>
+          <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+            <AdminCardHeader className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20 px-6 py-4">
               <AdminCardTitle>Send Broadcast</AdminCardTitle>
             </AdminCardHeader>
-            <AdminCardContent className="space-y-6">
+            <AdminCardContent className="space-y-6 p-6">
                 <div className="space-y-4">
                   <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Audience</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Claimed</p>
+                    <div className="space-y-3">
+                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Claimed Status</p>
                       <FilterPills
                         value={broadcastAudienceFilters.claimed}
                         onChange={(v) => {
@@ -887,14 +909,14 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                           setBroadcastAudienceCount(null)
                         }}
                         options={[
-                          { value: 'all', label: 'All' },
+                          { value: 'all', label: 'All Users' },
                           { value: 'yes', label: 'Claimed' },
-                          { value: 'no', label: 'Not claimed' },
+                          { value: 'no', label: 'Not Claimed' },
                         ]}
                       />
                     </div>
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Referrals</p>
+                    <div className="space-y-3">
+                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Referrals Status</p>
                       <FilterPills
                         value={broadcastAudienceFilters.has_referrals}
                         onChange={(v) => {
@@ -902,9 +924,9 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                           setBroadcastAudienceCount(null)
                         }}
                         options={[
-                          { value: 'all', label: 'All' },
-                          { value: 'yes', label: 'Has invited friends' },
-                          { value: 'no', label: 'No referrals' },
+                          { value: 'all', label: 'All Users' },
+                          { value: 'yes', label: 'Has Referrals' },
+                          { value: 'no', label: 'No Referrals' },
                         ]}
                       />
                     </div>
@@ -940,7 +962,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                     </div>
                   </div>
                 </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <Label className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Message</Label>
                 <textarea
                   className="w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3 text-sm min-h-[140px] focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 focus:border-transparent transition-all"
@@ -949,7 +971,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   placeholder="Enter message to send to all users (excluding blocked)"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <Label className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Media</Label>
                 <div className="flex gap-2">
                   {(['none', 'image', 'gif'] as const).map((t) => (
@@ -973,7 +995,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   />
                 )}
               </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <Label className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Buttons (optional)</Label>
                 <div className="space-y-2">
                   {broadcastButtons.map((b, i) => (
@@ -990,7 +1012,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   <Button variant="outline" size="sm" onClick={() => setBroadcastButtons([...broadcastButtons, { text: '', url: '' }])}>Add button</Button>
                 </div>
               </div>
-              <div className="pt-4 flex flex-col sm:flex-row gap-4">
+              <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row gap-4">
                 <Button
                   variant="outline"
                   disabled={!broadcastMessage.trim() || previewSending}
@@ -1060,8 +1082,8 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             </AdminCardContent>
           </AdminCard>
 
-          <AdminCard>
-            <AdminCardHeader>
+          <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm mt-8 overflow-hidden">
+            <AdminCardHeader className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20 px-6 py-4">
               <AdminCardTitle className="flex items-center gap-2">
                 <History className="w-4 h-4" /> Broadcast History
               </AdminCardTitle>
