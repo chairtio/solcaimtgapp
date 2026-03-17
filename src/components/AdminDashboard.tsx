@@ -769,6 +769,9 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                                 <div className="flex flex-wrap items-center gap-2">
                                   <p className="font-bold text-sm">{f.name || `${f.delay_minutes} min delay`}</p>
                                   <Badge variant={f.enabled ? 'default' : 'secondary'} className="text-[10px]">{f.enabled ? 'On' : 'Off'}</Badge>
+                                  <Badge variant="outline" className="text-[10px] font-mono">
+                                    {f.delay_minutes < 60 ? `${f.delay_minutes}m` : f.delay_minutes < 1440 ? `${Math.round(f.delay_minutes / 60)}h` : `${Math.round(f.delay_minutes / 1440)}d`}
+                                  </Badge>
                                   {f.media_type && <Badge variant="outline" className="text-[10px]">{f.media_type}</Badge>}
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{f.message}</p>
