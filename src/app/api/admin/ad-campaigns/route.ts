@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin } from '../../withAdmin'
+import { requireAdmin } from '../withAdmin'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 const BOT_USERNAME = process.env.NEXT_PUBLIC_BOT_USERNAME || 'solclaimxbot'
