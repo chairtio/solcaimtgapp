@@ -227,6 +227,23 @@ export async function createTransactionRecord(telegramUserId, xanoWalletId, fee,
 
 // --- Stats ---
 
+/** Record first-touch ad campaign attribution (e.g. /start camp_xxx). No-op if unknown code or already attributed. */
+export async function recordAdAttribution(telegramId, sourceCode) {
+  if (!supabase || !sourceCode || typeof sourceCode !== 'string') return
+  const code = sourceCode.trim()
+  if (code.length > 64 || !/^camp_[a-zA-Z0-9_-]+$/.test(code)) return
+  const { data: user } = await supabase.from('users').select('id').eq('telegram_id', String(telegramId)).single()
+  if (!user?.id) return
+  const { data: campaign } = await supabase.from('ad_campaigns').select('id').eq('source_code', code).single()
+  if (!campaign?.id) return
+  await supabase
+    .from('ad_campaign_attribution')
+    .upsert(
+      { user_id: user.id, ad_campaign_id: campaign.id },
+      { onConflict: 'user_id', ignoreDuplicates: true }
+    )
+}
+
 /** Get total claimed and total users. Xano urlTotalStats shape: { claimed, users } */
 export async function getTotalStats() {
   if (!supabase) return { claimed: 0, users: 0 }

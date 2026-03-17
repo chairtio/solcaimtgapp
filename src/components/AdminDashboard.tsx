@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Users, BarChart3, Megaphone, Mail, Send, Image, Film, Download, History, ChevronDown, ChevronRight, Plus, Pencil, Trash2, SendHorizontal } from 'lucide-react'
+import { ArrowLeft, Users, BarChart3, Megaphone, Mail, Send, Image, Film, Download, History, ChevronDown, ChevronRight, Plus, Pencil, Trash2, SendHorizontal, Target, Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { FollowUpForm } from './FollowUpForm'
 import { FilterPills } from './ui/filter-pills'
@@ -66,6 +66,15 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
   // Campaigns
   const [campaigns, setCampaigns] = useState<any[]>([])
   const [campaignsLoading, setCampaignsLoading] = useState(false)
+
+  // Ad campaigns
+  const [adCampaigns, setAdCampaigns] = useState<{ id: string; name: string; source_code: string; notes?: string; created_at: string }[]>([])
+  const [adCampaignsLoading, setAdCampaignsLoading] = useState(false)
+  const [adCampaignStats, setAdCampaignStats] = useState<Record<string, { started: number; added_wallet: number; claimed: number }>>({})
+  const [adCampaignCreateName, setAdCampaignCreateName] = useState('')
+  const [adCampaignCreateNotes, setAdCampaignCreateNotes] = useState('')
+  const [adCampaignCreating, setAdCampaignCreating] = useState(false)
+  const [adCampaignCreated, setAdCampaignCreated] = useState<{ name: string; source_code: string; bot_start_url: string; mini_app_url: string } | null>(null)
 
   // Follow-ups
   const [followUps, setFollowUps] = useState<any[]>([])
@@ -166,6 +175,35 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
         .finally(() => setFollowUpsLoading(false))
     }
   }, [adminTab])
+
+  useEffect(() => {
+    if (adminTab === 'adcampaigns') {
+      setAdCampaignsLoading(true)
+      setAdCampaignCreated(null)
+      adminFetch('/api/admin/ad-campaigns')
+        .then((r) => setAdCampaigns(r.campaigns || []))
+        .catch((e) => toast.error(e.message))
+        .finally(() => setAdCampaignsLoading(false))
+    }
+  }, [adminTab])
+
+  useEffect(() => {
+    if (adminTab === 'adcampaigns' && adCampaigns.length > 0) {
+      Promise.all(
+        adCampaigns.map((c) =>
+          adminFetch(`/api/admin/ad-campaigns/${c.id}/stats`).then((s) => ({ id: c.id, ...s }))
+        )
+      )
+        .then((results) => {
+          const next: Record<string, { started: number; added_wallet: number; claimed: number }> = {}
+          results.forEach((r) => { next[r.id] = { started: r.started, added_wallet: r.added_wallet, claimed: r.claimed } })
+          setAdCampaignStats(next)
+        })
+        .catch(() => {})
+    } else {
+      setAdCampaignStats({})
+    }
+  }, [adminTab, adCampaigns])
 
   useEffect(() => {
     if (adminTab === 'broadcast') {
@@ -359,6 +397,7 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'campaigns', label: 'Campaigns', icon: Megaphone },
+    { id: 'adcampaigns', label: 'Ad campaigns', icon: Target },
     { id: 'followups', label: 'Follow-ups', icon: Mail },
     { id: 'broadcast', label: 'Broadcast', icon: Send },
   ]
@@ -684,6 +723,159 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
             </div>
           )}
         </div>
+        )}
+
+        {adminTab === 'adcampaigns' && !selectedUserId && (
+          <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto w-full">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground">Ad campaigns</h1>
+            </div>
+
+            <AdminCard>
+              <AdminCardHeader className="border-b border-border pb-4">
+                <AdminCardTitle>Create campaign</AdminCardTitle>
+              </AdminCardHeader>
+              <AdminCardContent className="pt-4 space-y-4">
+                {adCampaignCreated ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">Campaign <span className="font-medium text-foreground">{adCampaignCreated.name}</span> created with code <code className="rounded bg-muted px-1.5 py-0.5 text-sm">{adCampaignCreated.source_code}</code>. Copy the URLs below for your ads:</p>
+                    <div className="grid gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Label className="text-xs text-muted-foreground shrink-0">Bot start (opens bot chat)</Label>
+                        <div className="flex-1 min-w-0 flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                          <input readOnly className="flex-1 min-w-0 bg-transparent text-sm font-mono truncate" value={adCampaignCreated.bot_start_url} />
+                          <Button variant="ghost" size="sm" className="shrink-0" onClick={() => { navigator.clipboard.writeText(adCampaignCreated!.bot_start_url); toast.success('Copied'); }}>
+                            <Copy className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Label className="text-xs text-muted-foreground shrink-0">Mini App direct</Label>
+                        <div className="flex-1 min-w-0 flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                          <input readOnly className="flex-1 min-w-0 bg-transparent text-sm font-mono truncate" value={adCampaignCreated.mini_app_url} />
+                          <Button variant="ghost" size="sm" className="shrink-0" onClick={() => { navigator.clipboard.writeText(adCampaignCreated!.mini_app_url); toast.success('Copied'); }}>
+                            <Copy className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setAdCampaignCreated(null)}>Create another</Button>
+                  </div>
+                ) : (
+                  <form
+                    className="space-y-4"
+                    onSubmit={async (e) => {
+                      e.preventDefault()
+                      if (!adCampaignCreateName.trim() || adCampaignCreating) return
+                      setAdCampaignCreating(true)
+                      try {
+                        const r = await adminFetch('/api/admin/ad-campaigns', {
+                          method: 'POST',
+                          body: JSON.stringify({ name: adCampaignCreateName.trim(), notes: adCampaignCreateNotes.trim() || undefined }),
+                        })
+                        setAdCampaignCreated({
+                          name: r.name,
+                          source_code: r.source_code,
+                          bot_start_url: r.bot_start_url,
+                          mini_app_url: r.mini_app_url,
+                        })
+                        setAdCampaignCreateName('')
+                        setAdCampaignCreateNotes('')
+                        setAdCampaigns((prev) => [{ id: r.id, name: r.name, source_code: r.source_code, notes: r.notes, created_at: r.created_at }, ...prev])
+                        toast.success('Campaign created')
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : 'Failed to create')
+                      } finally {
+                        setAdCampaignCreating(false)
+                      }
+                    }}
+                  >
+                    <div>
+                      <Label htmlFor="ad-campaign-name">Name</Label>
+                      <Input
+                        id="ad-campaign-name"
+                        value={adCampaignCreateName}
+                        onChange={(e) => setAdCampaignCreateName(e.target.value)}
+                        placeholder="e.g. Telegram Ads Q1"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="ad-campaign-notes">Notes (optional)</Label>
+                      <Input
+                        id="ad-campaign-notes"
+                        value={adCampaignCreateNotes}
+                        onChange={(e) => setAdCampaignCreateNotes(e.target.value)}
+                        placeholder="Optional notes"
+                        className="mt-1"
+                      />
+                    </div>
+                    <Button type="submit" disabled={!adCampaignCreateName.trim() || adCampaignCreating}>
+                      {adCampaignCreating ? 'Creating...' : 'Create campaign'}
+                    </Button>
+                  </form>
+                )}
+              </AdminCardContent>
+            </AdminCard>
+
+            {adCampaignsLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="rounded-2xl border-2 border-border bg-card p-5 h-16">
+                    <div className="h-4 w-48 rounded bg-muted animate-pulse mb-2" />
+                    <div className="h-3 w-32 rounded bg-muted animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            ) : adCampaigns.length === 0 ? (
+              <AdminCard>
+                <AdminEmptyState
+                  icon={Target}
+                  title="No ad campaigns yet"
+                  description="Create an ad campaign to get trackable URLs and measure funnel (Started, Added wallet, Claimed)."
+                />
+              </AdminCard>
+            ) : (
+              <AdminCard>
+                <AdminTable>
+                  <AdminTableHeader>
+                    <AdminTableRow>
+                      <AdminTableHead>Name</AdminTableHead>
+                      <AdminTableHead>Source code</AdminTableHead>
+                      <AdminTableHead>Created</AdminTableHead>
+                      <AdminTableHead className="text-right">Started</AdminTableHead>
+                      <AdminTableHead className="text-right">Added wallet</AdminTableHead>
+                      <AdminTableHead className="text-right">Claimed</AdminTableHead>
+                      <AdminTableHead></AdminTableHead>
+                    </AdminTableRow>
+                  </AdminTableHeader>
+                  <AdminTableBody>
+                    {adCampaigns.map((c) => {
+                      const stats = adCampaignStats[c.id]
+                      const botUrl = `https://t.me/${process.env.NEXT_PUBLIC_BOT_USERNAME || 'solclaimxbot'}?start=${encodeURIComponent(c.source_code)}`
+                      const appUrl = `https://t.me/${process.env.NEXT_PUBLIC_BOT_USERNAME || 'solclaimxbot'}/app?startapp=${encodeURIComponent(c.source_code)}`
+                      return (
+                        <AdminTableRow key={c.id}>
+                          <AdminTableCell className="font-medium">{c.name}</AdminTableCell>
+                          <AdminTableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded">{c.source_code}</code></AdminTableCell>
+                          <AdminTableCell className="text-muted-foreground text-sm">{new Date(c.created_at).toLocaleDateString()}</AdminTableCell>
+                          <AdminTableCell className="text-right tabular-nums">{stats ? stats.started : '—'}</AdminTableCell>
+                          <AdminTableCell className="text-right tabular-nums">{stats ? stats.added_wallet : '—'}</AdminTableCell>
+                          <AdminTableCell className="text-right tabular-nums">{stats ? stats.claimed : '—'}</AdminTableCell>
+                          <AdminTableCell>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => { navigator.clipboard.writeText(botUrl); toast.success('Bot URL copied'); }} title="Copy bot URL"><Copy className="w-3.5 h-3.5" /></Button>
+                              <Button variant="ghost" size="sm" onClick={() => { navigator.clipboard.writeText(appUrl); toast.success('Mini App URL copied'); }} title="Copy Mini App URL"><Copy className="w-3.5 h-3.5" /></Button>
+                            </div>
+                          </AdminTableCell>
+                        </AdminTableRow>
+                      )
+                    })}
+                  </AdminTableBody>
+                </AdminTable>
+              </AdminCard>
+            )}
+          </div>
         )}
 
         {adminTab === 'followups' && !selectedUserId && (

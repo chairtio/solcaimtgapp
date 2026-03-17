@@ -1,6 +1,7 @@
 // commands/startCommand.js
 import { urlTelegramUser, urlReferral } from '../private/private.js';
 import { fetchData } from '../utils/fetchData.js';
+import { recordAdAttribution } from '../lib/supabase-bot.js';
 import { getUserWithdrawWallet } from '../utils/getUserWithdrawWallet.js';
 import { fetchStats } from '../utils/fetchStats.js';
 import { redis } from "../private/private.js";
@@ -102,6 +103,11 @@ export const startCommand = async (ctx) => {
                     console.log(`Failed to record referral: ${refError}`);
                 }
             }
+        }
+
+        // Ad campaign attribution: first-touch when user opens bot via /start camp_xxx
+        if (userResponse && startArgs && /^camp_[a-zA-Z0-9_-]+$/.test(startArgs)) {
+            recordAdAttribution(userId, startArgs).catch(() => {});
         }
 
         // If tokenMint is provided

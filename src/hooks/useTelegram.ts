@@ -14,6 +14,7 @@ interface TelegramUser {
 interface TelegramWebApp {
   initData: string
   initDataUnsafe: {
+    start_param?: string
     user?: TelegramUser
     auth_date: number
     hash: string
@@ -139,6 +140,23 @@ export function useTelegram() {
         setUser(dbUser)
         setError(dbError)
         setIsLoading(false)
+
+        // Ad campaign attribution: if opened via start_param (e.g. startapp=camp_xxx), record first-touch once
+        if (webApp?.initDataUnsafe?.start_param) {
+          const sourceCode = webApp.initDataUnsafe.start_param.trim()
+          if (sourceCode && /^camp_[a-zA-Z0-9_-]+$/.test(sourceCode)) {
+            if (webApp.initData) {
+              fetch('/api/track-attribution', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Telegram-Init-Data': webApp.initData,
+                },
+                body: JSON.stringify({ source_code: sourceCode }),
+              }).catch(() => {})
+            }
+          }
+        }
 
         // Expand the WebApp to full height (only in Telegram)
         if (webApp) {
