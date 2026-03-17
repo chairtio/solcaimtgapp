@@ -20,6 +20,7 @@ import {
   Gift,
   ChevronRight,
   ChevronLeft,
+  ArrowLeft,
   ArrowUpRight,
   ArrowLeftRight,
   ChevronDown,
@@ -1554,68 +1555,88 @@ t.me/solclaimxbot?start=${telegramId}`
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans pb-24 selection:bg-primary/10">
-      {/* Promo Banner - 0% fees, at very top */}
-      {!promoBannerDismissed && (
-        <div className="bg-primary/10 border-b border-border">
-          <div className="max-w-md mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
-            <p className="text-xs font-bold text-foreground">
-              0% fees on claims — keep 100% of your SOL. Limited time.
-            </p>
-            <button
-              onClick={dismissPromoBanner}
-              className="p-1.5 text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              aria-label="Dismiss"
-            >
-              <X className="w-4 h-4" />
-            </button>
+      {activeTab !== 'admin' ? (
+        <>
+          {/* Promo Banner - 0% fees, at very top */}
+          {!promoBannerDismissed && (
+            <div className="bg-primary/10 border-b border-border">
+              <div className="max-w-md mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
+                <p className="text-xs font-bold text-foreground">
+                  0% fees on claims — keep 100% of your SOL. Limited time.
+                </p>
+                <button
+                  onClick={dismissPromoBanner}
+                  className="p-1.5 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                  aria-label="Dismiss"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Main App Header */}
+          <div className="sticky top-0 z-40 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-3">
+            <div className="flex items-center justify-between max-w-md mx-auto">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/20 shrink-0">
+                  <Wallet className="w-5 h-5 text-primary-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="text-xl font-black tracking-tight text-foreground">
+                    SolClaim
+                  </h1>
+                  {user ? (
+                    <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider flex items-center gap-2 truncate">
+                      {user.photo_url ? (
+                        <img src={user.photo_url} alt="" className="w-5 h-5 rounded-full object-cover ring-1 ring-primary/20 shrink-0" />
+                      ) : (
+                        <span className="w-5 h-5 rounded-full bg-primary/20 inline-flex items-center justify-center shrink-0 text-[9px] font-black text-primary">{(user.first_name?.[0] || '?').toUpperCase()}</span>
+                      )}
+                      Hi, {user.first_name || 'there'}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Claim SOL Rent</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {user?.is_premium && (
+                  <Badge variant="secondary" className="font-black text-[10px] uppercase tracking-widest bg-primary/10 text-primary border-0">
+                    PRO
+                  </Badge>
+                )}
+                {adminCheckLoaded && isAdmin && (
+                  <button
+                    onClick={() => setActiveTab('admin')}
+                    className="p-2.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                    aria-label="Admin"
+                  >
+                    <Shield className="w-5 h-5" />
+                  </button>
+                )}
+                <ThemeToggle />
+              </div>
+            </div>
+          </div>
+        </>
+      ) : (
+        /* Admin Dashboard Header - minimal, dedicated */
+        <div className="sticky top-0 z-40 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-3">
+          <div className="flex items-center justify-between max-w-7xl mx-auto">
+            <div className="flex items-center gap-3 min-w-0">
+              <Shield className="w-5 h-5 text-primary shrink-0" />
+              <h1 className="text-base font-semibold text-foreground">SolClaim Admin</h1>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="ghost" size="sm" onClick={() => setActiveTab('home')} className="gap-2">
+                Back
+              </Button>
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       )}
-
-      {/* Top Header */}
-      <div className="sticky top-0 z-40 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-3">
-        <div className="flex items-center justify-between max-w-md mx-auto">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/20 shrink-0">
-              <Wallet className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-xl font-black tracking-tight text-foreground">
-                SolClaim
-              </h1>
-              {user ? (
-                <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider flex items-center gap-2 truncate">
-                  {user.photo_url ? (
-                    <img src={user.photo_url} alt="" className="w-5 h-5 rounded-full object-cover ring-1 ring-primary/20 shrink-0" />
-                  ) : (
-                    <span className="w-5 h-5 rounded-full bg-primary/20 inline-flex items-center justify-center shrink-0 text-[9px] font-black text-primary">{(user.first_name?.[0] || '?').toUpperCase()}</span>
-                  )}
-                  Hi, {user.first_name || 'there'}
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Claim SOL Rent</p>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {user?.is_premium && (
-              <Badge variant="secondary" className="font-black text-[10px] uppercase tracking-widest bg-primary/10 text-primary border-0">
-                PRO
-              </Badge>
-            )}
-            {adminCheckLoaded && isAdmin && (
-              <button
-                onClick={() => setActiveTab('admin')}
-                className="p-2.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                aria-label="Admin"
-              >
-                <Shield className="w-5 h-5" />
-              </button>
-            )}
-            <ThemeToggle />
-          </div>
-        </div>
-      </div>
 
       <div className={`px-4 py-6 space-y-6 mx-auto ${activeTab === 'admin' ? 'max-w-7xl' : 'max-w-md'}`}>
         {activeTab === 'admin' ? (

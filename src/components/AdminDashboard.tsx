@@ -31,15 +31,6 @@ async function adminFetch(path: string, opts: RequestInit = {}) {
   return res.json()
 }
 
-type FollowUpFormData = {
-  name: string
-  message: string
-  delay_minutes: number
-  media_type: 'none' | 'image' | 'gif'
-  media_url: string
-  enabled: boolean
-}
-
 export function AdminDashboard({ onBack }: { onBack: () => void }) {
   const [adminTab, setAdminTab] = useState('overview')
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
@@ -182,7 +173,10 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
       setBroadcastHistoryLoading(true)
       adminFetch('/api/admin/broadcast')
         .then((r) => setBroadcastHistory(r.broadcasts || []))
-        .catch(() => setBroadcastHistory([]))
+        .catch((e) => {
+          toast.error(e.message)
+          setBroadcastHistory([])
+        })
         .finally(() => setBroadcastHistoryLoading(false))
     }
   }, [adminTab])
@@ -195,10 +189,10 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
     return (
       <div className="space-y-6 max-w-4xl mx-auto lg:max-w-6xl">
         <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(null)} className="gap-2">
-          <ArrowLeft className="w-4 h-4" /> Back
+          <ArrowLeft className="w-4 h-4" /> Back to users
         </Button>
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
+          <Card className="border-border/60 shadow-sm">
             <CardHeader>
               <CardTitle className="text-base font-semibold">User Detail</CardTitle>
             </CardHeader>
@@ -237,7 +231,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="border-border/60 shadow-sm">
             <CardHeader>
               <CardTitle className="text-base font-semibold">Follow-ups</CardTitle>
             </CardHeader>
@@ -338,7 +332,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
   return (
     <div className="flex flex-col lg:flex-row lg:gap-8 lg:max-w-7xl mx-auto pb-24">
       {/* Sidebar - desktop */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 gap-1">
+      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 gap-1 lg:border-r lg:border-border/50 lg:pr-6">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-primary" />
@@ -349,16 +343,18 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
           <button
             key={id}
             onClick={() => setAdminTab(id)}
-            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold text-left w-full transition-colors ${
-              adminTab === id ? 'bg-primary text-primary-foreground' : 'bg-secondary/50 text-muted-foreground hover:bg-secondary'
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-left w-full transition-colors ${
+              adminTab === id ? 'bg-primary text-primary-foreground' : 'bg-transparent text-muted-foreground hover:bg-muted/50'
             }`}
           >
             <Icon className="w-4 h-4 shrink-0" /> {label}
           </button>
         ))}
-        <Button variant="ghost" size="sm" onClick={onBack} className="mt-4 justify-start">
-          Back
-        </Button>
+        <div className="mt-auto pt-4 border-t border-border/50">
+          <Button variant="ghost" size="sm" onClick={onBack} className="w-full justify-start gap-2">
+            <ArrowLeft className="w-4 h-4" /> Back
+          </Button>
+        </div>
       </aside>
 
       {/* Mobile header + tabs */}
@@ -392,6 +388,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
         </div>
 
         <TabsContent value="overview" className="mt-4 space-y-6 outline-none">
+          <h3 className="text-lg font-semibold text-foreground">Overview</h3>
           <div className="space-y-2">
             <p className="text-sm font-medium text-muted-foreground">Date range</p>
             <FilterPills
@@ -413,92 +410,93 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   <Card className="border-border/60 shadow-sm">
                     <CardContent className="pt-3 pb-3">
                       <p className="text-xs font-medium text-muted-foreground">New signups</p>
-                      <p className="text-xl font-black">{stats.newSignups ?? 0}</p>
+                      <p className="text-xl font-semibold">{stats.newSignups ?? 0}</p>
                     </CardContent>
                   </Card>
                   <Card className="border-border/60 shadow-sm">
                     <CardContent className="pt-3 pb-3">
                       <p className="text-xs font-medium text-muted-foreground">New claims</p>
-                      <p className="text-xl font-black">{stats.newClaims ?? 0}</p>
+                      <p className="text-xl font-semibold">{stats.newClaims ?? 0}</p>
                     </CardContent>
                   </Card>
                   <Card className="border-border/60 shadow-sm">
                     <CardContent className="pt-3 pb-3">
                       <p className="text-xs font-medium text-muted-foreground">Campaigns sent</p>
-                      <p className="text-xl font-black">{stats.campaignsSent ?? 0}</p>
+                      <p className="text-xl font-semibold">{stats.campaignsSent ?? 0}</p>
                     </CardContent>
                   </Card>
                   <Card className="border-border/60 shadow-sm">
                     <CardContent className="pt-3 pb-3">
                       <p className="text-xs font-medium text-muted-foreground">Campaigns scheduled</p>
-                      <p className="text-xl font-black">{stats.campaignsScheduled ?? 0}</p>
+                      <p className="text-xl font-semibold">{stats.campaignsScheduled ?? 0}</p>
                     </CardContent>
                   </Card>
                   <Card className="border-border/60 shadow-sm">
                     <CardContent className="pt-3 pb-3">
                       <p className="text-xs font-medium text-muted-foreground">Broadcasts sent</p>
-                      <p className="text-xl font-black">{stats.broadcastsSent ?? 0}</p>
+                      <p className="text-xl font-semibold">{stats.broadcastsSent ?? 0}</p>
                     </CardContent>
                   </Card>
                   <Card className="border-border/60 shadow-sm">
                     <CardContent className="pt-3 pb-3">
                       <p className="text-xs font-medium text-muted-foreground">Follow-ups sent</p>
-                      <p className="text-xl font-black">{stats.followUpsSent ?? 0}</p>
+                      <p className="text-xl font-semibold">{stats.followUpsSent ?? 0}</p>
                     </CardContent>
                   </Card>
                 </div>
               )}
-              <p className="text-xs font-medium text-muted-foreground">All time</p>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="border-t border-border/50 pt-6 mt-6">
+                <p className="text-sm font-medium text-muted-foreground mb-4">All time</p>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card className="border-border/60 shadow-sm">
                   <CardContent className="pt-4">
                     <p className="text-xs font-medium text-muted-foreground">Total Users</p>
-                    <p className="text-2xl font-black">{stats.totalUsers}</p>
+                    <p className="text-2xl font-semibold">{stats.totalUsers}</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border/60 shadow-sm">
                   <CardContent className="pt-4">
                     <p className="text-xs font-medium text-muted-foreground">Wallets</p>
-                    <p className="text-2xl font-black">{stats.totalWallets}</p>
+                    <p className="text-2xl font-semibold">{stats.totalWallets}</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border/60 shadow-sm">
                   <CardContent className="pt-4">
                     <p className="text-xs font-medium text-muted-foreground">Claimed</p>
-                    <p className="text-2xl font-black">{stats.usersWhoClaimed}</p>
+                    <p className="text-2xl font-semibold">{stats.usersWhoClaimed}</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border/60 shadow-sm">
                   <CardContent className="pt-4">
                     <p className="text-xs font-medium text-muted-foreground">Bot Blocked</p>
-                    <p className="text-2xl font-black">{stats.botBlockedCount}</p>
+                    <p className="text-2xl font-semibold">{stats.botBlockedCount}</p>
                   </CardContent>
                 </Card>
               </div>
-              <Card>
+              <Card className="border-border/60 shadow-sm">
                 <CardHeader>
                   <CardTitle className="text-base font-semibold">Recent Signups</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
+                    <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-2">ID</th>
-                          <th className="text-left py-2">User</th>
-                          <th className="text-left py-2">Created</th>
-                          <th className="text-left py-2">Claimed</th>
-                          <th className="text-left py-2">Blocked</th>
+                        <tr className="border-b border-border/50">
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">ID</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">User</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Created</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Claimed</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Blocked</th>
                         </tr>
                       </thead>
                       <tbody>
                         {(stats.recentSignups || []).slice(0, 20).map((u: any) => (
-                          <tr key={u.id} className="border-b cursor-pointer hover:bg-secondary/50" onClick={() => { setSelectedUserId(u.id); setAdminTab('users'); }}>
-                            <td className="py-2 font-mono">{u.telegram_id}</td>
-                            <td className="py-2">@{u.username || '—'}</td>
-                            <td className="py-2 text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</td>
-                            <td className="py-2">{u.has_claimed ? 'Yes' : '—'}</td>
-                            <td className="py-2">{u.bot_blocked_at ? 'Yes' : '—'}</td>
+                          <tr key={u.id} className="border-b border-border/50 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => { setSelectedUserId(u.id); setAdminTab('users'); }}>
+                            <td className="py-3 px-4 font-mono">{u.telegram_id}</td>
+                            <td className="py-3 px-4">@{u.username || '—'}</td>
+                            <td className="py-3 px-4 text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</td>
+                            <td className="py-3 px-4">{u.has_claimed ? 'Yes' : '—'}</td>
+                            <td className="py-3 px-4">{u.bot_blocked_at ? 'Yes' : '—'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -506,6 +504,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   </div>
                 </CardContent>
               </Card>
+              </div>
             </>
           ) : null}
         </TabsContent>
@@ -566,26 +565,36 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                 <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />
               ))}
             </div>
+          ) : users.length === 0 ? (
+            <Card className="border-border/60 shadow-sm">
+              <CardContent className="py-12">
+                <div className="flex flex-col items-center justify-center text-center">
+                  <Users className="w-12 h-12 text-muted-foreground/50 mb-3" />
+                  <p className="text-sm font-medium text-muted-foreground">No users match your filters.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Try adjusting your search or filter criteria.</p>
+                </div>
+              </CardContent>
+            </Card>
           ) : (
-            <Card>
+            <Card className="border-border/60 shadow-sm">
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b">
-                        <th className="text-left p-2">ID</th>
-                        <th className="text-left p-2">User</th>
-                        <th className="text-left p-2">Created</th>
-                        <th className="text-left p-2">Blocked</th>
+                      <tr className="border-b border-border/50">
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">ID</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">User</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Created</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Blocked</th>
                       </tr>
                     </thead>
                     <tbody>
                       {users.map((u) => (
-                        <tr key={u.id} className="border-b cursor-pointer hover:bg-secondary/50" onClick={() => setSelectedUserId(u.id)}>
-                          <td className="p-2 font-mono">{u.telegram_id}</td>
-                          <td className="p-2">@{u.username || '—'}</td>
-                          <td className="p-2 text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</td>
-                          <td className="p-2">{u.bot_blocked_at ? 'Yes' : '—'}</td>
+                        <tr key={u.id} className="border-b border-border/50 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setSelectedUserId(u.id)}>
+                          <td className="py-3 px-4 font-mono">{u.telegram_id}</td>
+                          <td className="py-3 px-4">@{u.username || '—'}</td>
+                          <td className="py-3 px-4 text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</td>
+                          <td className="py-3 px-4">{u.bot_blocked_at ? 'Yes' : '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -606,7 +615,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
           ) : (
             <div className="space-y-3">
               {campaigns.map((c) => (
-                <Card key={c.id}>
+                <Card key={c.id} className="border-border/60 shadow-sm">
                   <CardContent className="pt-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-bold">{c.name}</p>
@@ -623,7 +632,17 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   </CardContent>
                 </Card>
               ))}
-              {campaigns.length === 0 && <p className="text-sm text-muted-foreground py-8 text-center">No campaigns yet.</p>}
+              {campaigns.length === 0 && (
+                <Card className="border-border/60 shadow-sm">
+                  <CardContent className="py-12">
+                    <div className="flex flex-col items-center justify-center text-center">
+                      <Megaphone className="w-12 h-12 text-muted-foreground/50 mb-3" />
+                      <p className="text-sm font-medium text-muted-foreground">No campaigns yet.</p>
+                      <p className="text-xs text-muted-foreground mt-1">Create campaigns to send scheduled messages and track performance.</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
         </TabsContent>
@@ -642,13 +661,13 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                 const isOpen = followUpExpandedGroups[segment] !== false
                 const label = segment === 'not_claimed' ? 'Not claimed' : 'Claimed'
                 return (
-                  <Card key={segment}>
+                  <Card key={segment} className="border-border/60 shadow-sm">
                     <button
                       type="button"
                       className="w-full flex items-center justify-between p-4 text-left hover:bg-muted/50 transition-colors rounded-t-lg"
                       onClick={() => setFollowUpExpandedGroups((g) => ({ ...g, [segment]: !isOpen }))}
                     >
-                      <span className="font-bold text-sm uppercase tracking-wider flex items-center gap-2">
+                      <span className="text-sm font-semibold flex items-center gap-2">
                         {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                         {label} ({items.length})
                       </span>
@@ -823,7 +842,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
         </TabsContent>
 
         <TabsContent value="broadcast" className="mt-4 space-y-4 outline-none">
-          <Card>
+          <Card className="border-border/60 shadow-sm">
             <CardHeader>
               <CardTitle className="text-base font-semibold">Send Broadcast</CardTitle>
             </CardHeader>
@@ -1007,7 +1026,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-border/60 shadow-sm">
             <CardHeader>
               <CardTitle className="text-base font-semibold flex items-center gap-2">
                 <History className="w-4 h-4" /> Broadcast History
@@ -1017,35 +1036,35 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
               {broadcastHistoryLoading ? (
                 <div className="space-y-2">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-12 rounded bg-muted animate-pulse" />
+                    <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />
                   ))}
                 </div>
               ) : broadcastHistory.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">No broadcasts yet.</p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2">Date</th>
-                        <th className="text-left py-2">Message</th>
-                        <th className="text-left py-2">Sent</th>
-                        <th className="text-left py-2">Blocked</th>
-                        <th className="text-left py-2">Errors</th>
-                        <th className="text-left py-2">Status</th>
+                      <tr className="border-b border-border/50">
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Date</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Message</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Sent</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Blocked</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Errors</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
                       </tr>
                     </thead>
                     <tbody>
                       {broadcastHistory.slice(0, 20).map((b: any) => (
-                        <tr key={b.id} className="border-b">
-                          <td className="py-2 text-muted-foreground">
+                        <tr key={b.id} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
+                          <td className="py-3 px-4 text-muted-foreground">
                             {b.finished_at ? new Date(b.finished_at).toLocaleString() : new Date(b.created_at).toLocaleString()}
                           </td>
-                          <td className="py-2 max-w-[140px] truncate">{b.message?.slice(0, 60) || '—'}…</td>
-                          <td className="py-2">{b.sent_count ?? 0}</td>
-                          <td className="py-2">{b.blocked_count ?? 0}</td>
-                          <td className="py-2">{b.error_count ?? 0}</td>
-                          <td className="py-2">
+                          <td className="py-3 px-4 max-w-[140px] truncate">{b.message?.slice(0, 60) || '—'}…</td>
+                          <td className="py-3 px-4">{b.sent_count ?? 0}</td>
+                          <td className="py-3 px-4">{b.blocked_count ?? 0}</td>
+                          <td className="py-3 px-4">{b.error_count ?? 0}</td>
+                          <td className="py-3 px-4">
                             <Badge variant={b.status === 'finished' ? 'default' : b.status === 'sending' ? 'secondary' : 'outline'} className="text-[10px]">
                               {b.status}
                             </Badge>
