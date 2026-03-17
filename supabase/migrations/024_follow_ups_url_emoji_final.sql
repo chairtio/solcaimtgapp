@@ -1,5 +1,5 @@
--- Migration 023: Add emojis, punchier copy, ensure all follow-ups have solid buttons
--- Keeps tone fun but not exaggerated
+-- Migration 024: Mini App URL fix (t.me/solclaimxbot/app) + emojis, punchier copy, all buttons
+-- Consolidates 022 and 023 for clean apply (021 duplicate issue workaround)
 
 -- not_claimed 30 min
 UPDATE follow_up_messages SET
