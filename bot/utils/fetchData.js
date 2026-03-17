@@ -50,6 +50,24 @@ export const fetchData = async (url, method = 'GET', body = null) => {
 }
 
 async function routeSupabase(url, method, body) {
+  // --- Mutations first (avoid being caught by GET matchers) ---
+
+  // PUT supabase:wallets_delete (delete all wallets for user)
+  if (method === 'PUT' && url === 'supabase:wallets_delete') {
+    const payload = body || {}
+    const telegramId = payload.telegram_id
+    if (!telegramId) throw new Error('Missing telegram_id')
+    await deleteAllWalletsByTelegramId(telegramId)
+    return { success: true }
+  }
+
+  // PUT supabase:wallet/:id/delete
+  if (method === 'PUT' && url.startsWith('supabase:wallet/') && url.includes('/delete')) {
+    const walletId = url.replace('supabase:wallet/', '').replace('/delete', '')
+    await deleteWallet(walletId)
+    return { success: true }
+  }
+
   // PATCH supabase:telegram_user/123
   if (method === 'PATCH' && url.startsWith('supabase:telegram_user/')) {
     const userId = url.replace('supabase:telegram_user/', '')
@@ -61,7 +79,7 @@ async function routeSupabase(url, method, body) {
   }
 
   // GET supabase:telegram_user/123
-  if (url.startsWith('supabase:telegram_user/')) {
+  if (method === 'GET' && url.startsWith('supabase:telegram_user/')) {
     const userId = url.replace('supabase:telegram_user/', '')
     const user = await getUserByTelegramId(userId)
     if (!user) throw new Error('User not found')
@@ -80,7 +98,7 @@ async function routeSupabase(url, method, body) {
   }
 
   // GET supabase:wallets?telegram_id=123
-  if (url.startsWith('supabase:wallets')) {
+  if (method === 'GET' && (url === 'supabase:wallets' || url.startsWith('supabase:wallets?'))) {
     const match = url.match(/telegram_id=(\d+)/)
     const userId = match ? match[1] : null
     if (!userId) return []
@@ -97,19 +115,12 @@ async function routeSupabase(url, method, body) {
   }
 
   // GET supabase:wallet/:id
-  if (url.startsWith('supabase:wallet/')) {
+  if (method === 'GET' && url.startsWith('supabase:wallet/')) {
     const rest = url.replace('supabase:wallet/', '')
     const walletId = rest.includes('/delete') ? rest.replace('/delete', '') : rest
     const wallet = await getWalletById(walletId)
     if (!wallet) throw new Error('Wallet not found')
     return wallet
-  }
-
-  // PUT supabase:wallet/:id/delete
-  if (method === 'PUT' && url.includes('/delete')) {
-    const walletId = url.replace('supabase:wallet/', '').replace('/delete', '')
-    await deleteWallet(walletId)
-    return { success: true }
   }
 
   // GET supabase:stats or supabase:total_stats
@@ -147,15 +158,6 @@ async function routeSupabase(url, method, body) {
   // PUT supabase:user_trading_bot/123 (stub - optional trading bot flag)
   if (method === 'PUT' && url.startsWith('supabase:user_trading_bot/')) {
     return { ok: true }
-  }
-
-  // PUT supabase:wallets_delete (delete all wallets for user)
-  if (method === 'PUT' && url === 'supabase:wallets_delete') {
-    const payload = body || {}
-    const telegramId = payload.telegram_id
-    if (!telegramId) throw new Error('Missing telegram_id')
-    await deleteAllWalletsByTelegramId(telegramId)
-    return { success: true }
   }
 
   throw new Error(`Unknown Supabase route: ${url} ${method}`)
