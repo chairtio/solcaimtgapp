@@ -146,6 +146,26 @@ export async function getUserById(userId: string): Promise<User | null> {
   return data
 }
 
+/** Check if user is admin. Requires is_admin column (migration 016). */
+export async function isAdmin(telegramId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .select('is_admin')
+    .eq('telegram_id', String(telegramId))
+    .single()
+  if (error && error.code !== 'PGRST116') throw error
+  return data?.is_admin === true
+}
+
+/** Mark user as having blocked the bot. Called when sendMessage returns 403. */
+export async function markUserBotBlocked(telegramId: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('users')
+    .update({ bot_blocked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('telegram_id', String(telegramId))
+  if (error) throw error
+}
+
 // Wallet operations
 export async function getWallets(userId: string): Promise<Wallet[]> {
   const { data, error } = await supabaseAdmin

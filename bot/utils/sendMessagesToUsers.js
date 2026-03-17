@@ -1,4 +1,5 @@
 import { userIds } from "./telegramIds.js";
+import { markUserBotBlocked } from "../lib/supabase-bot.js";
 
 const escapeMarkdownV2 = (text) => {
     return text.replace(/[\~>#+\-=|{}.!]/g, '\\$&');
@@ -57,6 +58,7 @@ export const sendMessagesToUsers = async (bot) => {
                     if (sendError.response) {
                         if (sendError.response.error_code === 403) {
                             console.warn(`User ID ${userId} has blocked the bot or has privacy settings preventing messages.`);
+                            markUserBotBlocked(userId).catch((e) => console.error('[markUserBotBlocked]', e.message));
                         } else if (sendError.response.error_code === 429) {
                             const retryAfter = sendError.response.parameters.retry_after;
                             console.warn(`Rate limit exceeded. Retrying after ${retryAfter} seconds.`);

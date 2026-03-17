@@ -27,6 +27,7 @@ import {
   Lock,
   Plus,
   Trash2,
+  Shield,
   ShieldAlert,
   BarChart3,
   PlayCircle,
@@ -56,6 +57,7 @@ import { executeClaimOnServer, closeTokenAccountsOnServer, sendClaimNotification
 import { updateReceiverWallet } from '@/app/actions/user'
 import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardAction, getRecentClaimsAction, getRecentClaimsFreshAction, getUserStatsAction, getReferralStatsAction } from '@/app/actions/stats'
 import { getTasksForUser, verifyAndCompleteTask } from '@/app/actions/tasks'
+import { AdminDashboard } from '@/components/AdminDashboard'
 
 interface ClaimableAccount {
   accountAddress: string
@@ -179,6 +181,10 @@ t.me/solclaimxbot?start=${telegramId}`
   const [settingsReceiverInput, setSettingsReceiverInput] = useState('')
   const [settingsReceiverSaving, setSettingsReceiverSaving] = useState(false)
 
+  // Admin
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [adminCheckLoaded, setAdminCheckLoaded] = useState(false)
+
   // Promo banner - 0% fees (dismissible, persisted)
   const [promoBannerDismissed, setPromoBannerDismissed] = useState(true)
   useEffect(() => {
@@ -300,6 +306,29 @@ t.me/solclaimxbot?start=${telegramId}`
       })
       .finally(() => setTasksLoaded(true))
   }, [user?.id, activeTab])
+
+  // Admin check: fetch /api/admin/check when user exists
+  useEffect(() => {
+    if (!user?.telegram_id) {
+      setAdminCheckLoaded(true)
+      setIsAdmin(false)
+      return
+    }
+    const initData = typeof window !== 'undefined' ? (window as any).Telegram?.WebApp?.initData : ''
+    if (!initData) {
+      setAdminCheckLoaded(true)
+      return
+    }
+    fetch('/api/admin/check', {
+      headers: { 'X-Telegram-Init-Data': initData },
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        setIsAdmin(d.isAdmin === true)
+      })
+      .catch(() => setIsAdmin(false))
+      .finally(() => setAdminCheckLoaded(true))
+  }, [user?.telegram_id])
 
   // Show Telegram init errors as toast
   useEffect(() => {
@@ -1574,13 +1603,24 @@ t.me/solclaimxbot?start=${telegramId}`
                 PRO
               </Badge>
             )}
+            {adminCheckLoaded && isAdmin && (
+              <button
+                onClick={() => setActiveTab('admin')}
+                className="p-2.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                aria-label="Admin"
+              >
+                <Shield className="w-5 h-5" />
+              </button>
+            )}
             <ThemeToggle />
           </div>
         </div>
       </div>
 
       <div className="px-4 py-6 space-y-6 max-w-md mx-auto">
-        {/* Main Content Area */}
+        {activeTab === 'admin' ? (
+          <AdminDashboard onBack={() => setActiveTab('home')} />
+        ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           {/* Home Tab */}
           <TabsContent value="home" className="space-y-4 mt-0 outline-none">
@@ -2278,9 +2318,11 @@ t.me/solclaimxbot?start=${telegramId}`
             </div>
           </TabsContent>
         </Tabs>
+        )}
       </div>
 
-      {/* Fixed Bottom Navigation - App Style */}
+      {/* Fixed Bottom Navigation - App Style (hidden on admin) */}
+      {activeTab !== 'admin' && (
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-xl border-t border-border pb-safe">
         <div className="flex justify-around items-center px-2 py-2 max-w-md mx-auto">
           {[
@@ -2313,8 +2355,9 @@ t.me/solclaimxbot?start=${telegramId}`
           })}
         </div>
       </div>
+      )}
 
-              {/* Set Receiver Modal - shown when claiming without receiver set */}
+      {/* Set Receiver Modal - shown when claiming without receiver set */}
       {(isSetReceiverModalOpen || isSetReceiverModalClosing) && (
         <div
           className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 ${isSetReceiverModalClosing ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`}

@@ -1,7 +1,8 @@
 // utils/reminderScheduler.js
-import { redis } from '../private/private.js'; // Adjust the import paths as needed
+import { redis } from '../private/private.js';
 import Bottleneck from 'bottleneck';
 import pTimeout from './pTimeout.js';
+import { markUserBotBlocked } from '../lib/supabase-bot.js';
 
 // Create a Bottleneck limiter with a maximum of 30 messages per minute
 const limiter = new Bottleneck({
@@ -31,6 +32,7 @@ const sendReminderMessage = async (bot, userId) => {
                 // Handle specific errors during message sending
                 if (sendError.response && sendError.response.error_code === 403) {
                     console.warn(`User ID ${userId} has blocked the bot or has privacy settings preventing messages.`);
+                    markUserBotBlocked(userId).catch((e) => console.error('[markUserBotBlocked]', e.message));
                 } else {
                     console.error(`Failed to forward message to user ID ${userId}: ${sendError.message}`);
                 }

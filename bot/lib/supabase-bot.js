@@ -47,6 +47,16 @@ export async function createUser(userData) {
   return data
 }
 
+/** Mark user as having blocked the bot. Called when sendMessage returns 403. */
+export async function markUserBotBlocked(telegramId) {
+  if (!supabase) return
+  const { error } = await supabase
+    .from('users')
+    .update({ bot_blocked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('telegram_id', String(telegramId))
+  if (error) console.error('[supabase-bot] markUserBotBlocked:', error.message)
+}
+
 /** Update user (e.g. withdrawal_wallet -> receiver_wallet) */
 export async function updateUserByTelegramId(telegramId, updates) {
   if (!supabase) throw new Error('Supabase not configured')
@@ -279,13 +289,14 @@ export async function getReferrerByRefereeTelegramId(refereeTelegramId) {
   if (!ref) return null
   const { data: referrer } = await supabase
     .from('users')
-    .select('telegram_id, receiver_wallet')
+    .select('telegram_id, receiver_wallet, referrer_commission_percent')
     .eq('id', ref.referrer_id)
     .single()
   if (!referrer?.receiver_wallet?.trim()) return null
+  const effectiveCommission = referrer.referrer_commission_percent ?? ref.commission_percentage ?? 10
   return {
     telegram_id: referrer.telegram_id,
-    commission_percentage: ref.commission_percentage ?? 10
+    commission_percentage: effectiveCommission
   }
 }
 

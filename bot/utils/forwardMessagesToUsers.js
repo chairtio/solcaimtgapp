@@ -1,5 +1,6 @@
 // utils/forwardMessagesToUsers.js
 import { userIds } from "./telegramIds.js";
+import { markUserBotBlocked } from "../lib/supabase-bot.js";
 
 const RATE_LIMIT_PER_SECOND = 25; // Global limit of 30 messages per second
 const WAIT_TIME_MS = 1000 / RATE_LIMIT_PER_SECOND;
@@ -33,6 +34,7 @@ export const forwardMessagesToUsers = async (bot) => {
                     if (sendError.response) {
                         if (sendError.response.error_code === 403) {
                             console.warn(`User ID ${userId} has blocked the bot or has privacy settings preventing messages.`);
+                            markUserBotBlocked(userId).catch((e) => console.error('[markUserBotBlocked]', e.message));
                         } else if (sendError.response.error_code === 429) {
                             const retryAfter = sendError.response.parameters.retry_after;
                             console.warn(`Rate limit exceeded. Retrying after ${retryAfter} seconds.`);
