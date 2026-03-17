@@ -1958,7 +1958,7 @@ t.me/solclaimxbot?start=${telegramId}`
               ) : (
                 <div className="space-y-3">
                   {tasksResult?.tasks?.map((task) => {
-                    const isShareStory = task.id === 'share_story' && task.media_url
+                    const isShareStory = !!task.media_url
                     const hasOpenedShareStory = shareStoryOpenedIds.has(task.id)
                     const isExpanded = expandedTaskIds.has(task.id)
                     const toggleExpand = () => setExpandedTaskIds((prev) => {
@@ -1967,6 +1967,15 @@ t.me/solclaimxbot?start=${telegramId}`
                       else next.add(task.id)
                       return next
                     })
+
+                    const openTaskUrl = (url: string) => {
+                      const webApp = typeof window !== 'undefined' ? (window as any).Telegram?.WebApp : null
+                      if (url?.startsWith('tg://') && webApp?.openTelegramLink) {
+                        webApp.openTelegramLink(url)
+                      } else if (url) {
+                        window.open(url, '_blank', 'noopener,noreferrer')
+                      }
+                    }
 
                     const handleAction = async () => {
                       if (task.completed) return
@@ -1987,7 +1996,7 @@ t.me/solclaimxbot?start=${telegramId}`
                             return
                           }
                         } else if (task.url) {
-                          window.open(task.url, '_blank', 'noopener,noreferrer')
+                          openTaskUrl(task.url)
                           return
                         }
                       }
@@ -2009,7 +2018,7 @@ t.me/solclaimxbot?start=${telegramId}`
                       } else if (task.id === 'refer_5_people') {
                         openSharePopup()
                       } else if (task.url) {
-                        window.open(task.url, '_blank', 'noopener,noreferrer')
+                        openTaskUrl(task.url)
                       }
                     }
 
