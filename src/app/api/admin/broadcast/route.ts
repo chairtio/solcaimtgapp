@@ -5,21 +5,50 @@ import { getUser, markUserBotBlocked } from '@/lib/database'
 
 const RATE_LIMIT_MS = 550 // ~2 msg/sec
 
-async function sendTelegramMessage(
-  token: string,
-  chatId: string,
-  text: string,
-  replyMarkup?: { inline_keyboard?: { text: string; url?: string; callback_data?: string }[][] }
-) {
-  const body: Record<string, unknown> = {
-    chat_id: chatId,
-    text,
-    parse_mode: 'HTML',
+type SendOpts = {
+  message: string
+  replyMarkup?: { inline_keyboard: { text: string; url?: string; callback_data?: string }[][] }
+  media_type?: string | null
+  media_url?: string | null
+}
+
+async function sendTelegramMessage(token: string, chatId: string, opts: SendOpts) {
+  const baseOpts = {
+    parse_mode: 'HTML' as const,
     disable_web_page_preview: true,
   }
-  if (replyMarkup?.inline_keyboard?.length) {
-    body.reply_markup = JSON.stringify(replyMarkup)
+  const body: Record<string, unknown> = {
+    chat_id: chatId,
+    ...baseOpts,
   }
+  if (opts.replyMarkup?.inline_keyboard?.length) {
+    body.reply_markup = JSON.stringify(opts.replyMarkup)
+  }
+  if (opts.media_type === 'image' && opts.media_url) {
+    body.photo = opts.media_url
+    body.caption = opts.message
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const json = await res.json()
+    if (!json.ok) throw new Error(json.description || 'Send failed')
+    return json
+  }
+  if (opts.media_type === 'gif' && opts.media_url) {
+    body.animation = opts.media_url
+    body.caption = opts.message
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendAnimation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const json = await res.json()
+    if (!json.ok) throw new Error(json.description || 'Send failed')
+    return json
+  }
+  body.text = opts.message
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -39,14 +68,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'TELEGRAM_BOT_TOKEN not set' }, { status: 503 })
   }
 
-  let body: { message: string; buttons?: { text: string; url?: string; callback_data?: string }[] }
+  let body: { message: string; buttons?: { text: string; url?: string; callback_data?: string }[]; media_type?: string; media_url?: string }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { message, buttons } = body
+  const { message, buttons, media_type, media_url } = body
   if (!message || typeof message !== 'string') {
     return NextResponse.json({ error: 'message is required' }, { status: 400 })
   }
@@ -79,6 +108,8 @@ export async function POST(request: Request) {
       admin_user_id: adminUserId,
       message,
       buttons: buttons ?? null,
+      media_type: media_type ?? null,
+      media_url: media_url ?? null,
       total_recipients: totalRecipients,
       status: 'sending',
     })
@@ -94,9 +125,16 @@ export async function POST(request: Request) {
   let blockedCount = 0
   let errorCount = 0
 
+  const sendOpts: SendOpts = {
+    message,
+    media_type: media_type || null,
+    media_url: media_url || null,
+  }
+  if (replyMarkup) sendOpts.replyMarkup = replyMarkup
+
   for (const telegramId of recipients) {
     try {
-      await sendTelegramMessage(token, String(telegramId), message, replyMarkup)
+      await sendTelegramMessage(token, String(telegramId), sendOpts)
       sentCount++
     } catch (err: unknown) {
       const code = (err as { response?: { error_code?: number } })?.response?.error_code

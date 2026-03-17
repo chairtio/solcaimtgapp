@@ -16,6 +16,11 @@ const supabase = url && key
   ? createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
   : null
 
+/** Get Supabase client for custom queries (e.g. follow-up scheduler) */
+export function getSupabase() {
+  return supabase
+}
+
 // --- User ---
 
 /** Get user by telegram_id. Returns null if not found. */

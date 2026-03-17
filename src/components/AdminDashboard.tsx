@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Shield, Users, Wallet, BarChart3, Megaphone, Mail, Send } from 'lucide-react'
+import { ArrowLeft, Shield, Users, Wallet, BarChart3, Megaphone, Mail, Send, Image, Film } from 'lucide-react'
 import { toast } from 'sonner'
 
 const getInitData = () => (typeof window !== 'undefined' ? (window as any).Telegram?.WebApp?.initData : '') || ''
@@ -64,8 +64,14 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
 
   // Broadcast
   const [broadcastMessage, setBroadcastMessage] = useState('')
+  const [broadcastMediaType, setBroadcastMediaType] = useState<'none' | 'image' | 'gif'>('none')
+  const [broadcastMediaUrl, setBroadcastMediaUrl] = useState('')
+  const [broadcastButtons, setBroadcastButtons] = useState<{ text: string; url: string }[]>([])
   const [broadcastSending, setBroadcastSending] = useState(false)
   const [lastBroadcast, setLastBroadcast] = useState<any>(null)
+
+  // Preview
+  const [previewSending, setPreviewSending] = useState(false)
 
   useEffect(() => {
     if (adminTab === 'overview') {
@@ -124,57 +130,181 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
   }, [adminTab])
 
   if (selectedUserId && userDetail) {
+    const followUpsSent = userDetail.followUpsSent || []
+    const followUpsScheduled = userDetail.followUpsScheduled || []
+    const allFollowUps = [...followUpsSent.map((f: any) => ({ ...f, status: 'sent' as const })), ...followUpsScheduled.map((f: any) => ({ ...f, status: 'scheduled' as const }))]
+
     return (
-      <div className="space-y-4 max-w-2xl mx-auto">
+      <div className="space-y-6 max-w-4xl mx-auto lg:max-w-6xl">
         <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(null)} className="gap-2">
           <ArrowLeft className="w-4 h-4" /> Back
         </Button>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-black uppercase tracking-widest">User Detail</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase">Telegram ID</p>
-              <p className="font-mono text-sm">{userDetail.user?.telegram_id}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase">Username</p>
-              <p>@{userDetail.user?.username || '—'}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase">Name</p>
-              <p>{[userDetail.user?.first_name, userDetail.user?.last_name].filter(Boolean).join(' ') || '—'}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase">Created</p>
-              <p className="text-xs">{userDetail.user?.created_at ? new Date(userDetail.user.created_at).toLocaleString() : '—'}</p>
-            </div>
-            {userDetail.user?.bot_blocked_at && (
-              <Badge variant="destructive">Bot blocked</Badge>
-            )}
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase">Stats</p>
-              <p className="text-sm">Claimed: {Number(userDetail.stats?.total_sol_claimed || 0).toFixed(4)} SOL | Accounts: {userDetail.stats?.total_accounts_closed || 0}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase">Wallets</p>
-              <ul className="text-xs font-mono space-y-1">
-                {(userDetail.wallets || []).map((w: any) => (
-                  <li key={w.id}>{w.public_key?.slice(0, 8)}...{w.public_key?.slice(-4)} ({w.status})</li>
-                ))}
-                {(!userDetail.wallets || userDetail.wallets.length === 0) && <li>—</li>}
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-black uppercase tracking-widest">User Detail</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Telegram ID</p>
+                <p className="font-mono text-sm">{userDetail.user?.telegram_id}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Username</p>
+                <p>@{userDetail.user?.username || '—'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Name</p>
+                <p>{[userDetail.user?.first_name, userDetail.user?.last_name].filter(Boolean).join(' ') || '—'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Created</p>
+                <p className="text-xs">{userDetail.user?.created_at ? new Date(userDetail.user.created_at).toLocaleString() : '—'}</p>
+              </div>
+              {userDetail.user?.bot_blocked_at && (
+                <Badge variant="destructive">Bot blocked</Badge>
+              )}
+              <div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Stats</p>
+                <p className="text-sm">Claimed: {Number(userDetail.stats?.total_sol_claimed || 0).toFixed(4)} SOL | Accounts: {userDetail.stats?.total_accounts_closed || 0}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Wallets</p>
+                <ul className="text-xs font-mono space-y-1">
+                  {(userDetail.wallets || []).map((w: any) => (
+                    <li key={w.id}>{w.public_key?.slice(0, 8)}...{w.public_key?.slice(-4)} ({w.status})</li>
+                  ))}
+                  {(!userDetail.wallets || userDetail.wallets.length === 0) && <li>—</li>}
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-black uppercase tracking-widest">Follow-ups</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {allFollowUps.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2">Status</th>
+                        <th className="text-left py-2">Message</th>
+                        <th className="text-left py-2">Delay</th>
+                        <th className="text-left py-2">Date</th>
+                        <th className="text-left py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allFollowUps.map((f: any, i: number) => (
+                        <tr key={`${f.follow_up_id}-${i}`} className="border-b">
+                          <td className="py-2">
+                            <Badge variant={f.status === 'sent' ? 'default' : 'secondary'} className="text-[10px]">
+                              {f.status === 'sent' ? 'Sent' : 'Scheduled'}
+                            </Badge>
+                          </td>
+                          <td className="py-2">{f.name || '—'}</td>
+                          <td className="py-2">{f.delay_minutes} min</td>
+                          <td className="py-2 text-muted-foreground">
+                            {f.status === 'sent' && f.sent_at ? new Date(f.sent_at).toLocaleString() : f.scheduled_at ? new Date(f.scheduled_at).toLocaleString() : '—'}
+                          </td>
+                          <td className="py-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 text-[10px]"
+                              disabled={previewSending}
+                              onClick={async () => {
+                                setPreviewSending(true)
+                                try {
+                                  await adminFetch('/api/admin/preview', {
+                                    method: 'POST',
+                                    body: JSON.stringify({ follow_up_id: f.follow_up_id }),
+                                  })
+                                  toast.success('Preview sent to your Telegram')
+                                } catch (e) {
+                                  toast.error((e as Error).message)
+                                } finally {
+                                  setPreviewSending(false)
+                                }
+                              }}
+                            >
+                              Preview
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No follow-ups sent or scheduled for this user.</p>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={previewSending}
+                onClick={async () => {
+                  setPreviewSending(true)
+                  try {
+                    await adminFetch('/api/admin/preview', {
+                      method: 'POST',
+                      body: JSON.stringify({ message: 'Test preview from admin dashboard' }),
+                    })
+                    toast.success('Preview sent to your Telegram')
+                  } catch (e) {
+                    toast.error((e as Error).message)
+                  } finally {
+                    setPreviewSending(false)
+                  }
+                }}
+              >
+                {previewSending ? 'Sending...' : 'Send custom preview'}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     )
   }
 
+  const navTabs = [
+    { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'users', label: 'Users', icon: Users },
+    { id: 'campaigns', label: 'Campaigns', icon: Megaphone },
+    { id: 'followups', label: 'Follow-ups', icon: Mail },
+    { id: 'broadcast', label: 'Broadcast', icon: Send },
+  ]
+
   return (
-    <div className="space-y-4 max-w-2xl mx-auto pb-24">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col lg:flex-row lg:gap-8 lg:max-w-7xl mx-auto pb-24">
+      {/* Sidebar - desktop */}
+      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 gap-1">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Shield className="w-5 h-5 text-primary" />
+            <h2 className="text-base font-black text-foreground uppercase tracking-widest">Admin</h2>
+          </div>
+        </div>
+        {navTabs.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setAdminTab(id)}
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-bold text-left w-full ${
+              adminTab === id ? 'bg-primary text-primary-foreground' : 'bg-secondary/50 text-muted-foreground hover:bg-secondary'
+            }`}
+          >
+            <Icon className="w-4 h-4 shrink-0" /> {label}
+          </button>
+        ))}
+        <Button variant="ghost" size="sm" onClick={onBack} className="mt-4 justify-start">
+          Back
+        </Button>
+      </aside>
+
+      {/* Mobile header + tabs */}
+      <div className="lg:hidden flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Shield className="w-5 h-5 text-primary" />
           <h2 className="text-base font-black text-foreground uppercase tracking-widest">Admin</h2>
@@ -182,8 +312,27 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
         <Button variant="ghost" size="sm" onClick={onBack}>Back</Button>
       </div>
 
-      <Tabs value={adminTab} onValueChange={(v) => { setAdminTab(v); setSelectedUserId(null); }}>
-        <div className="flex gap-2 overflow-x-auto pb-2">
+      <Tabs value={adminTab} onValueChange={(v) => { setAdminTab(v); setSelectedUserId(null); }} className="lg:flex lg:flex-1 lg:min-w-0">
+        <div className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 lg:gap-1 lg:pb-0" aria-label="Admin navigation">
+          {[
+            { id: 'overview', label: 'Overview', icon: BarChart3 },
+            { id: 'users', label: 'Users', icon: Users },
+            { id: 'campaigns', label: 'Campaigns', icon: Megaphone },
+            { id: 'followups', label: 'Follow-ups', icon: Mail },
+            { id: 'broadcast', label: 'Broadcast', icon: Send },
+          ].map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setAdminTab(id)}
+              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-bold ${
+                adminTab === id ? 'bg-primary text-primary-foreground' : 'bg-secondary/50 text-muted-foreground hover:bg-secondary'
+              }`}
+            >
+              <Icon className="w-4 h-4" /> {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-2 lg:hidden">
           {[
             { id: 'overview', label: 'Overview', icon: BarChart3 },
             { id: 'users', label: 'Users', icon: Users },
@@ -343,9 +492,12 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
               {followUps.map((f) => (
                 <Card key={f.id}>
                   <CardContent className="pt-4">
-                    <p className="font-bold">{f.delay_minutes} min</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-bold">{f.name || `${f.delay_minutes} min`}</p>
+                      <Badge variant="outline" className="text-[10px]">{f.segment === 'claimed' ? 'Claimed' : 'Not claimed'}</Badge>
+                      <Badge variant={f.enabled ? 'default' : 'secondary'} className="text-[10px]">{f.enabled ? 'Enabled' : 'Disabled'}</Badge>
+                    </div>
                     <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{f.message}</p>
-                    <Badge variant={f.enabled ? 'default' : 'secondary'} className="mt-2 text-[10px]">{f.enabled ? 'Enabled' : 'Disabled'}</Badge>
                   </CardContent>
                 </Card>
               ))}
@@ -369,6 +521,74 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   placeholder="Enter message to send to all users (excluding blocked)"
                 />
               </div>
+              <div>
+                <Label className="text-[11px] font-black uppercase tracking-widest">Media</Label>
+                <div className="mt-1 flex gap-2">
+                  {(['none', 'image', 'gif'] as const).map((t) => (
+                    <Button
+                      key={t}
+                      type="button"
+                      variant={broadcastMediaType === t ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => { setBroadcastMediaType(t); if (t === 'none') setBroadcastMediaUrl(''); }}
+                    >
+                      {t === 'none' ? 'None' : t === 'image' ? <><Image className="w-3.5 h-3.5 mr-1" /> Image</> : <><Film className="w-3.5 h-3.5 mr-1" /> GIF</>}
+                    </Button>
+                  ))}
+                </div>
+                {broadcastMediaType !== 'none' && (
+                  <Input
+                    className="mt-2"
+                    placeholder="Image/GIF URL or Telegram file_id"
+                    value={broadcastMediaUrl}
+                    onChange={(e) => setBroadcastMediaUrl(e.target.value)}
+                  />
+                )}
+              </div>
+              <div>
+                <Label className="text-[11px] font-black uppercase tracking-widest">Buttons (optional)</Label>
+                <div className="mt-1 space-y-2">
+                  {broadcastButtons.map((b, i) => (
+                    <div key={i} className="flex gap-2">
+                      <Input placeholder="Button text" value={b.text} onChange={(e) => {
+                        const n = [...broadcastButtons]; n[i] = { ...n[i], text: e.target.value }; setBroadcastButtons(n);
+                      }} />
+                      <Input placeholder="URL" value={b.url} onChange={(e) => {
+                        const n = [...broadcastButtons]; n[i] = { ...n[i], url: e.target.value }; setBroadcastButtons(n);
+                      }} />
+                      <Button variant="ghost" size="sm" onClick={() => setBroadcastButtons(broadcastButtons.filter((_, j) => j !== i))}>Remove</Button>
+                    </div>
+                  ))}
+                  <Button variant="outline" size="sm" onClick={() => setBroadcastButtons([...broadcastButtons, { text: '', url: '' }])}>Add button</Button>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  disabled={!broadcastMessage.trim() || previewSending}
+                  onClick={async () => {
+                    setPreviewSending(true)
+                    try {
+                      await adminFetch('/api/admin/preview', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                          message: broadcastMessage.trim(),
+                          media_type: broadcastMediaType !== 'none' ? broadcastMediaType : undefined,
+                          media_url: broadcastMediaType !== 'none' && broadcastMediaUrl ? broadcastMediaUrl : undefined,
+                          buttons: broadcastButtons.filter((b) => b.text.trim() && b.url.trim()).length > 0 ? broadcastButtons.filter((b) => b.text.trim() && b.url.trim()) : undefined,
+                        }),
+                      })
+                      toast.success('Preview sent to your Telegram')
+                    } catch (e) {
+                      toast.error((e as Error).message)
+                    } finally {
+                      setPreviewSending(false)
+                    }
+                  }}
+                >
+                  {previewSending ? 'Sending...' : 'Preview'}
+                </Button>
+              </div>
               <Button
                 disabled={!broadcastMessage.trim() || broadcastSending}
                 onClick={async () => {
@@ -376,10 +596,17 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   try {
                     const r = await adminFetch('/api/admin/broadcast', {
                       method: 'POST',
-                      body: JSON.stringify({ message: broadcastMessage.trim() }),
+                      body: JSON.stringify({
+                      message: broadcastMessage.trim(),
+                      media_type: broadcastMediaType !== 'none' ? broadcastMediaType : undefined,
+                      media_url: broadcastMediaType !== 'none' && broadcastMediaUrl ? broadcastMediaUrl : undefined,
+                      buttons: broadcastButtons.filter((b) => b.text.trim() && b.url.trim()).length > 0
+                        ? broadcastButtons.filter((b) => b.text.trim() && b.url.trim())
+                        : undefined,
+                    }),
                     })
                     setLastBroadcast(r)
-                    toast.success(`Sent: ${r.sent_count} | Blocked: ${r.blocked_count} | Errors: ${r.error_count}`)
+                    toast.success(`Sent: ${r.sentCount ?? r.sent_count} | Blocked: ${r.blockedCount ?? r.blocked_count} | Errors: ${r.errorCount ?? r.error_count}`)
                   } catch (e) {
                     toast.error((e as Error).message)
                   } finally {
@@ -391,7 +618,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
               </Button>
               {lastBroadcast && (
                 <p className="text-xs text-muted-foreground">
-                  Last: sent {lastBroadcast.sent_count} / blocked {lastBroadcast.blocked_count} / errors {lastBroadcast.error_count}
+                  Last: sent {lastBroadcast.sentCount ?? lastBroadcast.sent_count} / blocked {lastBroadcast.blockedCount ?? lastBroadcast.blocked_count} / errors {lastBroadcast.errorCount ?? lastBroadcast.error_count}
                 </p>
               )}
             </CardContent>

@@ -27,7 +27,7 @@ import { leadersRefCommand } from './commands/leadersRefCommand.js';
 import { referralsCommand } from './commands/referralsCommand.js';
 import pTimeout from './utils/pTimeout.js';
 import { deleteMessages } from './utils/deleteMessages.js';
-import { scheduleReminderChecks } from './utils/reminderScheduler.js';
+import { scheduleFollowUpChecks } from './utils/followUpScheduler.js';
 import { helpCommand } from './commands/helpCommand.js';
 import { testCommand } from './commands/testCommand.js';
 
@@ -581,8 +581,8 @@ const scheduleLeaderboardUpdate = () => {
 // Start the scheduling
 scheduleLeaderboardUpdate();
 
-// Start the scheduling for reminder checks
-// scheduleReminderChecks(bot);
+// Start follow-up drip campaign scheduler (Supabase-powered)
+scheduleFollowUpChecks(bot);
 
 // forwardMessagesToUsers(bot);
 // sendMessagesGifToUsers(bot);

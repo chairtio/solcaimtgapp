@@ -1617,7 +1617,7 @@ t.me/solclaimxbot?start=${telegramId}`
         </div>
       </div>
 
-      <div className="px-4 py-6 space-y-6 max-w-md mx-auto">
+      <div className={`px-4 py-6 space-y-6 mx-auto ${activeTab === 'admin' ? 'max-w-7xl' : 'max-w-md'}`}>
         {activeTab === 'admin' ? (
           <AdminDashboard onBack={() => setActiveTab('home')} />
         ) : (
