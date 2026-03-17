@@ -226,6 +226,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   {(!userDetail.wallets || userDetail.wallets.length === 0) && <li>—</li>}
                 </ul>
               </div>
+            </div>
           </AdminCard>
           <AdminCard title="Follow-ups">
             <div className="space-y-4">
@@ -804,8 +805,11 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
         </TabsContent>
 
         <TabsContent value="broadcast" className="mt-4 space-y-6 outline-none">
-          <AdminCard title="Send Broadcast">
-              <div className="space-y-4">
+          <AdminCard>
+            <AdminCardHeader>
+              <AdminCardTitle>Send Broadcast</AdminCardTitle>
+            </AdminCardHeader>
+            <AdminCardContent className="space-y-4">{/* BROADCAST_FORM_START */}
                 <p className="text-sm font-medium text-muted-foreground">Audience — preview first, then send.</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
@@ -869,7 +873,6 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                     {broadcastAudiencePreviewing ? 'Loading...' : broadcastAudienceCount !== null ? `${broadcastAudienceCount.toLocaleString()} users will receive this` : '\u00A0'}
                   </div>
                 </div>
-              </div>
               <div>
                 <Label className="text-sm font-medium text-muted-foreground">Message</Label>
                 <textarea
@@ -984,6 +987,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   Last: sent {lastBroadcast.sentCount ?? lastBroadcast.sent_count} / blocked {lastBroadcast.blockedCount ?? lastBroadcast.blocked_count} / errors {lastBroadcast.errorCount ?? lastBroadcast.error_count}
                 </p>
               )}
+            </AdminCardContent>
           </AdminCard>
 
           <AdminCard className="mt-6">
@@ -1029,6 +1033,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                 </AdminTableBody>
               </AdminTable>
             )}
+            </AdminCardContent>
           </AdminCard>
         </TabsContent>
       </Tabs>
