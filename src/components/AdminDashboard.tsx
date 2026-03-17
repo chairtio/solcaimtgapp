@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Users, BarChart3, Megaphone, Mail, Send, Image, Film, Download, History, ChevronDown, ChevronRight, Plus, Pencil, Trash2, SendHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
@@ -187,143 +186,161 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
     const allFollowUps = [...followUpsSent.map((f: any) => ({ ...f, status: 'sent' as const })), ...followUpsScheduled.map((f: any) => ({ ...f, status: 'scheduled' as const }))]
 
     return (
-      <div data-admin className="space-y-8 w-full max-w-6xl mx-auto">
-        <button type="button" onClick={() => setSelectedUserId(null)} className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-2 transition-colors duration-150">
-          <ArrowLeft className="w-4 h-4" /> Back to Users
-        </button>
-        <div className="grid gap-8 lg:grid-cols-2">
-          <AdminCard>
-            <AdminCardHeader>
-              <AdminCardTitle>User Detail</AdminCardTitle>
-            </AdminCardHeader>
-            <AdminCardContent className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Telegram ID</p>
-                  <p className="font-mono text-sm">{userDetail.user?.telegram_id}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Username</p>
-                  <p className="text-sm">@{userDetail.user?.username || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Name</p>
-                  <p className="text-sm">{[userDetail.user?.first_name, userDetail.user?.last_name].filter(Boolean).join(' ') || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Created</p>
-                  <p className="text-sm">{userDetail.user?.created_at ? new Date(userDetail.user.created_at).toLocaleString() : '—'}</p>
-                </div>
-              </div>
-              {userDetail.user?.bot_blocked_at && (
-                <Badge variant="destructive">Bot blocked</Badge>
-              )}
-              <div className="pt-4 border-t border-border/20">
-                <p className="text-xs font-medium text-muted-foreground mb-2">Stats</p>
-                <p className="text-sm">Claimed: <span className="font-semibold">{Number(userDetail.stats?.total_sol_claimed || 0).toFixed(4)} SOL</span> | Accounts: <span className="font-semibold">{userDetail.stats?.total_accounts_closed || 0}</span></p>
-              </div>
-              <div className="pt-4 border-t border-border/20">
-                <p className="text-xs font-medium text-muted-foreground mb-2">Wallets</p>
-                <ul className="text-sm font-mono space-y-2">
-                  {(userDetail.wallets || []).map((w: any) => (
-                    <li key={w.id} className="flex items-center justify-between">
-                      <span>{w.public_key?.slice(0, 8)}...{w.public_key?.slice(-4)}</span>
-                      <Badge variant="outline" className="text-[10px]">{w.status}</Badge>
-                    </li>
-                  ))}
-                  {(!userDetail.wallets || userDetail.wallets.length === 0) && <li className="text-muted-foreground font-sans">No wallets linked</li>}
-                </ul>
-              </div>
-            </AdminCardContent>
-          </AdminCard>
-          <AdminCard>
-            <AdminCardHeader>
-              <AdminCardTitle>Follow-ups</AdminCardTitle>
-            </AdminCardHeader>
-            <AdminCardContent className="space-y-6">
-              {allFollowUps.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2">Status</th>
-                        <th className="text-left py-2">Message</th>
-                        <th className="text-left py-2">Delay</th>
-                        <th className="text-left py-2">Date</th>
-                        <th className="text-left py-2"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {allFollowUps.map((f: any, i: number) => (
-                        <tr key={`${f.follow_up_id}-${i}`} className="border-b">
-                          <td className="py-2">
-                            <Badge variant={f.status === 'sent' ? 'default' : 'secondary'} className="text-[10px]">
-                              {f.status === 'sent' ? 'Sent' : 'Scheduled'}
-                            </Badge>
-                          </td>
-                          <td className="py-2">{f.name || '—'}</td>
-                          <td className="py-2">{f.delay_minutes} min</td>
-                          <td className="py-2 text-muted-foreground">
-                            {f.status === 'sent' && f.sent_at ? new Date(f.sent_at).toLocaleString() : f.scheduled_at ? new Date(f.scheduled_at).toLocaleString() : '—'}
-                          </td>
-                          <td className="py-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 text-[10px]"
-                              disabled={previewSending}
-                              onClick={async () => {
-                                setPreviewSending(true)
-                                try {
-                                  await adminFetch('/api/admin/preview', {
-                                    method: 'POST',
-                                    body: JSON.stringify({ follow_up_id: f.follow_up_id }),
-                                  })
-                                  toast.success('Preview sent to your Telegram')
-                                } catch (e) {
-                                  toast.error((e as Error).message)
-                                } finally {
-                                  setPreviewSending(false)
-                                }
-                              }}
-                            >
-                              Preview
-                            </Button>
-                          </td>
-                        </tr>
+      <div data-admin className="flex min-h-screen w-full bg-zinc-50 dark:bg-[#0b0c10]">
+        <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 lg:border-r lg:border-zinc-200 dark:lg:border-zinc-800 bg-white dark:bg-zinc-900 lg:fixed lg:inset-y-0 lg:left-0 z-20">
+          <div className="p-6">
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Admin</p>
+          </div>
+          <div className="p-4">
+            <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(null)} className="w-full justify-start gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors duration-150">
+              <ArrowLeft className="w-4 h-4" /> Back to Users
+            </Button>
+          </div>
+        </aside>
+
+        <main className="flex-1 lg:pl-64 min-w-0 flex flex-col min-h-screen">
+          <div className="lg:hidden bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-20 p-4">
+            <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(null)} className="gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors duration-150">
+              <ArrowLeft className="w-4 h-4" /> Back to Users
+            </Button>
+          </div>
+
+          <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-300">
+            <div className="grid gap-8 lg:grid-cols-2">
+              <AdminCard>
+                <AdminCardHeader>
+                  <AdminCardTitle>User Detail</AdminCardTitle>
+                </AdminCardHeader>
+                <AdminCardContent className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Telegram ID</p>
+                      <p className="font-mono text-sm">{userDetail.user?.telegram_id}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Username</p>
+                      <p className="text-sm">@{userDetail.user?.username || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Name</p>
+                      <p className="text-sm">{[userDetail.user?.first_name, userDetail.user?.last_name].filter(Boolean).join(' ') || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Created</p>
+                      <p className="text-sm">{userDetail.user?.created_at ? new Date(userDetail.user.created_at).toLocaleString() : '—'}</p>
+                    </div>
+                  </div>
+                  {userDetail.user?.bot_blocked_at && (
+                    <Badge variant="destructive">Bot blocked</Badge>
+                  )}
+                  <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">Stats</p>
+                    <p className="text-sm">Claimed: <span className="font-semibold">{Number(userDetail.stats?.total_sol_claimed || 0).toFixed(4)} SOL</span> | Accounts: <span className="font-semibold">{userDetail.stats?.total_accounts_closed || 0}</span></p>
+                  </div>
+                  <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">Wallets</p>
+                    <ul className="text-sm font-mono space-y-2">
+                      {(userDetail.wallets || []).map((w: any) => (
+                        <li key={w.id} className="flex items-center justify-between">
+                          <span>{w.public_key?.slice(0, 8)}...{w.public_key?.slice(-4)}</span>
+                          <Badge variant="outline" className="text-[10px]">{w.status}</Badge>
+                        </li>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No follow-ups sent or scheduled for this user.</p>
-              )}
-              <div className="pt-4 border-t border-border/20">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={previewSending}
-                  onClick={async () => {
-                    setPreviewSending(true)
-                    try {
-                      await adminFetch('/api/admin/preview', {
-                        method: 'POST',
-                        body: JSON.stringify({ message: 'Test preview from admin dashboard' }),
-                      })
-                      toast.success('Preview sent to your Telegram')
-                    } catch (e) {
-                      toast.error((e as Error).message)
-                    } finally {
-                      setPreviewSending(false)
-                    }
-                  }}
-                >
-                  {previewSending ? 'Sending...' : 'Send custom preview'}
-                </Button>
-              </div>
-            </AdminCardContent>
-          </AdminCard>
-        </div>
+                      {(!userDetail.wallets || userDetail.wallets.length === 0) && <li className="text-zinc-500 dark:text-zinc-400 font-sans">No wallets linked</li>}
+                    </ul>
+                  </div>
+                </AdminCardContent>
+              </AdminCard>
+              <AdminCard>
+                <AdminCardHeader>
+                  <AdminCardTitle>Follow-ups</AdminCardTitle>
+                </AdminCardHeader>
+                <AdminCardContent className="space-y-6">
+                  {allFollowUps.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-2">Status</th>
+                            <th className="text-left py-2">Message</th>
+                            <th className="text-left py-2">Delay</th>
+                            <th className="text-left py-2">Date</th>
+                            <th className="text-left py-2"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {allFollowUps.map((f: any, i: number) => (
+                            <tr key={`${f.follow_up_id}-${i}`} className="border-b">
+                              <td className="py-2">
+                                <Badge variant={f.status === 'sent' ? 'default' : 'secondary'} className="text-[10px]">
+                                  {f.status === 'sent' ? 'Sent' : 'Scheduled'}
+                                </Badge>
+                              </td>
+                              <td className="py-2">{f.name || '—'}</td>
+                              <td className="py-2">{f.delay_minutes} min</td>
+                              <td className="py-2 text-zinc-500 dark:text-zinc-400">
+                                {f.status === 'sent' && f.sent_at ? new Date(f.sent_at).toLocaleString() : f.scheduled_at ? new Date(f.scheduled_at).toLocaleString() : '—'}
+                              </td>
+                              <td className="py-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-[10px]"
+                                  disabled={previewSending}
+                                  onClick={async () => {
+                                    setPreviewSending(true)
+                                    try {
+                                      await adminFetch('/api/admin/preview', {
+                                        method: 'POST',
+                                        body: JSON.stringify({ follow_up_id: f.follow_up_id }),
+                                      })
+                                      toast.success('Preview sent to your Telegram')
+                                    } catch (e) {
+                                      toast.error((e as Error).message)
+                                    } finally {
+                                      setPreviewSending(false)
+                                    }
+                                  }}
+                                >
+                                  Preview
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">No follow-ups sent or scheduled for this user.</p>
+                  )}
+                  <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={previewSending}
+                      onClick={async () => {
+                        setPreviewSending(true)
+                        try {
+                          await adminFetch('/api/admin/preview', {
+                            method: 'POST',
+                            body: JSON.stringify({ message: 'Test preview from admin dashboard' }),
+                          })
+                          toast.success('Preview sent to your Telegram')
+                        } catch (e) {
+                          toast.error((e as Error).message)
+                        } finally {
+                          setPreviewSending(false)
+                        }
+                      }}
+                    >
+                      {previewSending ? 'Sending...' : 'Send custom preview'}
+                    </Button>
+                  </div>
+                </AdminCardContent>
+              </AdminCard>
+            </div>
+          </div>
+        </main>
       </div>
     )
   }
@@ -337,56 +354,62 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
   ]
 
   return (
-    <div data-admin className="flex min-h-0 w-full max-w-6xl mx-auto pb-24">
+    <div data-admin className="flex min-h-screen w-full bg-zinc-50 dark:bg-[#0b0c10]">
       {/* Sidebar - desktop: Stripe-style left accent for active */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 gap-1 lg:border-r lg:border-border/50 lg:pr-8 lg:sticky lg:top-4 lg:self-start">
-        <div className="px-4 pb-4 mb-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Admin</p>
+      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 lg:border-r lg:border-zinc-200 dark:lg:border-zinc-800 bg-white dark:bg-zinc-900 lg:fixed lg:inset-y-0 lg:left-0 z-20">
+        <div className="p-6">
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Admin</p>
         </div>
-        {navTabs.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setAdminTab(id)}
-            className={`flex items-center gap-3 pl-4 pr-3 py-3 text-sm font-medium text-left w-full transition-all duration-200 rounded-r-lg border-l-4 ${
-              adminTab === id
-                ? 'bg-primary/10 text-primary border-l-primary'
-                : 'border-l-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground'
-            }`}
-          >
-            <Icon className="w-4 h-4 shrink-0" /> {label}
-          </button>
-        ))}
-        <div className="mt-6 pt-6 border-t border-border/50">
-          <Button variant="ghost" size="sm" onClick={onBack} className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground transition-colors duration-150">
-            <ArrowLeft className="w-4 h-4" /> Back
+        <div className="flex-1 px-4 space-y-1 overflow-y-auto">
+          {navTabs.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => { setAdminTab(id); setSelectedUserId(null); }}
+              className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-left w-full transition-all duration-200 rounded-lg ${
+                adminTab === id && !selectedUserId
+                  ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50'
+                  : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-50'
+              }`}
+            >
+              <Icon className="w-4 h-4 shrink-0" /> {label}
+            </button>
+          ))}
+        </div>
+        <div className="p-4 border-t border-zinc-200 dark:border-zinc-800">
+          <Button variant="ghost" size="sm" onClick={onBack} className="w-full justify-start gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors duration-150">
+            <ArrowLeft className="w-4 h-4" /> Exit Admin
           </Button>
         </div>
       </aside>
 
-      <Tabs value={adminTab} onValueChange={(v) => { setAdminTab(v); setSelectedUserId(null); }} className="flex flex-col lg:flex-1 lg:min-w-0">
-        <div className="flex gap-2 overflow-x-auto pb-4 lg:hidden custom-scrollbar">
-          {[
-            { id: 'overview', label: 'Overview', icon: BarChart3 },
-            { id: 'users', label: 'Users', icon: Users },
-            { id: 'campaigns', label: 'Campaigns', icon: Megaphone },
-            { id: 'followups', label: 'Follow-ups', icon: Mail },
-            { id: 'broadcast', label: 'Broadcast', icon: Send },
-          ].map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setAdminTab(id)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                adminTab === id ? 'bg-primary text-primary-foreground' : 'bg-muted/60 text-muted-foreground hover:bg-muted/80'
-              }`}
-            >
-              <Icon className="w-4 h-4" /> {label}
-            </button>
-          ))}
+      <main className="flex-1 lg:pl-64 min-w-0 flex flex-col min-h-screen">
+        <div className="lg:hidden bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-20">
+          <div className="flex gap-2 overflow-x-auto p-4 custom-scrollbar">
+            {[
+              { id: 'overview', label: 'Overview', icon: BarChart3 },
+              { id: 'users', label: 'Users', icon: Users },
+              { id: 'campaigns', label: 'Campaigns', icon: Megaphone },
+              { id: 'followups', label: 'Follow-ups', icon: Mail },
+              { id: 'broadcast', label: 'Broadcast', icon: Send },
+            ].map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => { setAdminTab(id); setSelectedUserId(null); }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                  adminTab === id && !selectedUserId ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                }`}
+              >
+                <Icon className="w-4 h-4" /> {label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <TabsContent value="overview" className="mt-4 space-y-8 outline-none">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <h3 className="text-xl font-semibold text-foreground">Overview</h3>
+        <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+          {adminTab === 'overview' && !selectedUserId && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Overview</h3>
             <FilterPills
               value={dateRange}
               onChange={(v) => setDateRange(v as 'today' | '7d' | '30d')}
@@ -401,19 +424,19 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             <div className="space-y-8">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-5">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="rounded-xl border border-border/20 bg-card p-6 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-                    <div className="h-4 w-20 rounded bg-muted/60 animate-pulse mb-4" />
-                    <div className="h-8 w-16 rounded bg-muted/60 animate-pulse" />
+                  <div key={i} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
+                    <div className="h-4 w-20 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse mb-4" />
+                    <div className="h-8 w-16 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
                   </div>
                 ))}
               </div>
               <div className="space-y-4">
-                <p className="text-sm font-medium text-muted-foreground">All time</p>
+                <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">All time</p>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
                   {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="rounded-xl border border-border/20 bg-card p-6 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-                      <div className="h-4 w-24 rounded bg-muted/60 animate-pulse mb-4" />
-                      <div className="h-8 w-20 rounded bg-muted/60 animate-pulse" />
+                    <div key={i} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
+                      <div className="h-4 w-24 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse mb-4" />
+                      <div className="h-8 w-20 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
                     </div>
                   ))}
                 </div>
@@ -440,7 +463,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                 </div>
               )}
               <div className="space-y-4">
-                <p className="text-sm font-medium text-muted-foreground">All time</p>
+                <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">All time</p>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
                   <AdminStatCard label="Total Users" value={stats.totalUsers} />
                   <AdminStatCard label="Wallets" value={stats.totalWallets} />
@@ -472,7 +495,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                         >
                           <AdminTableCell className="font-mono">{u.telegram_id}</AdminTableCell>
                           <AdminTableCell>@{u.username || '—'}</AdminTableCell>
-                          <AdminTableCell className="text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</AdminTableCell>
+                          <AdminTableCell className="text-zinc-500 dark:text-zinc-400">{new Date(u.created_at).toLocaleDateString()}</AdminTableCell>
                           <AdminTableCell>{u.has_claimed ? 'Yes' : '—'}</AdminTableCell>
                           <AdminTableCell>{u.bot_blocked_at ? 'Yes' : '—'}</AdminTableCell>
                         </AdminTableRow>
@@ -483,11 +506,13 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
               </AdminCard>
             </>
           ) : null}
-        </TabsContent>
+            </div>
+          )}
 
-        <TabsContent value="users" className="mt-4 space-y-8 outline-none">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <h3 className="text-xl font-semibold text-foreground">Users</h3>
+          {adminTab === 'users' && !selectedUserId && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Users</h3>
             <div className="flex flex-wrap items-center gap-3">
               <Input
                 placeholder="Search telegram_id or username"
@@ -572,25 +597,27 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                       >
                         <AdminTableCell className="font-mono">{u.telegram_id}</AdminTableCell>
                         <AdminTableCell>@{u.username || '—'}</AdminTableCell>
-                        <AdminTableCell className="text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</AdminTableCell>
+                        <AdminTableCell className="text-zinc-500 dark:text-zinc-400">{new Date(u.created_at).toLocaleDateString()}</AdminTableCell>
                         <AdminTableCell>{u.bot_blocked_at ? 'Yes' : '—'}</AdminTableCell>
                       </AdminTableRow>
                     ))}
                   </AdminTableBody>
-                </AdminTable>
-              </AdminCardContent>
-            </AdminCard>
-          )}
-        </TabsContent>
+                  </AdminTable>
+                </AdminCardContent>
+              </AdminCard>
+            )}
+          </div>
+        )}
 
-        <TabsContent value="campaigns" className="mt-4 space-y-8 outline-none">
-          <AdminPageHeader title="Campaigns" />
+        {adminTab === 'campaigns' && !selectedUserId && (
+          <div className="space-y-8 animate-in fade-in duration-300">
+            <AdminPageHeader title="Campaigns" />
           {campaignsLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="rounded-xl border border-border/20 bg-card p-6 h-24 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-                  <div className="h-5 w-40 rounded bg-muted/60 animate-pulse mb-3" />
-                  <div className="h-4 w-24 rounded bg-muted/60 animate-pulse" />
+                <div key={i} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 h-24 shadow-sm">
+                  <div className="h-5 w-40 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse mb-3" />
+                  <div className="h-4 w-24 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
                 </div>
               ))}
             </div>
@@ -609,34 +636,46 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-3 mb-2">
-                        <span className="font-semibold text-base">{c.name}</span>
+                        <span className="font-semibold text-base text-zinc-900 dark:text-zinc-50">{c.name}</span>
                         <Badge
                           variant={c.status === 'sent' ? 'default' : c.status === 'scheduled' ? 'secondary' : c.status === 'cancelled' ? 'destructive' : 'outline'}
-                          className="text-xs"
+                          className="text-[10px] uppercase tracking-wider"
                         >
                           {c.status}
                         </Badge>
                       </div>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
                         {c.sent_at ? `Sent ${new Date(c.sent_at).toLocaleString()}` : c.scheduled_at ? `Scheduled ${new Date(c.scheduled_at).toLocaleString()}` : '—'}
                       </p>
+                    </div>
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1">Sent</p>
+                        <p className="text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{c.sent_count || 0}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1">Blocked</p>
+                        <p className="text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{c.blocked_count || 0}</p>
+                      </div>
                     </div>
                   </div>
                 </AdminCard>
               ))}
             </div>
           )}
-        </TabsContent>
+        </div>
+        )}
 
-        <TabsContent value="followups" className="mt-4 space-y-8 outline-none">
+        {adminTab === 'followups' && !selectedUserId && (
+          <div className="space-y-8 animate-in fade-in duration-300">
           {followUpsLoading ? (
             <div className="space-y-6">
               {[1, 2].map((i) => (
-                <div key={i} className="rounded-xl border border-border/20 p-6 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-                  <div className="h-5 w-40 rounded bg-muted/60 animate-pulse mb-6" />
+                <div key={i} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
+                  <div className="h-5 w-40 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse mb-6" />
                   <div className="space-y-4">
                     {[1, 2, 3].map((j) => (
-                      <div key={j} className="h-16 rounded-lg bg-muted/60 animate-pulse" />
+                      <div key={j} className="h-16 rounded-lg bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
                     ))}
                   </div>
                 </div>
@@ -652,7 +691,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   <AdminCard key={segment} className="p-0 overflow-hidden">
                     <button
                       type="button"
-                      className="w-full flex items-center justify-between p-6 text-left hover:bg-muted/30 transition-colors"
+                      className="w-full flex items-center justify-between p-6 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
                       onClick={() => setFollowUpExpandedGroups((g) => ({ ...g, [segment]: !isOpen }))}
                     >
                       <span className="text-base font-semibold flex items-center gap-3">
@@ -668,7 +707,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                       </Button>
                     </button>
                     {isOpen && (
-                      <div className="px-6 pb-6 space-y-4 border-t border-border/20 pt-6">
+                      <div className="px-6 pb-6 space-y-4 border-t border-zinc-200 dark:border-zinc-800 pt-6">
                         {followUpAddingSegment === segment && (
                           <FollowUpForm
                             segment={segment}
@@ -776,20 +815,20 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                               }}
                             />
                           ) : (
-                            <div key={f.id} className="flex flex-wrap items-start justify-between gap-2 p-3 rounded-lg border bg-card">
+                            <div key={f.id} className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20">
                               <div className="flex-1 min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <p className="font-bold text-sm">{f.name || `${f.delay_minutes} min delay`}</p>
-                                  <Badge variant={f.enabled ? 'default' : 'secondary'} className="text-[10px]">{f.enabled ? 'On' : 'Off'}</Badge>
+                                <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                                  <span className="font-semibold text-sm text-zinc-900 dark:text-zinc-50">{f.name || `${f.delay_minutes} min delay`}</span>
+                                  <Badge variant={f.enabled ? 'default' : 'secondary'} className="text-[10px] uppercase tracking-wider">{f.enabled ? 'On' : 'Off'}</Badge>
                                   <Badge variant="outline" className="text-[10px] font-mono">
                                     {f.delay_minutes < 60 ? `${f.delay_minutes}m` : f.delay_minutes < 1440 ? `${Math.round(f.delay_minutes / 60)}h` : `${Math.round(f.delay_minutes / 1440)}d`}
                                   </Badge>
-                                  {f.media_type && <Badge variant="outline" className="text-[10px]">{f.media_type}</Badge>}
+                                  {f.media_type && <Badge variant="outline" className="text-[10px] uppercase tracking-wider">{f.media_type}</Badge>}
                                 </div>
-                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{f.message}</p>
+                                <p className="text-sm text-zinc-500 dark:text-zinc-400 line-clamp-2">{f.message}</p>
                               </div>
-                              <div className="flex gap-1">
-                                <Button variant="outline" size="sm" className="h-7" disabled={previewSending} onClick={async () => {
+                              <div className="flex items-center gap-2 shrink-0">
+                                <Button variant="outline" size="sm" disabled={previewSending} onClick={async () => {
                                   setPreviewSending(true)
                                   try {
                                     await adminFetch('/api/admin/preview', { method: 'POST', body: JSON.stringify({ follow_up_id: f.id }) })
@@ -797,12 +836,12 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                                   } catch (e) { toast.error((e as Error).message) }
                                   finally { setPreviewSending(false) }
                                 }}>
-                                  <SendHorizontal className="w-3.5 h-3.5" />
+                                  <SendHorizontal className="w-4 h-4" />
                                 </Button>
-                                <Button variant="outline" size="sm" className="h-7" onClick={() => { setFollowUpEditingId(f.id); setFollowUpAddingSegment(null); }}>
-                                  <Pencil className="w-3.5 h-3.5" />
+                                <Button variant="outline" size="sm" onClick={() => { setFollowUpEditingId(f.id); setFollowUpAddingSegment(null); }}>
+                                  <Pencil className="w-4 h-4" />
                                 </Button>
-                                <Button variant="ghost" size="sm" className="h-7 text-destructive hover:text-destructive" onClick={async () => {
+                                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={async () => {
                                   if (!confirm('Delete this follow-up?')) return
                                   try {
                                     await adminFetch(`/api/admin/follow-ups/${f.id}`, { method: 'DELETE' })
@@ -810,35 +849,37 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                                     adminFetch('/api/admin/follow-ups').then((r) => setFollowUps(r.followUps || []))
                                   } catch (e) { toast.error((e as Error).message) }
                                 }}>
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Trash2 className="w-4 h-4" />
                                 </Button>
                               </div>
                             </div>
                           )
                         )}
                         {items.length === 0 && !followUpAddingSegment && (
-                          <p className="text-sm text-muted-foreground py-4 text-center">No follow-ups in this group.</p>
+                          <p className="text-sm text-zinc-500 dark:text-zinc-400 py-4 text-center">No follow-ups in this group.</p>
                         )}
                       </div>
                     )}
                   </AdminCard>
                 )
               })}
-            </div>
-          )}
-        </TabsContent>
+              </div>
+            )}
+          </div>
+        )}
 
-        <TabsContent value="broadcast" className="mt-4 space-y-8 outline-none">
+        {adminTab === 'broadcast' && !selectedUserId && (
+          <div className="space-y-8 animate-in fade-in duration-300">
           <AdminCard>
             <AdminCardHeader>
               <AdminCardTitle>Send Broadcast</AdminCardTitle>
             </AdminCardHeader>
             <AdminCardContent className="space-y-6">
                 <div className="space-y-4">
-                  <p className="text-sm font-medium text-muted-foreground">Audience</p>
+                  <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Audience</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground">Claimed</p>
+                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Claimed</p>
                       <FilterPills
                         value={broadcastAudienceFilters.claimed}
                         onChange={(v) => {
@@ -853,7 +894,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                       />
                     </div>
                     <div className="space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground">Referrals</p>
+                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Referrals</p>
                       <FilterPills
                         value={broadcastAudienceFilters.has_referrals}
                         onChange={(v) => {
@@ -900,16 +941,16 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   </div>
                 </div>
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-muted-foreground">Message</Label>
+                <Label className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Message</Label>
                 <textarea
-                  className="w-full rounded-xl border border-input/80 bg-background px-4 py-3 text-sm min-h-[140px] focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0"
+                  className="w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3 text-sm min-h-[140px] focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 focus:border-transparent transition-all"
                   value={broadcastMessage}
                   onChange={(e) => setBroadcastMessage(e.target.value)}
                   placeholder="Enter message to send to all users (excluding blocked)"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-muted-foreground">Media</Label>
+                <Label className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Media</Label>
                 <div className="flex gap-2">
                   {(['none', 'image', 'gif'] as const).map((t) => (
                     <Button
@@ -933,7 +974,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                 )}
               </div>
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-muted-foreground">Buttons (optional)</Label>
+                <Label className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Buttons (optional)</Label>
                 <div className="space-y-2">
                   {broadcastButtons.map((b, i) => (
                     <div key={i} className="flex gap-2">
@@ -1010,7 +1051,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                     {broadcastSending ? 'Sending...' : 'Send Broadcast'}
                   </Button>
                   {lastBroadcast && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
                       Last: sent {lastBroadcast.sentCount ?? lastBroadcast.sent_count} / blocked {lastBroadcast.blockedCount ?? lastBroadcast.blocked_count} / errors {lastBroadcast.errorCount ?? lastBroadcast.error_count}
                     </p>
                   )}
@@ -1029,7 +1070,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             {broadcastHistoryLoading ? (
               <AdminTableSkeleton rows={5} cols={6} />
             ) : broadcastHistory.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-8 text-center">No broadcasts yet.</p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 py-8 text-center">No broadcasts yet.</p>
             ) : (
               <AdminTable>
                 <AdminTableHeader>
@@ -1045,7 +1086,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                 <AdminTableBody>
                   {broadcastHistory.slice(0, 20).map((b: any) => (
                     <AdminTableRow key={b.id}>
-                      <AdminTableCell className="text-muted-foreground">
+                      <AdminTableCell className="text-zinc-500 dark:text-zinc-400">
                         {b.finished_at ? new Date(b.finished_at).toLocaleString() : new Date(b.created_at).toLocaleString()}
                       </AdminTableCell>
                       <AdminTableCell className="max-w-[140px] truncate">{b.message?.slice(0, 60) || '—'}…</AdminTableCell>
@@ -1064,8 +1105,10 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             )}
             </AdminCardContent>
           </AdminCard>
-        </TabsContent>
-      </Tabs>
+        </div>
+        )}
+        </div>
+      </main>
     </div>
   )
 }

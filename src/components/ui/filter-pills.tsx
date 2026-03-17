@@ -28,23 +28,21 @@ export function FilterPills<T extends string>({
       {label && (
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
       )}
-      <div className="flex flex-wrap gap-1 rounded-lg bg-muted/50 p-1">
+      <div className="inline-flex items-center gap-1 rounded-lg bg-zinc-100 dark:bg-zinc-800/50 p-1">
         {options.map((opt) => (
-          <Button
+          <button
             key={opt.value}
             type="button"
-            variant="ghost"
-            size="sm"
             className={cn(
-              'h-8 rounded-md px-3.5 text-sm font-medium transition-colors duration-150',
+              'rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-200 ease-in-out',
               value === opt.value
-                ? 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90'
-                : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm ring-1 ring-black/5 dark:ring-white/10'
+                : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/50 dark:hover:bg-zinc-800'
             )}
             onClick={() => onChange(opt.value)}
           >
             {opt.label}
-          </Button>
+          </button>
         ))}
       </div>
     </div>

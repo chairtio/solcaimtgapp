@@ -10,18 +10,18 @@ const AdminCard = React.forwardRef<HTMLDivElement, AdminCardProps>(
     <div
       ref={ref}
       className={cn(
-        'rounded-xl border border-border/20 bg-card text-card-foreground shadow-[0_1px_3px_rgba(0,0,0,0.08)] dark:shadow-[0_1px_3px_rgba(0,0,0,0.2)]',
+        'rounded-2xl bg-white dark:bg-zinc-900 text-card-foreground shadow-sm',
         className
       )}
       {...props}
     >
       {title && (
-        <div className="p-6 pb-5">
+        <div className="p-6 pb-4">
           <h3 className="text-base font-semibold leading-none tracking-tight">{title}</h3>
         </div>
       )}
       {children && (
-        <div className={cn(title ? 'p-6 pt-0' : 'p-6')}>{children}</div>
+        <div className={cn(title ? 'px-6 pb-6' : 'p-6')}>{children}</div>
       )}
     </div>
   )
@@ -32,7 +32,7 @@ const AdminCardHeader = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn('p-6 pb-5', className)} {...props} />
+  <div ref={ref} className={cn('p-6 pb-4', className)} {...props} />
 ))
 AdminCardHeader.displayName = 'AdminCardHeader'
 
@@ -52,7 +52,7 @@ const AdminCardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn('p-6 pt-0', className)} {...props} />
+  <div ref={ref} className={cn('px-6 pb-6', className)} {...props} />
 ))
 AdminCardContent.displayName = 'AdminCardContent'
 

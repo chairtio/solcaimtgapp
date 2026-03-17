@@ -13,18 +13,18 @@ const AdminStatCard = React.forwardRef<HTMLDivElement, AdminStatCardProps>(
     <div
       ref={ref}
       className={cn(
-        'rounded-xl border border-border/20 bg-card p-6 shadow-[0_1px_3px_rgba(0,0,0,0.08)] dark:shadow-[0_1px_3px_rgba(0,0,0,0.2)] transition-colors duration-150',
+        'rounded-2xl bg-white dark:bg-zinc-900 p-6 shadow-sm transition-colors duration-150',
         className
       )}
       {...props}
     >
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className={cn("mt-2 font-semibold tabular-nums text-foreground", size === 'primary' ? 'text-3xl' : 'text-2xl')}>{value}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">{label}</p>
+      <p className={cn("font-semibold tabular-nums text-foreground", size === 'primary' ? 'text-3xl' : 'text-2xl')}>{value}</p>
       {delta && (
         <p
           className={cn(
             'mt-2 text-sm font-medium',
-            delta.positive ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'
+            delta.positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'
           )}
         >
           {delta.value}
