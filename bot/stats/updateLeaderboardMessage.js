@@ -38,7 +38,7 @@ export const updateLeaderboardMessage = async () => {
             let userText;
             if (user.telegram_id === 0) {
                 // For users with telegram_id == 0
-                userText = '[Web User](http://app.solclaim.io/)';
+                userText = 'Web User';
             } else {
                 // For users with a valid telegram_id
                 const abbreviatedUserId = abbreviateUserId(user.telegram_id);

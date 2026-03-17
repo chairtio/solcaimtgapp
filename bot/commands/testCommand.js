@@ -68,8 +68,8 @@ export const testCommand = async (ctx) => {
         const statsDataClaimedStr = statsData.claimed.toFixed(4).toString().replace('.', '\\.');
         let responseText = `💰 Solclaim: Reclaim Your Sol\\! 🤖\n`;
         responseText += `\n📊 Stats: ${statsDataUsersStr} users have already claimed ${statsDataClaimedStr} SOL in total\\!\n\n`;
-        responseText += `[Group](https://t.me/SolClaimChat) \\| [Channel](https://t.me/SolClaimPortal) \\| [Twitter](https://x.com/solclaimx) \\| [Website](https://solclaim.io)\n\n`;
-        responseText += `If you've traded or received tokens on Solana \\(like Raydium or Pumpfun\\)\\, use [SolClaim](https://solclaim.io) to check if you're eligible to claim back sol FOR FREE\\. 💰`;
+        responseText += `[Group](https://t.me/SolClaimChat) \\| [Channel](https://t.me/SolClaimPortal) \\| [Twitter](https://x.com/solclaimx)\n\n`;
+        responseText += `If you've traded or received tokens on Solana \\(like Raydium or Pumpfun\\)\\, use SolClaim to check if you're eligible to claim back sol FOR FREE\\. 💰`;
 
         // Update response text and buttons based on user withdrawal wallet status
         if (userWithdrawWallet) {

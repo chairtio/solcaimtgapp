@@ -498,7 +498,11 @@ export async function closeEmptyTokenAccounts(
         ? n * (commissionPercent !== undefined ? SOLCLAIM_RENT_PER_ACCOUNT * (commissionPercent / 100) : SOLCLAIM_COMMISSION_PER_ACCOUNT)
         : 0
       const userPayoutBeforeReferral = totalRent - commissionAmount
-      const referrerAmount = referrerWallet ? userPayoutBeforeReferral * (referralPercent / 100) : 0
+      const referrerAmount = referrerWallet
+        ? (commissionAmount > 0
+          ? commissionAmount * (referralPercent / 100)
+          : userPayoutBeforeReferral * (referralPercent / 100))
+        : 0
       const userReceives = userPayoutBeforeReferral - referrerAmount
 
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()

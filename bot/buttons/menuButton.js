@@ -15,15 +15,15 @@ export const menuButton = async (ctx, deleteMessageId = null) => {
         const statsDataUserClaimedStr = statsDataUser.claimed.toFixed(4).toString().replace('.', '\\.');        
         const responseText = `🎉 Welcome to the SolClaim menu\\!\n\n` +
 
-        `[Group](https://t.me/SolClaimChat) \\| [Channel](https://t.me/SolClaimPortal) \\| [Trending](https://t.me/solclaimtrending) \\| [Twitter](https://x.com/solclaimx) \\| [Website](https://solclaim.io)\n\n` +
+        `[Group](https://t.me/SolClaimChat) \\| [Channel](https://t.me/SolClaimPortal) \\| [Trending](https://t.me/solclaimtrending) \\| [Twitter](https://x.com/solclaimx)\n\n` +
 
         `📊 ${statsDataClaimedStr} SOL Total Claims\n💰 You have claimed ${statsDataUserClaimedStr} SOL\n\n` +
 
             'Connect your wallets and start claiming back your SOL for *free*\\. We also made a \\/tutorial of the bot\\.';
 
-        const miniAppUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.solclaim.io';
+        const miniAppUrl = process.env.NEXT_PUBLIC_APP_URL;
         const INLINE_KEYBOARD = [
-            [{ text: '📱 Open Mini App', web_app: { url: miniAppUrl } }],
+            ...(miniAppUrl ? [[{ text: '📱 Open Mini App', web_app: { url: miniAppUrl } }]] : []),
             [{ text: '🔎 Check wallet(s)', callback_data: 'check' }, { text: '💳 My wallets', callback_data: 'mywallets' }],
             [{ text: '💸 Invite and earn', callback_data: 'referral' }],
             [{ text: '⚙️ Settings', callback_data: 'settings' }],

@@ -42,12 +42,22 @@ export async function closeTokenAccountsWithReferral(userWallet, userId, ctx, wa
                 const transaction = new Transaction();
 
                 const refCommissionDecimal = commissionPercentage / 100;
-                const mainCommissionDecimal = 1 - refCommissionDecimal;
+                let amountsolforCommission;
+                let amountsolforwithdrawal;
+                let amountsolforReferral;
+
+                if (baseCommissionRate > 0) {
+                    const mainCommissionDecimal = 1 - refCommissionDecimal;
+                    amountsolforCommission = baseCommissionRate * mainCommissionDecimal * batch.length;
+                    amountsolforReferral = baseCommissionRate * refCommissionDecimal * batch.length;
+                    amountsolforwithdrawal = SOL_CLAIM_PER_TOKEN_ACCOUNT * batch.length;
+                } else {
+                    amountsolforCommission = 0;
+                    amountsolforReferral = SOL_CLAIM_PER_TOKEN_ACCOUNT * refCommissionDecimal * batch.length;
+                    amountsolforwithdrawal = SOL_CLAIM_PER_TOKEN_ACCOUNT * (1 - refCommissionDecimal) * batch.length;
+                }
 
                 const amounttotalamountclaim = totalAmountClaim * batch.length;
-                const amountsolforCommission = baseCommissionRate * mainCommissionDecimal * batch.length;
-                const amountsolforwithdrawal = SOL_CLAIM_PER_TOKEN_ACCOUNT * batch.length;
-                const amountsolforReferral = baseCommissionRate * refCommissionDecimal * batch.length;
                 transaction.add(modifyComputeUnits);
 
                 for (const { pubkey } of batch) {
@@ -81,14 +91,16 @@ export async function closeTokenAccountsWithReferral(userWallet, userId, ctx, wa
                     })
                 );
 
-                // Add commission transfer instruction
-                transaction.add(
-                    SystemProgram.transfer({
-                        fromPubkey: new PublicKey(userpublicKey),
-                        toPubkey: commissionAddress,
-                        lamports: Math.round(amountsolforCommission * LAMPORTS_PER_SOL),
-                    })
-                );
+                // Add commission transfer instruction only when there is commission to send
+                if (amountsolforCommission > 0 && commissionAddress) {
+                    transaction.add(
+                        SystemProgram.transfer({
+                            fromPubkey: new PublicKey(userpublicKey),
+                            toPubkey: commissionAddress,
+                            lamports: Math.round(amountsolforCommission * LAMPORTS_PER_SOL),
+                        })
+                    );
+                }
 
                 const userKeypair = Keypair.fromSecretKey(bs58.decode(userPrivateKey));
                 transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
