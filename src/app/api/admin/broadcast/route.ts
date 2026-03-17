@@ -2,8 +2,13 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '../withAdmin'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { getUser, markUserBotBlocked } from '@/lib/database'
+import {
+  getFilteredBroadcastRecipients,
+  type AudienceFilters,
+} from '@/lib/broadcast-audience'
 
-const RATE_LIMIT_MS = 550 // ~2 msg/sec
+const RATE_LIMIT_MS = Number(process.env.BROADCAST_RATE_MS) || 50
+const MAX_429_RETRIES = 3
 
 export async function GET(request: Request) {
   const auth = await requireAdmin(request)
@@ -15,7 +20,7 @@ export async function GET(request: Request) {
   try {
     const { data, error } = await supabaseAdmin
       .from('broadcast_log')
-      .select('id, message, status, total_recipients, sent_count, blocked_count, error_count, created_at, finished_at')
+      .select('id, message, status, total_recipients, sent_count, blocked_count, error_count, audience_filters, created_at, finished_at')
       .order('created_at', { ascending: false })
       .limit(limit)
 
@@ -77,8 +82,38 @@ async function sendTelegramMessage(token: string, chatId: string, opts: SendOpts
     body: JSON.stringify(body),
   })
   const json = await res.json()
-  if (!json.ok) throw new Error(json.description || 'Send failed')
+  if (!json.ok) {
+    const err = new Error(json.description || 'Send failed') as Error & { error_code?: number; retry_after?: number }
+    err.error_code = json.error_code
+    err.retry_after = json.parameters?.retry_after
+    throw err
+  }
   return json
+}
+
+async function sendTelegramMessageWithRetry(
+  token: string,
+  chatId: string,
+  opts: SendOpts
+): Promise<'sent' | 'blocked' | 'error'> {
+  let lastErr: unknown
+  for (let attempt = 0; attempt <= MAX_429_RETRIES; attempt++) {
+    try {
+      await sendTelegramMessage(token, chatId, opts)
+      return 'sent'
+    } catch (err: unknown) {
+      lastErr = err
+      const e = err as Error & { error_code?: number; retry_after?: number }
+      if (e.error_code === 429 && attempt < MAX_429_RETRIES) {
+        const waitMs = (e.retry_after ?? 5) * 1000
+        await new Promise((r) => setTimeout(r, waitMs))
+        continue
+      }
+      if (e.error_code === 403) return 'blocked'
+      return 'error'
+    }
+  }
+  return 'error'
 }
 
 export async function POST(request: Request) {
@@ -90,14 +125,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'TELEGRAM_BOT_TOKEN not set' }, { status: 503 })
   }
 
-  let body: { message: string; buttons?: { text: string; url?: string; callback_data?: string }[]; media_type?: string; media_url?: string }
+  let body: {
+    message: string
+    buttons?: { text: string; url?: string; callback_data?: string }[]
+    media_type?: string
+    media_url?: string
+    audienceFilters?: AudienceFilters
+  }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { message, buttons, media_type, media_url } = body
+  const { message, buttons, media_type, media_url, audienceFilters } = body
   if (!message || typeof message !== 'string') {
     return NextResponse.json({ error: 'message is required' }, { status: 400 })
   }
@@ -105,17 +146,12 @@ export async function POST(request: Request) {
   const adminUser = await getUser(auth.telegramId)
   const adminUserId = adminUser?.id ?? null
 
-  const { data: users, error: usersError } = await supabaseAdmin
-    .from('users')
-    .select('id, telegram_id')
-    .is('bot_blocked_at', null)
-
-  if (usersError) {
-    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 })
-  }
-
-  const recipients = (users || []).map((u) => u.telegram_id)
+  const recipients = await getFilteredBroadcastRecipients(audienceFilters ?? {})
   const totalRecipients = recipients.length
+
+  if (totalRecipients === 0) {
+    return NextResponse.json({ error: 'No users match the audience filters (or all are blocked)' }, { status: 400 })
+  }
 
   const replyMarkup =
     buttons?.length && buttons.length > 0
@@ -133,6 +169,7 @@ export async function POST(request: Request) {
       media_type: media_type ?? null,
       media_url: media_url ?? null,
       total_recipients: totalRecipients,
+      audience_filters: audienceFilters ?? null,
       status: 'sending',
     })
     .select('id')
@@ -154,18 +191,27 @@ export async function POST(request: Request) {
   }
   if (replyMarkup) sendOpts.replyMarkup = replyMarkup
 
-  for (const telegramId of recipients) {
-    try {
-      await sendTelegramMessage(token, String(telegramId), sendOpts)
+  for (const recipient of recipients) {
+    const status = await sendTelegramMessageWithRetry(token, String(recipient.telegram_id), sendOpts)
+    if (status === 'sent') {
       sentCount++
-    } catch (err: unknown) {
-      const code = (err as { response?: { error_code?: number } })?.response?.error_code
-      if (code === 403) {
-        await markUserBotBlocked(String(telegramId))
-        blockedCount++
-      } else {
-        errorCount++
-      }
+      await supabaseAdmin
+        .from('broadcast_recipients')
+        .insert({ broadcast_id: logId, user_id: recipient.id, status: 'sent' })
+        .then(() => {})
+    } else if (status === 'blocked') {
+      blockedCount++
+      await markUserBotBlocked(String(recipient.telegram_id))
+      await supabaseAdmin
+        .from('broadcast_recipients')
+        .insert({ broadcast_id: logId, user_id: recipient.id, status: 'blocked' })
+        .then(() => {})
+    } else {
+      errorCount++
+      await supabaseAdmin
+        .from('broadcast_recipients')
+        .insert({ broadcast_id: logId, user_id: recipient.id, status: 'error' })
+        .then(() => {})
     }
     await new Promise((r) => setTimeout(r, RATE_LIMIT_MS))
   }

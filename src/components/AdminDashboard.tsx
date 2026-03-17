@@ -112,6 +112,9 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
   const [lastBroadcast, setLastBroadcast] = useState<any>(null)
   const [broadcastHistory, setBroadcastHistory] = useState<any[]>([])
   const [broadcastHistoryLoading, setBroadcastHistoryLoading] = useState(false)
+  const [broadcastAudienceCount, setBroadcastAudienceCount] = useState<number | null>(null)
+  const [broadcastAudienceFilters, setBroadcastAudienceFilters] = useState<{ claimed: 'all' | 'yes' | 'no'; has_referrals: 'all' | 'yes' | 'no' }>({ claimed: 'all', has_referrals: 'all' })
+  const [broadcastAudiencePreviewing, setBroadcastAudiencePreviewing] = useState(false)
 
   // Preview
   const [previewSending, setPreviewSending] = useState(false)
@@ -823,6 +826,69 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
+                <Label className="text-[11px] font-black uppercase tracking-widest">Audience</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">Preview audience first, then send.</p>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs">Claimed</Label>
+                    <select
+                      className="rounded border bg-background px-2 py-1 text-sm"
+                      value={broadcastAudienceFilters.claimed}
+                      onChange={(e) => {
+                        setBroadcastAudienceFilters((f) => ({ ...f, claimed: e.target.value as 'all' | 'yes' | 'no' }))
+                        setBroadcastAudienceCount(null)
+                      }}
+                    >
+                      <option value="all">All</option>
+                      <option value="yes">Claimed</option>
+                      <option value="no">Not claimed</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs">Referrals</Label>
+                    <select
+                      className="rounded border bg-background px-2 py-1 text-sm"
+                      value={broadcastAudienceFilters.has_referrals}
+                      onChange={(e) => {
+                        setBroadcastAudienceFilters((f) => ({ ...f, has_referrals: e.target.value as 'all' | 'yes' | 'no' }))
+                        setBroadcastAudienceCount(null)
+                      }}
+                    >
+                      <option value="all">All</option>
+                      <option value="yes">Has invited friends</option>
+                      <option value="no">No referrals</option>
+                    </select>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={broadcastAudiencePreviewing}
+                    onClick={async () => {
+                      setBroadcastAudiencePreviewing(true)
+                      try {
+                        const params = new URLSearchParams({
+                          claimed: broadcastAudienceFilters.claimed,
+                          has_referrals: broadcastAudienceFilters.has_referrals,
+                        })
+                        const r = await adminFetch(`/api/admin/broadcast/audience?${params}`)
+                        setBroadcastAudienceCount(r.count ?? 0)
+                        toast.success(`${r.count ?? 0} users will receive this`)
+                      } catch (e) {
+                        toast.error((e as Error).message)
+                        setBroadcastAudienceCount(null)
+                      } finally {
+                        setBroadcastAudiencePreviewing(false)
+                      }
+                    }}
+                  >
+                    {broadcastAudiencePreviewing ? 'Loading...' : 'Preview audience'}
+                  </Button>
+                  {broadcastAudienceCount !== null && (
+                    <span className="text-sm font-bold text-primary">{broadcastAudienceCount} users will receive this</span>
+                  )}
+                </div>
+              </div>
+              <div>
                 <Label className="text-[11px] font-black uppercase tracking-widest">Message</Label>
                 <textarea
                   className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm min-h-[120px]"
@@ -900,23 +966,25 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                 </Button>
               </div>
               <Button
-                disabled={!broadcastMessage.trim() || broadcastSending}
+                disabled={!broadcastMessage.trim() || broadcastSending || broadcastAudienceCount === null}
                 onClick={async () => {
-                  if (!confirm('Send this broadcast to all non-blocked users?')) return
+                  if (!confirm(`Send this broadcast to ${broadcastAudienceCount} users?`)) return
                   setBroadcastSending(true)
                   try {
                     const r = await adminFetch('/api/admin/broadcast', {
                       method: 'POST',
                       body: JSON.stringify({
-                      message: broadcastMessage.trim(),
-                      media_type: broadcastMediaType !== 'none' ? broadcastMediaType : undefined,
-                      media_url: broadcastMediaType !== 'none' && broadcastMediaUrl ? broadcastMediaUrl : undefined,
-                      buttons: broadcastButtons.filter((b) => b.text.trim() && b.url.trim()).length > 0
-                        ? broadcastButtons.filter((b) => b.text.trim() && b.url.trim())
-                        : undefined,
-                    }),
+                        message: broadcastMessage.trim(),
+                        media_type: broadcastMediaType !== 'none' ? broadcastMediaType : undefined,
+                        media_url: broadcastMediaType !== 'none' && broadcastMediaUrl ? broadcastMediaUrl : undefined,
+                        buttons: broadcastButtons.filter((b) => b.text.trim() && b.url.trim()).length > 0
+                          ? broadcastButtons.filter((b) => b.text.trim() && b.url.trim())
+                          : undefined,
+                        audienceFilters: broadcastAudienceFilters,
+                      }),
                     })
                     setLastBroadcast(r)
+                    setBroadcastAudienceCount(null)
                     adminFetch('/api/admin/broadcast').then((res) => setBroadcastHistory(res.broadcasts || []))
                     toast.success(`Sent: ${r.sentCount ?? r.sent_count} | Blocked: ${r.blockedCount ?? r.blocked_count} | Errors: ${r.errorCount ?? r.error_count}`)
                   } catch (e) {
@@ -960,6 +1028,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                         <th className="text-left py-2">Message</th>
                         <th className="text-left py-2">Sent</th>
                         <th className="text-left py-2">Blocked</th>
+                        <th className="text-left py-2">Errors</th>
                         <th className="text-left py-2">Status</th>
                       </tr>
                     </thead>
@@ -972,6 +1041,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                           <td className="py-2 max-w-[140px] truncate">{b.message?.slice(0, 60) || '—'}…</td>
                           <td className="py-2">{b.sent_count ?? 0}</td>
                           <td className="py-2">{b.blocked_count ?? 0}</td>
+                          <td className="py-2">{b.error_count ?? 0}</td>
                           <td className="py-2">
                             <Badge variant={b.status === 'finished' ? 'default' : b.status === 'sending' ? 'secondary' : 'outline'} className="text-[10px]">
                               {b.status}
