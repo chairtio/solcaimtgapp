@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -73,6 +73,59 @@ interface ClaimableAccount {
   programIdStr?: string
 }
 
+function TaskConfettiBurst({ active }: { active: boolean }) {
+  if (!active) return null
+
+  const pieces = [
+    { x: -82, y: -120, r: -220, delay: 0, color: 'bg-primary' },
+    { x: -54, y: -96, r: -145, delay: 25, color: 'bg-foreground' },
+    { x: -28, y: -132, r: -260, delay: 10, color: 'bg-secondary' },
+    { x: -8, y: -104, r: -185, delay: 55, color: 'bg-muted-foreground' },
+    { x: 18, y: -140, r: 190, delay: 15, color: 'bg-primary' },
+    { x: 42, y: -92, r: 135, delay: 40, color: 'bg-foreground' },
+    { x: 68, y: -126, r: 245, delay: 65, color: 'bg-secondary' },
+    { x: 96, y: -102, r: 165, delay: 5, color: 'bg-muted-foreground' },
+    { x: -114, y: -54, r: -120, delay: 35, color: 'bg-primary/80' },
+    { x: 114, y: -48, r: 120, delay: 45, color: 'bg-foreground/90' },
+  ] as const
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[120] overflow-hidden">
+      <style jsx global>{`
+        @keyframes task-confetti-pop {
+          0% {
+            transform: translate(-50%, -50%) translate3d(0, 0, 0) scale(0.3) rotate(0deg);
+            opacity: 0;
+          }
+          15% {
+            opacity: 1;
+          }
+          100% {
+            transform: translate(-50%, -50%) translate3d(var(--x), var(--y), 0) scale(1) rotate(var(--r));
+            opacity: 0;
+          }
+        }
+      `}</style>
+      <div className="absolute left-1/2 top-[44%]">
+        {pieces.map((piece, index) => (
+          <span
+            key={`${index}-${piece.delay}`}
+            className={`absolute block rounded-sm ${piece.color}`}
+            style={{
+              width: index % 3 === 0 ? '8px' : index % 3 === 1 ? '6px' : '4px',
+              height: index % 2 === 0 ? '14px' : '8px',
+              '--x': `${piece.x}px`,
+              '--y': `${piece.y}px`,
+              '--r': `${piece.r}deg`,
+              animation: `task-confetti-pop 900ms cubic-bezier(0.16, 1, 0.3, 1) ${piece.delay}ms both`,
+            } as CSSProperties}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function SolClaimApp() {
   const router = useRouter()
   const { user, isLoading, error: telegramError, refreshUser } = useTelegram()
@@ -121,6 +174,8 @@ export default function SolClaimApp() {
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null)
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set())
   const [linkOpenedTaskIds, setLinkOpenedTaskIds] = useState<Set<string>>(new Set())
+  const [taskInstructionOpenIds, setTaskInstructionOpenIds] = useState<Set<string>>(new Set())
+  const [taskConfettiToken, setTaskConfettiToken] = useState(0)
 
   // Video modal
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
@@ -195,6 +250,12 @@ t.me/solclaimxbot?start=${telegramId}`
     setPromoBannerDismissed(true)
     if (typeof localStorage !== 'undefined') localStorage.setItem('solclaim_promo_banner_dismissed', '1')
   }
+
+  useEffect(() => {
+    if (!taskConfettiToken) return
+    const timer = window.setTimeout(() => setTaskConfettiToken(0), 1100)
+    return () => window.clearTimeout(timer)
+  }, [taskConfettiToken])
 
   // Story-style onboarding (first visit only) - Tinder-style swipe
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null)
@@ -2007,8 +2068,10 @@ t.me/solclaimxbot?start=${telegramId}`
                   {tasksResult?.tasks?.map((task) => {
                     const isShareStory = !!task.media_url
                     const isManualWithUrl = task.verification_type === 'manual' && !!task.url && !task.media_url
+                    const isSettingsTask = task.id === 'add_solclaim_name' || task.id === 'referral_link_bio'
                     const needsLinkFirst = isShareStory || isManualWithUrl
                     const hasOpenedLink = linkOpenedTaskIds.has(task.id)
+                    const hasOpenedInstructions = taskInstructionOpenIds.has(task.id)
                     const isExpanded = expandedTaskIds.has(task.id)
                     const toggleExpand = () => setExpandedTaskIds((prev) => {
                       const next = new Set(prev)
@@ -2036,8 +2099,38 @@ t.me/solclaimxbot?start=${telegramId}`
                       }
                     }
 
+                    const settingsTaskInstruction = isSettingsTask
+                      ? task.id === 'referral_link_bio'
+                        ? {
+                            title: 'Add your referral link to your Telegram bio',
+                            body: 'Copy your referral link, open Telegram settings manually, paste it into your bio, then return here and tap Done.',
+                            copyText: user?.telegram_id ? `https://t.me/solclaimxbot?start=${user.telegram_id}` : '',
+                            copyLabel: 'Copy referral link',
+                          }
+                        : {
+                            title: 'Add $SOLCLAIM to your Telegram name',
+                            body: 'Open Telegram settings manually, add $SOLCLAIM to your first or last name, then return here and tap Done.',
+                            copyText: '',
+                            copyLabel: '',
+                          }
+                      : null
+
+                    const openSettingsTaskInstructions = () => {
+                      setTaskInstructionOpenIds((prev) => new Set(prev).add(task.id))
+                    }
+
                     const handleAction = async () => {
                       if (task.completed) return
+
+                      if (isSettingsTask && !hasOpenedInstructions) {
+                        openSettingsTaskInstructions()
+                        if (task.id === 'referral_link_bio') {
+                          toast.success('Copy your referral link, update your bio in Telegram settings, then come back and tap Done.')
+                        } else {
+                          toast.success('Open Telegram settings, update your name, then come back and tap Done.')
+                        }
+                        return
+                      }
 
                       // Tasks that require opening link first: share-story or manual (Tweet/Retweet/Follow)
                       if (needsLinkFirst && !hasOpenedLink) {
@@ -2064,13 +2157,14 @@ t.me/solclaimxbot?start=${telegramId}`
                         return
                       }
 
-                      if (task.canComplete || (needsLinkFirst && hasOpenedLink)) {
+                      if (task.canComplete || (needsLinkFirst && hasOpenedLink) || (isSettingsTask && hasOpenedInstructions)) {
                         setCompletingTaskId(task.id)
                         try {
                           const result = await verifyAndCompleteTask(user!.id, task.id)
                           if (result.success) {
                             const fresh = await getTasksForUser(user!.id)
                             setTasksResult(fresh)
+                            setTaskConfettiToken(Date.now())
                             toast.success(`+${task.points} XP earned!`)
                           } else {
                             toast.error(result.error || 'Could not complete task')
@@ -2085,13 +2179,16 @@ t.me/solclaimxbot?start=${telegramId}`
                       }
                     }
 
-                    const buttonLabel = needsLinkFirst && !hasOpenedLink
-                      ? (task.button_text || 'Open Link')
-                      : needsLinkFirst && hasOpenedLink
-                        ? 'Done'
-                        : task.verification_type === 'manual'
+                    const isActionReady = (needsLinkFirst && hasOpenedLink) || (isSettingsTask && hasOpenedInstructions)
+                    const buttonLabel = isSettingsTask
+                      ? (isActionReady ? 'Done' : 'View steps')
+                      : needsLinkFirst && !hasOpenedLink
+                        ? (task.button_text || 'Open Link')
+                        : needsLinkFirst && hasOpenedLink
                           ? 'Done'
-                          : (task.canComplete ? 'Claim' : (task.button_text || 'Go'))
+                          : task.verification_type === 'manual'
+                            ? 'Done'
+                            : (task.canComplete ? 'Claim' : (task.button_text || 'Go'))
 
                     return (
                       <div
@@ -2126,6 +2223,48 @@ t.me/solclaimxbot?start=${telegramId}`
                                   </button>
                                 )}
                               </>
+                            )}
+                            {settingsTaskInstruction && hasOpenedInstructions && (
+                              <div className="mt-4 rounded-2xl border border-border bg-secondary/30 p-4 space-y-3">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-bold text-foreground">{settingsTaskInstruction.title}</p>
+                                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                      {settingsTaskInstruction.body}
+                                    </p>
+                                  </div>
+                                  <Badge variant="secondary" className="shrink-0 text-[10px] uppercase tracking-wider">
+                                    Step 1
+                                  </Badge>
+                                </div>
+                                {settingsTaskInstruction.copyText ? (
+                                  <div className="space-y-2">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Referral link</p>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        await copyToClipboard(settingsTaskInstruction.copyText)
+                                        toast.success('Referral link copied. Paste it in your bio, then come back and tap Done.')
+                                      }}
+                                      className="w-full flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-3 text-left transition-colors hover:border-primary/30"
+                                    >
+                                      <span className="min-w-0 truncate font-mono text-xs text-foreground">
+                                        {settingsTaskInstruction.copyText}
+                                      </span>
+                                      <span className="inline-flex items-center gap-1.5 shrink-0 text-[11px] font-bold text-primary">
+                                        <Copy className="w-3.5 h-3.5" />
+                                        {settingsTaskInstruction.copyLabel}
+                                      </span>
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="rounded-xl border border-border bg-background px-3 py-3">
+                                    <p className="text-xs text-foreground leading-relaxed">
+                                      Add <span className="font-bold">$SOLCLAIM</span> to your first or last name in Telegram settings, then come back and tap Done.
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
                           <div className="flex flex-col items-end gap-2 shrink-0 ml-auto">
@@ -2335,6 +2474,8 @@ t.me/solclaimxbot?start=${telegramId}`
         </Tabs>
         )}
       </div>
+
+      <TaskConfettiBurst active={taskConfettiToken !== 0} key={taskConfettiToken} />
 
       {/* Fixed Bottom Navigation - App Style (hidden on admin) */}
       {activeTab !== 'admin' && (
