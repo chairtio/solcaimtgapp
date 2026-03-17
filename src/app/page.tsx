@@ -1936,7 +1936,7 @@ t.me/solclaimxbot?start=${telegramId}`
                 <div className="text-right">
                   <p className="text-sm font-black text-foreground">
                     {tasksLoaded && tasksResult ? (
-                      <>{tasksResult.experiencePoints} <span className="text-muted-foreground font-semibold">/ {tasksResult.nextLevelAt} XP</span></>
+                      <>{tasksResult.experiencePoints} <span className="text-muted-foreground font-semibold">/ {tasksResult.maxTaskXP > 0 ? tasksResult.maxTaskXP : tasksResult.nextLevelAt} XP</span></>
                     ) : (
                       '—'
                     )}
@@ -1944,7 +1944,9 @@ t.me/solclaimxbot?start=${telegramId}`
                 </div>
               </div>
               <Progress
-                value={tasksLoaded && tasksResult ? Math.round(tasksResult.levelProgress * 100) : 0}
+                value={tasksLoaded && tasksResult && tasksResult.maxTaskXP > 0
+                  ? Math.min(100, Math.round((tasksResult.experiencePoints / tasksResult.maxTaskXP) * 100))
+                  : 0}
                 className="h-3 bg-secondary relative z-10"
               />
             </div>

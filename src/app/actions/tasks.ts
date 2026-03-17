@@ -36,6 +36,8 @@ export interface TasksForUserResult {
   levelName: string
   levelProgress: number
   nextLevelAt: number
+  /** Sum of all task points (actual max XP achievable) */
+  maxTaskXP: number
 }
 
 const LEVEL_THRESHOLDS = [0, 100, 250, 500, 1000]
@@ -150,6 +152,7 @@ export async function getTasksForUser(userId: string): Promise<TasksForUserResul
 
   const completedSet = new Set(completions.map((c) => c.task_definition_id))
   const { level, name, progress, nextAt } = getLevelFromXP(experiencePoints)
+  const maxTaskXP = definitions.reduce((sum, d) => sum + d.points, 0)
 
   const tasks: TaskWithStatus[] = await Promise.all(
     definitions
@@ -189,6 +192,7 @@ export async function getTasksForUser(userId: string): Promise<TasksForUserResul
     levelName: name,
     levelProgress: progress,
     nextLevelAt: nextAt,
+    maxTaskXP,
   }
 }
 
