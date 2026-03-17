@@ -70,6 +70,28 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
   // Ad campaigns
   const [adCampaigns, setAdCampaigns] = useState<{ id: string; name: string; source_code: string; notes?: string; created_at: string }[]>([])
   const [adCampaignsLoading, setAdCampaignsLoading] = useState(false)
+  const [selectedAdCampaignId, setSelectedAdCampaignId] = useState<string | null>(null)
+  const [adCampaignDetail, setAdCampaignDetail] = useState<{
+    started: number
+    added_wallet: number
+    claimed: number
+    conversion: { started_to_wallet: number; wallet_to_claim: number }
+    timeSeries: { date: string; started: number; added_wallet: number; claimed: number }[]
+    users: {
+      id: string
+      telegram_id: string
+      username?: string
+      first_name?: string
+      last_name?: string
+      created_at: string
+      has_wallet: boolean
+      has_claimed: boolean
+      total_sol_claimed: number
+      total_accounts_closed: number
+      wallets: { id: string; public_key: string; status: string; created_at: string }[]
+    }[]
+  } | null>(null)
+  const [adCampaignDetailLoading, setAdCampaignDetailLoading] = useState(false)
   const [adCampaignStats, setAdCampaignStats] = useState<Record<string, { started: number; added_wallet: number; claimed: number }>>({})
   const [adCampaignCreateName, setAdCampaignCreateName] = useState('')
   const [adCampaignCreateNotes, setAdCampaignCreateNotes] = useState('')
@@ -177,7 +199,7 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
   }, [adminTab])
 
   useEffect(() => {
-    if (adminTab === 'adcampaigns') {
+    if (adminTab === 'adcampaigns' && !selectedAdCampaignId) {
       setAdCampaignsLoading(true)
       setAdCampaignCreated(null)
       adminFetch('/api/admin/ad-campaigns')
@@ -185,10 +207,10 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
         .catch((e) => toast.error(e.message))
         .finally(() => setAdCampaignsLoading(false))
     }
-  }, [adminTab])
+  }, [adminTab, selectedAdCampaignId])
 
   useEffect(() => {
-    if (adminTab === 'adcampaigns' && adCampaigns.length > 0) {
+    if (adminTab === 'adcampaigns' && adCampaigns.length > 0 && !selectedAdCampaignId) {
       Promise.all(
         adCampaigns.map((c) =>
           adminFetch(`/api/admin/ad-campaigns/${c.id}/stats`).then((s) => ({ id: c.id, ...s }))
@@ -203,7 +225,22 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
     } else {
       setAdCampaignStats({})
     }
-  }, [adminTab, adCampaigns])
+  }, [adminTab, adCampaigns, selectedAdCampaignId])
+
+  useEffect(() => {
+    if (adminTab === 'adcampaigns' && selectedAdCampaignId) {
+      setAdCampaignDetailLoading(true)
+      adminFetch(`/api/admin/ad-campaigns/${selectedAdCampaignId}/detail`)
+        .then((r) => setAdCampaignDetail(r))
+        .catch((e) => {
+          toast.error(e.message)
+          setAdCampaignDetail(null)
+        })
+        .finally(() => setAdCampaignDetailLoading(false))
+    } else {
+      setAdCampaignDetail(null)
+    }
+  }, [adminTab, selectedAdCampaignId])
 
   useEffect(() => {
     if (adminTab === 'broadcast') {
@@ -725,7 +762,7 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
         </div>
         )}
 
-        {adminTab === 'adcampaigns' && !selectedUserId && (
+        {adminTab === 'adcampaigns' && !selectedUserId && !selectedAdCampaignId && (
           <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto w-full">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">Ad campaigns</h1>
@@ -855,7 +892,11 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
                       const botUrl = `https://t.me/${process.env.NEXT_PUBLIC_BOT_USERNAME || 'solclaimxbot'}?start=${encodeURIComponent(c.source_code)}`
                       const appUrl = `https://t.me/${process.env.NEXT_PUBLIC_BOT_USERNAME || 'solclaimxbot'}/app?startapp=${encodeURIComponent(c.source_code)}`
                       return (
-                        <AdminTableRow key={c.id}>
+                        <AdminTableRow
+                          key={c.id}
+                          className="cursor-pointer"
+                          onClick={() => setSelectedAdCampaignId(c.id)}
+                        >
                           <AdminTableCell className="font-medium">{c.name}</AdminTableCell>
                           <AdminTableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded">{c.source_code}</code></AdminTableCell>
                           <AdminTableCell className="text-muted-foreground text-sm">{new Date(c.created_at).toLocaleDateString()}</AdminTableCell>
@@ -874,6 +915,187 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
                   </AdminTableBody>
                 </AdminTable>
               </AdminCard>
+            )}
+          </div>
+        )}
+
+        {adminTab === 'adcampaigns' && !selectedUserId && selectedAdCampaignId && (
+          <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto w-full">
+            <div className="flex items-center justify-between gap-4 mb-2">
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setSelectedAdCampaignId(null)}
+                >
+                  <ArrowLeft className="w-4 h-4 mr-1" />
+                  Back to Ad campaigns
+                </Button>
+                <h1 className="text-2xl font-semibold tracking-tight text-foreground">Ad campaign detail</h1>
+              </div>
+            </div>
+
+            {adCampaignDetailLoading || !adCampaignDetail ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="rounded-2xl border-2 border-border bg-card p-5">
+                    <div className="h-3 w-20 rounded bg-muted animate-pulse mb-3" />
+                    <div className="h-7 w-16 rounded bg-muted animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <AdminStatCard label="Started" value={adCampaignDetail.started} />
+                  <AdminStatCard label="Added wallet" value={adCampaignDetail.added_wallet} />
+                  <AdminStatCard label="Claimed" value={adCampaignDetail.claimed} />
+                </div>
+
+                {adCampaignDetail.timeSeries.length > 0 && (
+                  <AdminCard>
+                    <AdminCardHeader className="border-b border-border pb-4">
+                      <AdminCardTitle>Funnel over time</AdminCardTitle>
+                    </AdminCardHeader>
+                    <AdminCardContent className="pt-4">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-border text-left">
+                              <th className="py-2 pr-4">Date</th>
+                              <th className="py-2 pr-4 text-right">Started</th>
+                              <th className="py-2 pr-4 text-right">Added wallet</th>
+                              <th className="py-2 pr-4 text-right">Claimed</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {adCampaignDetail.timeSeries.map((b) => (
+                              <tr key={b.date} className="border-b border-border/60">
+                                <td className="py-2 pr-4 text-sm text-foreground">{b.date}</td>
+                                <td className="py-2 pr-4 text-right tabular-nums">{b.started}</td>
+                                <td className="py-2 pr-4 text-right tabular-nums">{b.added_wallet}</td>
+                                <td className="py-2 pr-4 text-right tabular-nums">{b.claimed}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </AdminCardContent>
+                  </AdminCard>
+                )}
+
+                <AdminCard>
+                  <AdminCardHeader className="border-b border-border pb-4 flex items-center justify-between">
+                    <div className="flex flex-col gap-1">
+                      <AdminCardTitle>Attributed users</AdminCardTitle>
+                      <p className="text-xs text-muted-foreground">
+                        {adCampaignDetail.users.length} users attributed to this campaign
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          const initData = getInitData()
+                          const res = await fetch(
+                            `/api/admin/ad-campaigns/${selectedAdCampaignId}/wallets.csv`,
+                            {
+                              headers: { 'X-Telegram-Init-Data': initData },
+                            }
+                          )
+                          if (!res.ok) throw new Error('Export failed')
+                          const blob = await res.blob()
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url
+                          a.download = `ad-campaign-${selectedAdCampaignId}-wallets-${new Date()
+                            .toISOString()
+                            .slice(0, 10)}.csv`
+                          a.click()
+                          URL.revokeObjectURL(url)
+                          toast.success('CSV downloaded')
+                        } catch (e) {
+                          toast.error((e as Error).message)
+                        }
+                      }}
+                    >
+                      <Download className="w-4 h-4 mr-2" /> Download CSV
+                    </Button>
+                  </AdminCardHeader>
+                  <AdminCardContent className="pt-4">
+                    {adCampaignDetail.users.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No users yet.</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-border text-left">
+                              <th className="py-2 pr-4">User</th>
+                              <th className="py-2 pr-4">Created</th>
+                              <th className="py-2 pr-4 text-right">Has wallet</th>
+                              <th className="py-2 pr-4 text-right">Has claimed</th>
+                              <th className="py-2 pr-4 text-right">Total claimed (SOL)</th>
+                              <th className="py-2 pr-4 text-right">Accounts closed</th>
+                              <th className="py-2 pr-4">Wallets</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {adCampaignDetail.users.map((u) => (
+                              <tr key={u.id} className="border-b border-border/60 align-top">
+                                <td className="py-2 pr-4">
+                                  <div className="flex flex-col">
+                                    <span className="font-mono text-[11px] text-muted-foreground">{u.telegram_id}</span>
+                                    <span className="text-xs text-foreground">
+                                      @{u.username || '—'}{' '}
+                                      {(u.first_name || u.last_name) &&
+                                        `· ${(u.first_name || '')} ${u.last_name || ''}`.trim()}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-2 pr-4 text-xs text-muted-foreground">
+                                  {new Date(u.created_at).toLocaleString()}
+                                </td>
+                                <td className="py-2 pr-4 text-right">
+                                  {u.has_wallet ? 'Yes' : 'No'}
+                                </td>
+                                <td className="py-2 pr-4 text-right">
+                                  {u.has_claimed ? 'Yes' : 'No'}
+                                </td>
+                                <td className="py-2 pr-4 text-right tabular-nums">
+                                  {u.total_sol_claimed.toFixed(4)}
+                                </td>
+                                <td className="py-2 pr-4 text-right tabular-nums">
+                                  {u.total_accounts_closed}
+                                </td>
+                                <td className="py-2 pr-4">
+                                  {u.wallets.length === 0 ? (
+                                    <span className="text-muted-foreground">—</span>
+                                  ) : (
+                                    <div className="space-y-1">
+                                      {u.wallets.map((w) => (
+                                        <div key={w.id} className="flex items-center justify-between gap-2">
+                                          <span className="font-mono text-[11px]">
+                                            {w.public_key.slice(0, 4)}…{w.public_key.slice(-4)}
+                                          </span>
+                                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                            {w.status}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </AdminCardContent>
+                </AdminCard>
+              </>
             )}
           </div>
         )}
