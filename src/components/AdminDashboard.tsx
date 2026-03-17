@@ -30,7 +30,7 @@ async function adminFetch(path: string, opts: RequestInit = {}) {
   return res.json()
 }
 
-export function AdminDashboard({ onBack }: { onBack: () => void }) {
+export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; rightSlot?: React.ReactNode }) {
   const [adminTab, setAdminTab] = useState('overview')
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
 
@@ -186,64 +186,68 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
     const allFollowUps = [...followUpsSent.map((f: any) => ({ ...f, status: 'sent' as const })), ...followUpsScheduled.map((f: any) => ({ ...f, status: 'scheduled' as const }))]
 
     return (
-      <div data-admin className="flex min-h-screen w-full bg-zinc-50 dark:bg-[#0b0c10]">
-        <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 lg:border-r lg:border-zinc-200 dark:lg:border-zinc-800 bg-white dark:bg-zinc-900 lg:fixed lg:inset-y-0 lg:left-0 z-20">
-          <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Admin</p>
+      <div data-admin className="flex min-h-screen w-full bg-neutral-50 dark:bg-neutral-950">
+        <aside className="hidden lg:flex lg:flex-col lg:w-56 lg:shrink-0 lg:border-r lg:border-neutral-200 dark:lg:border-neutral-800 bg-white dark:bg-neutral-950 lg:fixed lg:inset-y-0 lg:left-0 z-20">
+          <div className="p-5 border-b border-neutral-200 dark:border-neutral-800">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Admin</p>
           </div>
-          <div className="p-4 py-6">
-            <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(null)} className="w-full justify-start gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors duration-150">
+          <div className="p-3">
+            <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(null)} className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground">
               <ArrowLeft className="w-4 h-4" /> Back to Users
             </Button>
           </div>
         </aside>
 
-        <main className="flex-1 lg:pl-64 min-w-0 flex flex-col min-h-screen bg-zinc-50 dark:bg-[#0b0c10] w-full max-w-full">
-        <div className="lg:hidden bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-20 p-4 w-full overflow-hidden max-w-full flex items-center justify-between">
-          <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(null)} className="gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors duration-150 h-8 px-2">
-            <ArrowLeft className="w-4 h-4" /> Back
-          </Button>
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">User Detail</p>
-        </div>
-
-          <div className="flex-1 p-4 sm:p-6 lg:p-8 w-full max-w-full overflow-x-hidden">
-            <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto w-full">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">User Detail</h3>
+        <main className="flex-1 lg:pl-56 min-w-0 flex flex-col min-h-screen bg-neutral-50 dark:bg-neutral-950 w-full">
+          {/* Unified top bar - same width as content */}
+          <header className="shrink-0 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950">
+            <div className="flex items-center justify-between h-14 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+              <div className="flex items-center gap-3 min-w-0">
+                <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(null)} className="gap-2 text-muted-foreground hover:text-foreground -ml-2 lg:hidden">
+                  <ArrowLeft className="w-4 h-4" /> Back
+                </Button>
+                <span className="text-sm font-medium text-foreground">User detail</span>
               </div>
-              <div className="grid gap-8 lg:grid-cols-2">
-              <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-                <AdminCardHeader className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20 px-6 py-4">
-                  <AdminCardTitle>User Profile</AdminCardTitle>
+              <div className="flex items-center gap-2 shrink-0">{rightSlot}</div>
+            </div>
+          </header>
+
+          <div className="flex-1 p-4 sm:p-6 lg:p-8 w-full overflow-x-hidden">
+            <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto w-full">
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground">User detail</h1>
+              <div className="grid gap-6 lg:grid-cols-2">
+              <AdminCard>
+                <AdminCardHeader className="border-b border-neutral-200 dark:border-neutral-800 pb-4">
+                  <AdminCardTitle>Profile</AdminCardTitle>
                 </AdminCardHeader>
-                <AdminCardContent className="space-y-6 p-6">
-                  <div className="grid grid-cols-2 gap-4">
+                <AdminCardContent className="space-y-5 pt-4">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                     <div>
-                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Telegram ID</p>
-                      <p className="font-mono text-sm">{userDetail.user?.telegram_id}</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-0.5">Telegram ID</p>
+                      <p className="font-mono text-sm text-foreground">{userDetail.user?.telegram_id}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Username</p>
-                      <p className="text-sm">@{userDetail.user?.username || '—'}</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-0.5">Username</p>
+                      <p className="text-sm text-foreground">@{userDetail.user?.username || '—'}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Name</p>
-                      <p className="text-sm">{[userDetail.user?.first_name, userDetail.user?.last_name].filter(Boolean).join(' ') || '—'}</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-0.5">Name</p>
+                      <p className="text-sm text-foreground">{[userDetail.user?.first_name, userDetail.user?.last_name].filter(Boolean).join(' ') || '—'}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Created</p>
-                      <p className="text-sm">{userDetail.user?.created_at ? new Date(userDetail.user.created_at).toLocaleString() : '—'}</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-0.5">Created</p>
+                      <p className="text-sm text-foreground">{userDetail.user?.created_at ? new Date(userDetail.user.created_at).toLocaleString() : '—'}</p>
                     </div>
                   </div>
                   {userDetail.user?.bot_blocked_at && (
                     <Badge variant="destructive">Bot blocked</Badge>
                   )}
-                  <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
-                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">Stats</p>
-                    <p className="text-sm">Claimed: <span className="font-semibold">{Number(userDetail.stats?.total_sol_claimed || 0).toFixed(4)} SOL</span> | Accounts: <span className="font-semibold">{userDetail.stats?.total_accounts_closed || 0}</span></p>
+                  <div className="pt-4 border-t border-neutral-200 dark:border-neutral-800">
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Stats</p>
+                    <p className="text-sm text-foreground">Claimed: <span className="font-semibold">{Number(userDetail.stats?.total_sol_claimed || 0).toFixed(4)} SOL</span> · Accounts: <span className="font-semibold">{userDetail.stats?.total_accounts_closed || 0}</span></p>
                   </div>
-                  <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
-                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">Wallets</p>
+                  <div className="pt-4 border-t border-neutral-200 dark:border-neutral-800">
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Wallets</p>
                     <ul className="text-sm font-mono space-y-2">
                       {(userDetail.wallets || []).map((w: any) => (
                         <li key={w.id} className="flex items-center justify-between">
@@ -251,16 +255,16 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                           <Badge variant="outline" className="text-[10px]">{w.status}</Badge>
                         </li>
                       ))}
-                      {(!userDetail.wallets || userDetail.wallets.length === 0) && <li className="text-zinc-500 dark:text-zinc-400 font-sans">No wallets linked</li>}
+                      {(!userDetail.wallets || userDetail.wallets.length === 0) && <li className="text-muted-foreground font-sans">No wallets linked</li>}
                     </ul>
                   </div>
                 </AdminCardContent>
               </AdminCard>
-              <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm mt-0 overflow-hidden">
-                <AdminCardHeader className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20 px-6 py-4">
+              <AdminCard>
+                <AdminCardHeader className="border-b border-neutral-200 dark:border-neutral-800 pb-4">
                   <AdminCardTitle>Follow-ups</AdminCardTitle>
                 </AdminCardHeader>
-                <AdminCardContent className="space-y-6 p-6">
+                <AdminCardContent className="space-y-5 pt-4">
                   {allFollowUps.length > 0 ? (
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
@@ -283,7 +287,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                               </td>
                               <td className="py-2">{f.name || '—'}</td>
                               <td className="py-2">{f.delay_minutes} min</td>
-                              <td className="py-2 text-zinc-500 dark:text-zinc-400">
+                              <td className="py-2 text-muted-foreground">
                                 {f.status === 'sent' && f.sent_at ? new Date(f.sent_at).toLocaleString() : f.scheduled_at ? new Date(f.scheduled_at).toLocaleString() : '—'}
                               </td>
                               <td className="py-2">
@@ -316,9 +320,9 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                       </table>
                     </div>
                   ) : (
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400">No follow-ups sent or scheduled for this user.</p>
+                    <p className="text-sm text-muted-foreground">No follow-ups sent or scheduled for this user.</p>
                   )}
-                  <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                  <div className="pt-4 border-t border-neutral-200 dark:border-neutral-800">
                     <Button
                       variant="outline"
                       size="sm"
@@ -360,68 +364,68 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
   ]
 
   return (
-    <div data-admin className="flex min-h-screen w-full bg-zinc-50 dark:bg-[#0b0c10]">
-      {/* Sidebar - desktop: Stripe-style left accent for active */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 lg:border-r lg:border-zinc-200 dark:lg:border-zinc-800 bg-white dark:bg-zinc-900 lg:fixed lg:inset-y-0 lg:left-0 z-20">
-        <div className="p-6">
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Admin</p>
+    <div data-admin className="flex min-h-screen w-full bg-neutral-50 dark:bg-neutral-950">
+      <aside className="hidden lg:flex lg:flex-col lg:w-56 lg:shrink-0 lg:border-r lg:border-neutral-200 dark:lg:border-neutral-800 bg-white dark:bg-neutral-950 lg:fixed lg:inset-y-0 lg:left-0 z-20">
+        <div className="p-5 border-b border-neutral-200 dark:border-neutral-800">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Admin</p>
         </div>
-        <div className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+        <div className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
           {navTabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => { setAdminTab(id); setSelectedUserId(null); }}
-              className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-left w-full transition-all duration-200 rounded-lg ${
+              className={`flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-left w-full rounded-lg transition-colors ${
                 adminTab === id && !selectedUserId
-                  ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50'
-                  : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-50'
+                  ? 'bg-neutral-100 dark:bg-neutral-800 text-foreground'
+                  : 'text-muted-foreground hover:bg-neutral-100 dark:hover:bg-neutral-800/50 hover:text-foreground'
               }`}
             >
               <Icon className="w-4 h-4 shrink-0" /> {label}
             </button>
           ))}
         </div>
-        <div className="p-4 border-t border-zinc-200 dark:border-zinc-800">
-          <Button variant="ghost" size="sm" onClick={onBack} className="w-full justify-start gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors duration-150">
+        <div className="p-3 border-t border-neutral-200 dark:border-neutral-800">
+          <Button variant="ghost" size="sm" onClick={onBack} className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4" /> Exit Admin
           </Button>
         </div>
       </aside>
 
-        <main className="flex-1 lg:pl-64 min-w-0 flex flex-col min-h-screen bg-zinc-50 dark:bg-[#0b0c10] w-full max-w-full">
-        <div className="lg:hidden bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-20 w-full overflow-hidden max-w-full">
-          <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800">
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Admin</p>
-            <Button variant="ghost" size="sm" onClick={onBack} className="gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors duration-150 h-8 px-2">
-              <ArrowLeft className="w-4 h-4" /> Exit
-            </Button>
+      <main className="flex-1 lg:pl-56 min-w-0 flex flex-col min-h-screen bg-neutral-50 dark:bg-neutral-950 w-full">
+        {/* Unified top bar - aligned with content */}
+        <header className="shrink-0 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950">
+          <div className="flex items-center justify-between h-14 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+            <h1 className="text-sm font-semibold text-foreground">Admin</h1>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="ghost" size="sm" onClick={onBack} className="gap-2 text-muted-foreground hover:text-foreground">
+                Back
+              </Button>
+              {rightSlot}
+            </div>
           </div>
-          <div className="flex gap-2 overflow-x-auto p-4 custom-scrollbar w-full max-w-full">
-            {[
-              { id: 'overview', label: 'Overview', icon: BarChart3 },
-              { id: 'users', label: 'Users', icon: Users },
-              { id: 'campaigns', label: 'Campaigns', icon: Megaphone },
-              { id: 'followups', label: 'Follow-ups', icon: Mail },
-              { id: 'broadcast', label: 'Broadcast', icon: Send },
-            ].map(({ id, label, icon: Icon }) => (
+        </header>
+        {/* Mobile nav */}
+        <div className="lg:hidden shrink-0 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950">
+          <div className="flex gap-1.5 overflow-x-auto p-3 custom-scrollbar">
+            {navTabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => { setAdminTab(id); setSelectedUserId(null); }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                  adminTab === id && !selectedUserId ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                  adminTab === id && !selectedUserId ? 'bg-foreground text-background' : 'bg-neutral-100 dark:bg-neutral-800 text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <Icon className="w-4 h-4" /> {label}
+                <Icon className="w-3.5 h-3.5" /> {label}
               </button>
             ))}
           </div>
         </div>
 
-          <div className="flex-1 p-4 sm:p-6 lg:p-8 w-full max-w-full overflow-x-hidden">
+        <div className="flex-1 p-4 sm:p-6 lg:p-8 w-full overflow-x-hidden">
           {adminTab === 'overview' && !selectedUserId && (
             <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto w-full">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Overview</h3>
+                <h1 className="text-2xl font-semibold tracking-tight text-foreground">Overview</h1>
                 <FilterPills
                   value={dateRange}
                   onChange={(v) => setDateRange(v as 'today' | '7d' | '30d')}
@@ -436,25 +440,25 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             <div className="space-y-8">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-5">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
-                    <div className="h-4 w-20 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse mb-4" />
-                    <div className="h-8 w-16 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                  <div key={i} className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-5">
+                    <div className="h-3 w-20 rounded bg-neutral-200 dark:bg-neutral-700 animate-pulse mb-3" />
+                    <div className="h-7 w-16 rounded bg-neutral-200 dark:bg-neutral-700 animate-pulse" />
                   </div>
                 ))}
               </div>
               <div className="space-y-4">
-                <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">All time</p>
+                <p className="text-sm font-medium text-muted-foreground">All time</p>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
                   {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
-                      <div className="h-4 w-24 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse mb-4" />
-                      <div className="h-8 w-20 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                    <div key={i} className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-5">
+                      <div className="h-3 w-24 rounded bg-neutral-200 dark:bg-neutral-700 animate-pulse mb-3" />
+                      <div className="h-7 w-20 rounded bg-neutral-200 dark:bg-neutral-700 animate-pulse" />
                     </div>
                   ))}
                 </div>
               </div>
-              <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-                <AdminCardHeader className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20 px-6 py-4">
+              <AdminCard>
+                <AdminCardHeader className="border-b border-neutral-200 dark:border-neutral-800 pb-4">
                   <AdminCardTitle>Recent Signups</AdminCardTitle>
                 </AdminCardHeader>
                 <AdminCardContent className="p-0">
@@ -475,16 +479,16 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                 </div>
               )}
               <div className="space-y-4">
-                <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">All time</p>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-                  <AdminStatCard label="Total Users" value={stats.totalUsers} />
+<p className="text-sm font-medium text-muted-foreground">All time</p>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+                <AdminStatCard label="Total Users" value={stats.totalUsers} />
                   <AdminStatCard label="Wallets" value={stats.totalWallets} />
                   <AdminStatCard label="Claimed" value={stats.usersWhoClaimed} />
                   <AdminStatCard label="Bot Blocked" value={stats.botBlockedCount} />
                 </div>
               </div>
-              <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-                <AdminCardHeader className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20 px-6 py-4">
+              <AdminCard>
+                <AdminCardHeader className="border-b border-neutral-200 dark:border-neutral-800 pb-4">
                   <AdminCardTitle>Recent Signups</AdminCardTitle>
                 </AdminCardHeader>
                 <AdminCardContent className="p-0">
@@ -507,7 +511,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                         >
                           <AdminTableCell className="font-mono">{u.telegram_id}</AdminTableCell>
                           <AdminTableCell>@{u.username || '—'}</AdminTableCell>
-                          <AdminTableCell className="text-zinc-500 dark:text-zinc-400">{new Date(u.created_at).toLocaleDateString()}</AdminTableCell>
+                          <AdminTableCell className="text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</AdminTableCell>
                           <AdminTableCell>{u.has_claimed ? 'Yes' : '—'}</AdminTableCell>
                           <AdminTableCell>{u.bot_blocked_at ? 'Yes' : '—'}</AdminTableCell>
                         </AdminTableRow>
@@ -524,7 +528,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
           {adminTab === 'users' && !selectedUserId && (
             <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto w-full">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Users</h3>
+                <h1 className="text-2xl font-semibold tracking-tight text-foreground">Users</h1>
                 <div className="flex flex-wrap items-center gap-3">
               <Input
                 placeholder="Search telegram_id or username"
@@ -577,13 +581,13 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             </div>
           </div>
           {usersLoading ? (
-            <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+            <AdminCard>
               <AdminCardContent className="p-0">
                 <AdminTableSkeleton rows={5} cols={4} />
               </AdminCardContent>
             </AdminCard>
           ) : users.length === 0 ? (
-            <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+            <AdminCard>
               <AdminEmptyState
                 icon={Users}
                 title="No users match your filters"
@@ -591,7 +595,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
               />
             </AdminCard>
           ) : (
-            <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+            <AdminCard>
               <AdminCardContent className="p-0">
                 <AdminTable>
                   <AdminTableHeader>
@@ -611,7 +615,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                       >
                         <AdminTableCell className="font-mono">{u.telegram_id}</AdminTableCell>
                         <AdminTableCell>@{u.username || '—'}</AdminTableCell>
-                        <AdminTableCell className="text-zinc-500 dark:text-zinc-400">{new Date(u.created_at).toLocaleDateString()}</AdminTableCell>
+                        <AdminTableCell className="text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</AdminTableCell>
                         <AdminTableCell>{u.bot_blocked_at ? 'Yes' : '—'}</AdminTableCell>
                       </AdminTableRow>
                     ))}
@@ -626,19 +630,19 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
         {adminTab === 'campaigns' && !selectedUserId && (
           <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto w-full">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-              <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Campaigns</h3>
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground">Campaigns</h1>
             </div>
           {campaignsLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 h-24 shadow-sm">
-                  <div className="h-5 w-40 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse mb-3" />
-                  <div className="h-4 w-24 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                <div key={i} className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-5 h-20">
+                  <div className="h-4 w-40 rounded bg-neutral-200 dark:bg-neutral-700 animate-pulse mb-2" />
+                  <div className="h-3 w-24 rounded bg-neutral-200 dark:bg-neutral-700 animate-pulse" />
                 </div>
               ))}
             </div>
           ) : campaigns.length === 0 ? (
-            <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+            <AdminCard>
               <AdminEmptyState
                 icon={Megaphone}
                 title="No campaigns yet"
@@ -648,11 +652,11 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
           ) : (
             <div className="space-y-4">
               {campaigns.map((c) => (
-                <AdminCard key={c.id} className="p-6 border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                <AdminCard key={c.id} className="p-5">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="font-semibold text-base text-zinc-900 dark:text-zinc-50">{c.name}</span>
+                      <div className="flex items-center gap-3 mb-1">
+                        <span className="font-semibold text-base text-foreground">{c.name}</span>
                         <Badge
                           variant={c.status === 'sent' ? 'default' : c.status === 'scheduled' ? 'secondary' : c.status === 'cancelled' ? 'destructive' : 'outline'}
                           className="text-[10px] uppercase tracking-wider"
@@ -660,18 +664,18 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                           {c.status}
                         </Badge>
                       </div>
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                      <p className="text-sm text-muted-foreground">
                         {c.sent_at ? `Sent ${new Date(c.sent_at).toLocaleString()}` : c.scheduled_at ? `Scheduled ${new Date(c.scheduled_at).toLocaleString()}` : '—'}
                       </p>
                     </div>
                     <div className="flex items-center gap-6">
                       <div className="text-right">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1">Sent</p>
-                        <p className="text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{c.sent_count || 0}</p>
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-0.5">Sent</p>
+                        <p className="text-lg font-semibold tabular-nums text-foreground">{c.sent_count || 0}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1">Blocked</p>
-                        <p className="text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{c.blocked_count || 0}</p>
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-0.5">Blocked</p>
+                        <p className="text-lg font-semibold tabular-nums text-foreground">{c.blocked_count || 0}</p>
                       </div>
                     </div>
                   </div>
@@ -685,16 +689,16 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
         {adminTab === 'followups' && !selectedUserId && (
           <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto w-full">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-              <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Follow-ups</h3>
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground">Follow-ups</h1>
             </div>
           {followUpsLoading ? (
             <div className="space-y-6">
               {[1, 2].map((i) => (
-                <div key={i} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
-                  <div className="h-5 w-40 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse mb-6" />
-                  <div className="space-y-4">
+                <div key={i} className="rounded-xl border border-neutral-200 dark:border-neutral-800 p-5">
+                  <div className="h-4 w-40 rounded bg-neutral-200 dark:bg-neutral-700 animate-pulse mb-4" />
+                  <div className="space-y-3">
                     {[1, 2, 3].map((j) => (
-                      <div key={j} className="h-16 rounded-lg bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                      <div key={j} className="h-14 rounded-lg bg-neutral-200 dark:bg-neutral-700 animate-pulse" />
                     ))}
                   </div>
                 </div>
@@ -707,10 +711,10 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                 const isOpen = followUpExpandedGroups[segment] !== false
                 const label = segment === 'not_claimed' ? 'Not claimed' : 'Claimed'
                 return (
-                  <AdminCard key={segment} className="p-0 border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                  <AdminCard key={segment} className="p-0 overflow-hidden">
                     <button
                       type="button"
-                      className="w-full flex items-center justify-between p-6 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                      className="w-full flex items-center justify-between p-5 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors"
                       onClick={() => setFollowUpExpandedGroups((g) => ({ ...g, [segment]: !isOpen }))}
                     >
                       <span className="text-base font-semibold flex items-center gap-3">
@@ -726,7 +730,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                       </Button>
                     </button>
                     {isOpen && (
-                      <div className="px-6 pb-6 space-y-4 border-t border-zinc-200 dark:border-zinc-800 pt-6">
+                      <div className="px-5 pb-5 space-y-4 border-t border-neutral-200 dark:border-neutral-800 pt-5">
                         {followUpAddingSegment === segment && (
                           <FollowUpForm
                             segment={segment}
@@ -834,17 +838,17 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                               }}
                             />
                           ) : (
-                            <div key={f.id} className="group flex flex-col sm:flex-row sm:items-start justify-between gap-4 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
+                            <div key={f.id} className="group flex flex-col sm:flex-row sm:items-start justify-between gap-4 p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800/30 transition-colors hover:border-neutral-300 dark:hover:border-neutral-700">
                               <div className="flex-1 min-w-0">
-                                <div className="flex flex-wrap items-center gap-2.5 mb-2">
-                                  <span className="font-semibold text-sm text-zinc-900 dark:text-zinc-50">{f.name || `${f.delay_minutes} min delay`}</span>
+                                <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                                  <span className="font-semibold text-sm text-foreground">{f.name || `${f.delay_minutes} min delay`}</span>
                                   <Badge variant={f.enabled ? 'default' : 'secondary'} className="text-[10px] uppercase tracking-wider">{f.enabled ? 'Active' : 'Paused'}</Badge>
-                                  <Badge variant="outline" className="text-[10px] font-mono bg-zinc-50 dark:bg-zinc-800/50">
+                                  <Badge variant="outline" className="text-[10px] font-mono">
                                     {f.delay_minutes < 60 ? `${f.delay_minutes}m` : f.delay_minutes < 1440 ? `${Math.round(f.delay_minutes / 60)}h` : `${Math.round(f.delay_minutes / 1440)}d`} delay
                                   </Badge>
-                                  {f.media_type && <Badge variant="outline" className="text-[10px] uppercase tracking-wider bg-zinc-50 dark:bg-zinc-800/50">{f.media_type}</Badge>}
+                                  {f.media_type && <Badge variant="outline" className="text-[10px] uppercase tracking-wider">{f.media_type}</Badge>}
                                 </div>
-                                <p className="text-sm text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">{f.message}</p>
+                                <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">{f.message}</p>
                               </div>
                               <div className="flex items-center gap-2 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                 <Button variant="outline" size="sm" className="h-8 px-3" disabled={previewSending} onClick={async () => {
@@ -875,7 +879,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                           )
                         )}
                         {items.length === 0 && !followUpAddingSegment && (
-                          <p className="text-sm text-zinc-500 dark:text-zinc-400 py-4 text-center">No follow-ups in this group.</p>
+                          <p className="text-sm text-muted-foreground py-4 text-center">No follow-ups in this group.</p>
                         )}
                       </div>
                     )}
@@ -890,18 +894,18 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
         {adminTab === 'broadcast' && !selectedUserId && (
           <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto w-full">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-              <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Broadcast</h3>
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground">Broadcast</h1>
             </div>
-          <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-            <AdminCardHeader className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20 px-6 py-4">
-              <AdminCardTitle>Send Broadcast</AdminCardTitle>
+          <AdminCard>
+            <AdminCardHeader className="border-b border-neutral-200 dark:border-neutral-800 pb-4">
+              <AdminCardTitle>Send broadcast</AdminCardTitle>
             </AdminCardHeader>
-            <AdminCardContent className="space-y-6 p-6">
+            <AdminCardContent className="space-y-6 pt-4">
                 <div className="space-y-4">
-                  <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Audience</p>
+                  <p className="text-sm font-medium text-muted-foreground">Audience</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Claimed Status</p>
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Claimed</p>
                       <FilterPills
                         value={broadcastAudienceFilters.claimed}
                         onChange={(v) => {
@@ -915,8 +919,8 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                         ]}
                       />
                     </div>
-                    <div className="space-y-3">
-                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Referrals Status</p>
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Referrals</p>
                       <FilterPills
                         value={broadcastAudienceFilters.has_referrals}
                         onChange={(v) => {
@@ -963,16 +967,16 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   </div>
                 </div>
               <div className="space-y-3">
-                <Label className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Message</Label>
+                <Label className="text-sm font-medium text-foreground">Message</Label>
                 <textarea
-                  className="w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3 text-sm min-h-[140px] focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 focus:border-transparent transition-all"
+                  className="w-full rounded-lg border border-neutral-200 dark:border-neutral-700 bg-background px-3 py-2.5 text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
                   value={broadcastMessage}
                   onChange={(e) => setBroadcastMessage(e.target.value)}
                   placeholder="Enter message to send to all users (excluding blocked)"
                 />
               </div>
               <div className="space-y-3">
-                <Label className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Media</Label>
+                <Label className="text-sm font-medium text-foreground">Media</Label>
                 <div className="flex gap-2">
                   {(['none', 'image', 'gif'] as const).map((t) => (
                     <Button
@@ -996,7 +1000,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                 )}
               </div>
               <div className="space-y-3">
-                <Label className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Buttons (optional)</Label>
+                <Label className="text-sm font-medium text-foreground">Buttons (optional)</Label>
                 <div className="space-y-2">
                   {broadcastButtons.map((b, i) => (
                     <div key={i} className="flex gap-2">
@@ -1012,7 +1016,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                   <Button variant="outline" size="sm" onClick={() => setBroadcastButtons([...broadcastButtons, { text: '', url: '' }])}>Add button</Button>
                 </div>
               </div>
-              <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row gap-4">
+              <div className="pt-5 border-t border-neutral-200 dark:border-neutral-800 flex flex-col sm:flex-row gap-4">
                 <Button
                   variant="outline"
                   disabled={!broadcastMessage.trim() || previewSending}
@@ -1073,8 +1077,8 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                     {broadcastSending ? 'Sending...' : 'Send Broadcast'}
                   </Button>
                   {lastBroadcast && (
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      Last: sent {lastBroadcast.sentCount ?? lastBroadcast.sent_count} / blocked {lastBroadcast.blockedCount ?? lastBroadcast.blocked_count} / errors {lastBroadcast.errorCount ?? lastBroadcast.error_count}
+                    <p className="text-xs text-muted-foreground">
+                      Last: sent {lastBroadcast.sentCount ?? lastBroadcast.sent_count} · blocked {lastBroadcast.blockedCount ?? lastBroadcast.blocked_count} · errors {lastBroadcast.errorCount ?? lastBroadcast.error_count}
                     </p>
                   )}
                 </div>
@@ -1082,17 +1086,17 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             </AdminCardContent>
           </AdminCard>
 
-          <AdminCard className="border border-zinc-200 dark:border-zinc-800 shadow-sm mt-8 overflow-hidden">
-            <AdminCardHeader className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20 px-6 py-4">
+          <AdminCard className="mt-8">
+            <AdminCardHeader className="border-b border-neutral-200 dark:border-neutral-800 pb-4">
               <AdminCardTitle className="flex items-center gap-2">
-                <History className="w-4 h-4" /> Broadcast History
+                <History className="w-4 h-4" /> Broadcast history
               </AdminCardTitle>
             </AdminCardHeader>
             <AdminCardContent className="p-0">
             {broadcastHistoryLoading ? (
               <AdminTableSkeleton rows={5} cols={6} />
             ) : broadcastHistory.length === 0 ? (
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 py-8 text-center">No broadcasts yet.</p>
+              <p className="text-sm text-muted-foreground py-8 text-center">No broadcasts yet.</p>
             ) : (
               <AdminTable>
                 <AdminTableHeader>
@@ -1108,7 +1112,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
                 <AdminTableBody>
                   {broadcastHistory.slice(0, 20).map((b: any) => (
                     <AdminTableRow key={b.id}>
-                      <AdminTableCell className="text-zinc-500 dark:text-zinc-400">
+                      <AdminTableCell className="text-muted-foreground">
                         {b.finished_at ? new Date(b.finished_at).toLocaleString() : new Date(b.created_at).toLocaleString()}
                       </AdminTableCell>
                       <AdminTableCell className="max-w-[140px] truncate">{b.message?.slice(0, 60) || '—'}…</AdminTableCell>

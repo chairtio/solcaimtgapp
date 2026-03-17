@@ -11,12 +11,12 @@ const AdminPageHeader = React.forwardRef<HTMLDivElement, AdminPageHeaderProps>(
     <div
       ref={ref}
       className={cn(
-        'flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-zinc-200 dark:border-zinc-800',
+        'flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-neutral-200 dark:border-neutral-800',
         className
       )}
       {...props}
     >
-      <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{title}</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
       {actions && <div className="flex items-center gap-3">{actions}</div>}
     </div>
   )

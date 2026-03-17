@@ -14,15 +14,15 @@ const AdminEmptyState = React.forwardRef<HTMLDivElement, AdminEmptyStateProps>(
     <div
       ref={ref}
       className={cn(
-        'flex flex-col items-center justify-center rounded-2xl bg-white dark:bg-zinc-900 py-20 text-center shadow-sm',
+        'flex flex-col items-center justify-center rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 py-16 text-center',
         className
       )}
       {...props}
     >
-      <Icon className="mb-5 h-12 w-12 text-zinc-300 dark:text-zinc-700" strokeWidth={1.5} />
-      <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</p>
+      <Icon className="mb-4 h-10 w-10 text-neutral-300 dark:text-neutral-600" strokeWidth={1.5} />
+      <p className="text-base font-semibold text-foreground">{title}</p>
       {description && (
-        <p className="mt-2 max-w-sm text-sm text-zinc-500 dark:text-zinc-400">{description}</p>
+        <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">{description}</p>
       )}
       {action && <div className="mt-8">{action}</div>}
     </div>

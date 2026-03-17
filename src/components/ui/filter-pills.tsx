@@ -28,16 +28,16 @@ export function FilterPills<T extends string>({
       {label && (
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
       )}
-      <div className="inline-flex items-center gap-1 rounded-lg bg-zinc-100 dark:bg-zinc-800/50 p-1">
+      <div className="inline-flex items-center gap-0.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 p-0.5">
         {options.map((opt) => (
           <button
             key={opt.value}
             type="button"
             className={cn(
-              'rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-200 ease-in-out',
+              'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
               value === opt.value
-                ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm ring-1 ring-black/5 dark:ring-white/10'
-                : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/50 dark:hover:bg-zinc-800'
+                ? 'bg-white dark:bg-neutral-700 text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             )}
             onClick={() => onChange(opt.value)}
           >

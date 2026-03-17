@@ -1620,27 +1620,11 @@ t.me/solclaimxbot?start=${telegramId}`
             </div>
           </div>
         </>
-      ) : (
-        /* Admin Dashboard Header - minimal, dedicated */
-        <div className="sticky top-0 z-40 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-3">
-          <div className="flex items-center justify-between max-w-7xl mx-auto">
-            <div className="flex items-center gap-3 min-w-0">
-              <Shield className="w-5 h-5 text-primary shrink-0" />
-              <h1 className="text-base font-medium text-foreground">SolClaim Admin</h1>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button variant="ghost" size="sm" onClick={() => setActiveTab('home')} className="gap-2">
-                Back
-              </Button>
-              <ThemeToggle />
-            </div>
-          </div>
-        </div>
-      )}
+      ) : null}
 
-      <div className={`px-4 py-6 space-y-6 mx-auto ${activeTab === 'admin' ? 'max-w-7xl' : 'max-w-md'}`}>
+      <div className={activeTab === 'admin' ? 'w-full min-h-screen' : 'px-4 py-6 space-y-6 mx-auto max-w-md'}>
         {activeTab === 'admin' ? (
-          <AdminDashboard onBack={() => setActiveTab('home')} />
+          <AdminDashboard onBack={() => setActiveTab('home')} rightSlot={<ThemeToggle />} />
         ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           {/* Home Tab */}

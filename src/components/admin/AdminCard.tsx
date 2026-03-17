@@ -10,7 +10,7 @@ const AdminCard = React.forwardRef<HTMLDivElement, AdminCardProps>(
     <div
       ref={ref}
       className={cn(
-        'rounded-2xl bg-white dark:bg-zinc-900 text-card-foreground shadow-sm',
+        'rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-foreground',
         className
       )}
       {...props}
