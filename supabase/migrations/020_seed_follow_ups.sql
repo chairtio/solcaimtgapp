@@ -1,11 +1,11 @@
 -- Migration 020: Seed default drip campaign messages for not_claimed and claimed segments
 -- Links: Tutorial t.me/SolClaimPortal/149, Info t.me/SolClaimPortal/162, News t.me/solclaim
--- Mini App app.solclaim.io, Claims channel t.me/solclaim, Bot t.me/solclaimiobot
+-- Mini App t.me/solclaimxbot/app, Claims channel t.me/solclaim, Bot t.me/solclaimiobot
 
 INSERT INTO follow_up_messages (segment, delay_minutes, message, buttons, name, sort) VALUES
 -- Not-claimed: 30 min
 ('not_claimed', 30,
- 'Still here? Claim your rent in 3 taps. Watch the <a href="https://t.me/SolClaimPortal/149">tutorial</a> or open the <a href="https://app.solclaim.io">Mini App</a>.',
+ 'Still here? Claim your rent in 3 taps. Watch the <a href="https://t.me/SolClaimPortal/149">tutorial</a> or open the <a href="https://t.me/solclaimxbot/app">Mini App</a>.',
  NULL,
  '30min tutorial nudge',
  1),
@@ -17,7 +17,7 @@ INSERT INTO follow_up_messages (segment, delay_minutes, message, buttons, name, 
  2),
 -- Not-claimed: 24h
 ('not_claimed', 1440,
- 'Last nudge – your wallet could have free SOL. <a href="https://t.me/SolClaimPortal/162">Learn why</a> or claim now in our <a href="https://app.solclaim.io">Mini App</a>.',
+ 'Last nudge – your wallet could have free SOL. <a href="https://t.me/SolClaimPortal/162">Learn why</a> or claim now in our <a href="https://t.me/solclaimxbot/app">Mini App</a>.',
  NULL,
  '24h last nudge',
  3),
