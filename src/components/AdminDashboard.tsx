@@ -357,7 +357,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
             <p className="text-sm text-muted-foreground">Loading...</p>
           ) : stats ? (
             <>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <Card>
                   <CardContent className="pt-4">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">Total Users</p>
