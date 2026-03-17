@@ -5,7 +5,8 @@ export const helpCommand = async (ctx) => {
 
     const responseText = `
 /menu - view the SolClaim menu
-/settings - setting your withdraw wallet
+/settings - set your withdrawal wallet
+/referrals - view your referral link and earnings
 /wallets - view your wallets
 /tutorial - watch a tutorial
 /info - learn how the technology works

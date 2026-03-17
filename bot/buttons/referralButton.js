@@ -13,8 +13,9 @@ const getConversionRateEmoji = (rate) => {
 export const referralButton = async (ctx) => {
     const userId = ctx.from.id;
     const referralLink = `https://t\\.me/solclaimxbot?start\\=${userId}`;
+    const isCallback = !!ctx.callbackQuery;
     try {
-        await ctx.answerCbQuery?.();
+        if (isCallback) await ctx.answerCbQuery?.();
         // Fetch user's referral earnings and total affiliates earnings
         const userEarningsResponse = await fetchDataReferral(`${urlRefPayout}/${userId}`);
 
@@ -71,15 +72,20 @@ t.me/solclaimxbot?start=${userId}`;
         const encodedText = encodeURIComponent(shareText);
         const shareUrl = `https://t.me/share/url?url=t.me/solclaimxbot?start=${userId}&text=${encodedText}`;
 
-        await ctx.editMessageText(response, {
-            parse_mode: 'MarkdownV2',
+        const markup = {
             reply_markup: {
                 inline_keyboard: [
                     [{ text: '💬 Share with friends', url: shareUrl}],
                     [{ text: '← Back', callback_data: 'menu' }]
                 ],
             },
-        });
+        };
+
+        if (isCallback) {
+            await ctx.editMessageText(response, { parse_mode: 'MarkdownV2', ...markup });
+        } else {
+            await ctx.reply(response, { parse_mode: 'MarkdownV2', ...markup });
+        }
     } catch (error) {
         console.error('Error fetching referral data:', error.message);
         await ctx.answerCbQuery?.().catch(() => {});

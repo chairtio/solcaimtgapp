@@ -26,6 +26,22 @@ export const startCommand = async (ctx) => {
         let tokenMint = null;
 
         if (startArgs) {
+            // Deep links from follow-up buttons: /start referral, /start settings
+            if (startArgs === 'referral') {
+                const { referralButton } = await import('../buttons/referralButton.js');
+                await referralButton(ctx);
+                return;
+            }
+            if (startArgs === 'settings') {
+                const { settingsCommand } = await import('../commands/settingsCommand.js');
+                await settingsCommand(ctx);
+                return;
+            }
+            if (startArgs === 'menu') {
+                const { menuButton } = await import('../buttons/menuButton.js');
+                await menuButton(ctx);
+                return;
+            }
             // Handle actions: trade, hide, delete
             if (startArgs.startsWith('trade-') || startArgs.startsWith('hide-') || startArgs.startsWith('delete-')) {
                 [action, tokenMint] = startArgs.split('-');
