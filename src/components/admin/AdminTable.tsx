@@ -38,7 +38,7 @@ const AdminTableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      'border-b border-neutral-200 dark:border-neutral-800 transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800/50',
+      'border-b border-border transition-colors hover:bg-muted/50',
       className
     )}
     {...props}
@@ -53,7 +53,7 @@ const AdminTableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      'px-5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground bg-neutral-50 dark:bg-neutral-900 sticky top-0 z-10',
+      'px-5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground bg-muted/50 sticky top-0 z-10',
       className
     )}
     {...props}

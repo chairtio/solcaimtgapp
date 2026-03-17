@@ -28,7 +28,7 @@ export function FilterPills<T extends string>({
       {label && (
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
       )}
-      <div className="inline-flex items-center gap-0.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 p-0.5">
+      <div className="inline-flex items-center gap-0.5 rounded-lg border-2 border-border bg-muted/50 p-0.5">
         {options.map((opt) => (
           <button
             key={opt.value}
@@ -36,7 +36,7 @@ export function FilterPills<T extends string>({
             className={cn(
               'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
               value === opt.value
-                ? 'bg-white dark:bg-neutral-700 text-foreground shadow-sm'
+                ? 'bg-card text-foreground shadow-sm border border-border'
                 : 'text-muted-foreground hover:text-foreground'
             )}
             onClick={() => onChange(opt.value)}

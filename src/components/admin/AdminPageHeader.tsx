@@ -11,7 +11,7 @@ const AdminPageHeader = React.forwardRef<HTMLDivElement, AdminPageHeaderProps>(
     <div
       ref={ref}
       className={cn(
-        'flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-neutral-200 dark:border-neutral-800',
+        'flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-border',
         className
       )}
       {...props}

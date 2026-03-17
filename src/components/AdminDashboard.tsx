@@ -186,9 +186,9 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
     const allFollowUps = [...followUpsSent.map((f: any) => ({ ...f, status: 'sent' as const })), ...followUpsScheduled.map((f: any) => ({ ...f, status: 'scheduled' as const }))]
 
     return (
-      <div data-admin className="flex min-h-screen w-full bg-neutral-50 dark:bg-neutral-950">
-        <aside className="hidden lg:flex lg:flex-col lg:w-56 lg:shrink-0 lg:border-r lg:border-neutral-200 dark:lg:border-neutral-800 bg-white dark:bg-neutral-950 lg:fixed lg:inset-y-0 lg:left-0 z-20">
-          <div className="p-5 border-b border-neutral-200 dark:border-neutral-800">
+      <div data-admin className="flex min-h-screen w-full bg-background">
+        <aside className="hidden lg:flex lg:flex-col lg:w-56 lg:shrink-0 lg:border-r lg:border-border bg-card lg:fixed lg:inset-y-0 lg:left-0 z-20">
+          <div className="p-5 border-b border-border">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Admin</p>
           </div>
           <div className="p-3">
@@ -198,9 +198,9 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
           </div>
         </aside>
 
-        <main className="flex-1 lg:pl-56 min-w-0 flex flex-col min-h-screen bg-neutral-50 dark:bg-neutral-950 w-full">
+        <main className="flex-1 lg:pl-56 min-w-0 flex flex-col min-h-screen bg-background w-full">
           {/* Unified top bar - same width as content */}
-          <header className="shrink-0 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950">
+          <header className="shrink-0 border-b border-border bg-card">
             <div className="flex items-center justify-between h-14 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
               <div className="flex items-center gap-3 min-w-0">
                 <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(null)} className="gap-2 text-muted-foreground hover:text-foreground -ml-2 lg:hidden">
@@ -217,7 +217,7 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">User detail</h1>
               <div className="grid gap-6 lg:grid-cols-2">
               <AdminCard>
-                <AdminCardHeader className="border-b border-neutral-200 dark:border-neutral-800 pb-4">
+                <AdminCardHeader className="border-b border-border pb-4">
                   <AdminCardTitle>Profile</AdminCardTitle>
                 </AdminCardHeader>
                 <AdminCardContent className="space-y-5 pt-4">
@@ -242,11 +242,11 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
                   {userDetail.user?.bot_blocked_at && (
                     <Badge variant="destructive">Bot blocked</Badge>
                   )}
-                  <div className="pt-4 border-t border-neutral-200 dark:border-neutral-800">
+                  <div className="pt-4 border-t border-border">
                     <p className="text-xs font-medium text-muted-foreground mb-1">Stats</p>
                     <p className="text-sm text-foreground">Claimed: <span className="font-semibold">{Number(userDetail.stats?.total_sol_claimed || 0).toFixed(4)} SOL</span> · Accounts: <span className="font-semibold">{userDetail.stats?.total_accounts_closed || 0}</span></p>
                   </div>
-                  <div className="pt-4 border-t border-neutral-200 dark:border-neutral-800">
+                  <div className="pt-4 border-t border-border">
                     <p className="text-xs font-medium text-muted-foreground mb-1">Wallets</p>
                     <ul className="text-sm font-mono space-y-2">
                       {(userDetail.wallets || []).map((w: any) => (
@@ -261,7 +261,7 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
                 </AdminCardContent>
               </AdminCard>
               <AdminCard>
-                <AdminCardHeader className="border-b border-neutral-200 dark:border-neutral-800 pb-4">
+                <AdminCardHeader className="border-b border-border pb-4">
                   <AdminCardTitle>Follow-ups</AdminCardTitle>
                 </AdminCardHeader>
                 <AdminCardContent className="space-y-5 pt-4">
@@ -322,7 +322,7 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
                   ) : (
                     <p className="text-sm text-muted-foreground">No follow-ups sent or scheduled for this user.</p>
                   )}
-                  <div className="pt-4 border-t border-neutral-200 dark:border-neutral-800">
+                  <div className="pt-4 border-t border-border">
                     <Button
                       variant="outline"
                       size="sm"
@@ -364,9 +364,9 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
   ]
 
   return (
-    <div data-admin className="flex min-h-screen w-full bg-neutral-50 dark:bg-neutral-950">
-      <aside className="hidden lg:flex lg:flex-col lg:w-56 lg:shrink-0 lg:border-r lg:border-neutral-200 dark:lg:border-neutral-800 bg-white dark:bg-neutral-950 lg:fixed lg:inset-y-0 lg:left-0 z-20">
-        <div className="p-5 border-b border-neutral-200 dark:border-neutral-800">
+    <div data-admin className="flex min-h-screen w-full bg-background">
+      <aside className="hidden lg:flex lg:flex-col lg:w-56 lg:shrink-0 lg:border-r lg:border-border bg-card lg:fixed lg:inset-y-0 lg:left-0 z-20">
+        <div className="p-5 border-b border-border">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Admin</p>
         </div>
         <div className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
@@ -376,24 +376,24 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
               onClick={() => { setAdminTab(id); setSelectedUserId(null); }}
               className={`flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-left w-full rounded-lg transition-colors ${
                 adminTab === id && !selectedUserId
-                  ? 'bg-neutral-100 dark:bg-neutral-800 text-foreground'
-                  : 'text-muted-foreground hover:bg-neutral-100 dark:hover:bg-neutral-800/50 hover:text-foreground'
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
               }`}
             >
               <Icon className="w-4 h-4 shrink-0" /> {label}
             </button>
           ))}
         </div>
-        <div className="p-3 border-t border-neutral-200 dark:border-neutral-800">
+        <div className="p-3 border-t border-border">
           <Button variant="ghost" size="sm" onClick={onBack} className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4" /> Exit Admin
           </Button>
         </div>
       </aside>
 
-      <main className="flex-1 lg:pl-56 min-w-0 flex flex-col min-h-screen bg-neutral-50 dark:bg-neutral-950 w-full">
+      <main className="flex-1 lg:pl-56 min-w-0 flex flex-col min-h-screen bg-background w-full">
         {/* Unified top bar - aligned with content */}
-        <header className="shrink-0 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950">
+        <header className="shrink-0 border-b border-border bg-card">
           <div className="flex items-center justify-between h-14 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
             <h1 className="text-sm font-semibold text-foreground">Admin</h1>
             <div className="flex items-center gap-2 shrink-0">
@@ -405,14 +405,14 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
           </div>
         </header>
         {/* Mobile nav */}
-        <div className="lg:hidden shrink-0 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950">
+        <div className="lg:hidden shrink-0 border-b border-border bg-card">
           <div className="flex gap-1.5 overflow-x-auto p-3 custom-scrollbar">
             {navTabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => { setAdminTab(id); setSelectedUserId(null); }}
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                  adminTab === id && !selectedUserId ? 'bg-foreground text-background' : 'bg-neutral-100 dark:bg-neutral-800 text-muted-foreground hover:text-foreground'
+                  adminTab === id && !selectedUserId ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" /> {label}
@@ -440,9 +440,9 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
             <div className="space-y-8">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-5">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-5">
-                    <div className="h-3 w-20 rounded bg-neutral-200 dark:bg-neutral-700 animate-pulse mb-3" />
-                    <div className="h-7 w-16 rounded bg-neutral-200 dark:bg-neutral-700 animate-pulse" />
+                  <div key={i} className="rounded-2xl border-2 border-border bg-card p-5">
+                    <div className="h-3 w-20 rounded bg-muted animate-pulse mb-3" />
+                    <div className="h-7 w-16 rounded bg-muted animate-pulse" />
                   </div>
                 ))}
               </div>
@@ -450,15 +450,15 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
                 <p className="text-sm font-medium text-muted-foreground">All time</p>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
                   {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-5">
-                      <div className="h-3 w-24 rounded bg-neutral-200 dark:bg-neutral-700 animate-pulse mb-3" />
-                      <div className="h-7 w-20 rounded bg-neutral-200 dark:bg-neutral-700 animate-pulse" />
+                    <div key={i} className="rounded-2xl border-2 border-border bg-card p-5">
+                      <div className="h-3 w-24 rounded bg-muted animate-pulse mb-3" />
+                      <div className="h-7 w-20 rounded bg-muted animate-pulse" />
                     </div>
                   ))}
                 </div>
               </div>
               <AdminCard>
-                <AdminCardHeader className="border-b border-neutral-200 dark:border-neutral-800 pb-4">
+                <AdminCardHeader className="border-b border-border pb-4">
                   <AdminCardTitle>Recent Signups</AdminCardTitle>
                 </AdminCardHeader>
                 <AdminCardContent className="p-0">
@@ -488,7 +488,7 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
                 </div>
               </div>
               <AdminCard>
-                <AdminCardHeader className="border-b border-neutral-200 dark:border-neutral-800 pb-4">
+                <AdminCardHeader className="border-b border-border pb-4">
                   <AdminCardTitle>Recent Signups</AdminCardTitle>
                 </AdminCardHeader>
                 <AdminCardContent className="p-0">
@@ -635,9 +635,9 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
           {campaignsLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-5 h-20">
-                  <div className="h-4 w-40 rounded bg-neutral-200 dark:bg-neutral-700 animate-pulse mb-2" />
-                  <div className="h-3 w-24 rounded bg-neutral-200 dark:bg-neutral-700 animate-pulse" />
+                <div key={i} className="rounded-2xl border-2 border-border bg-card p-5 h-20">
+                  <div className="h-4 w-40 rounded bg-muted animate-pulse mb-2" />
+                  <div className="h-3 w-24 rounded bg-muted animate-pulse" />
                 </div>
               ))}
             </div>
@@ -694,11 +694,11 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
           {followUpsLoading ? (
             <div className="space-y-6">
               {[1, 2].map((i) => (
-                <div key={i} className="rounded-xl border border-neutral-200 dark:border-neutral-800 p-5">
-                  <div className="h-4 w-40 rounded bg-neutral-200 dark:bg-neutral-700 animate-pulse mb-4" />
+                <div key={i} className="rounded-2xl border-2 border-border bg-card p-5">
+                  <div className="h-4 w-40 rounded bg-muted animate-pulse mb-4" />
                   <div className="space-y-3">
                     {[1, 2, 3].map((j) => (
-                      <div key={j} className="h-14 rounded-lg bg-neutral-200 dark:bg-neutral-700 animate-pulse" />
+                      <div key={j} className="h-14 rounded-lg bg-muted animate-pulse" />
                     ))}
                   </div>
                 </div>
@@ -714,7 +714,7 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
                   <AdminCard key={segment} className="p-0 overflow-hidden">
                     <button
                       type="button"
-                      className="w-full flex items-center justify-between p-5 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors"
+                      className="w-full flex items-center justify-between p-5 text-left hover:bg-muted/50 transition-colors"
                       onClick={() => setFollowUpExpandedGroups((g) => ({ ...g, [segment]: !isOpen }))}
                     >
                       <span className="text-base font-semibold flex items-center gap-3">
@@ -730,7 +730,7 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
                       </Button>
                     </button>
                     {isOpen && (
-                      <div className="px-5 pb-5 space-y-4 border-t border-neutral-200 dark:border-neutral-800 pt-5">
+                      <div className="px-5 pb-5 space-y-4 border-t border-border pt-5">
                         {followUpAddingSegment === segment && (
                           <FollowUpForm
                             segment={segment}
@@ -838,7 +838,7 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
                               }}
                             />
                           ) : (
-                            <div key={f.id} className="group flex flex-col sm:flex-row sm:items-start justify-between gap-4 p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800/30 transition-colors hover:border-neutral-300 dark:hover:border-neutral-700">
+                            <div key={f.id} className="group flex flex-col sm:flex-row sm:items-start justify-between gap-4 p-4 rounded-xl border-2 border-border bg-muted/30 transition-colors hover:border-primary/30">
                               <div className="flex-1 min-w-0">
                                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
                                   <span className="font-semibold text-sm text-foreground">{f.name || `${f.delay_minutes} min delay`}</span>
@@ -897,7 +897,7 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">Broadcast</h1>
             </div>
           <AdminCard>
-            <AdminCardHeader className="border-b border-neutral-200 dark:border-neutral-800 pb-4">
+            <AdminCardHeader className="border-b border-border pb-4">
               <AdminCardTitle>Send broadcast</AdminCardTitle>
             </AdminCardHeader>
             <AdminCardContent className="space-y-6 pt-4">
@@ -969,7 +969,7 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
               <div className="space-y-3">
                 <Label className="text-sm font-medium text-foreground">Message</Label>
                 <textarea
-                  className="w-full rounded-lg border border-neutral-200 dark:border-neutral-700 bg-background px-3 py-2.5 text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                  className="w-full rounded-xl border-2 border-border bg-background px-3 py-2.5 text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
                   value={broadcastMessage}
                   onChange={(e) => setBroadcastMessage(e.target.value)}
                   placeholder="Enter message to send to all users (excluding blocked)"
@@ -1016,7 +1016,7 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
                   <Button variant="outline" size="sm" onClick={() => setBroadcastButtons([...broadcastButtons, { text: '', url: '' }])}>Add button</Button>
                 </div>
               </div>
-              <div className="pt-5 border-t border-neutral-200 dark:border-neutral-800 flex flex-col sm:flex-row gap-4">
+              <div className="pt-5 border-t border-border flex flex-col sm:flex-row gap-4">
                 <Button
                   variant="outline"
                   disabled={!broadcastMessage.trim() || previewSending}
@@ -1087,7 +1087,7 @@ export function AdminDashboard({ onBack, rightSlot }: { onBack: () => void; righ
           </AdminCard>
 
           <AdminCard className="mt-8">
-            <AdminCardHeader className="border-b border-neutral-200 dark:border-neutral-800 pb-4">
+            <AdminCardHeader className="border-b border-border pb-4">
               <AdminCardTitle className="flex items-center gap-2">
                 <History className="w-4 h-4" /> Broadcast history
               </AdminCardTitle>
