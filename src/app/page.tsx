@@ -2019,10 +2019,18 @@ t.me/solclaimxbot?start=${telegramId}`
 
                     const openTaskUrl = (url: string) => {
                       const webApp = typeof window !== 'undefined' ? (window as any).Telegram?.WebApp : null
-                      if (url?.startsWith('tg://') && webApp?.openTelegramLink) {
-                        // tg://settings often doesn't work in Mini App; use t.me/settings per Telegram docs
-                        const link = url === 'tg://settings' ? 'https://t.me/settings' : url
-                        webApp.openTelegramLink(link)
+                      if (url?.startsWith('tg://')) {
+                        // Telegram deep links should stay native so the client can decide how to open them.
+                        // For tg://settings this is the only reliable way to try to launch Telegram settings.
+                        if (webApp?.openTelegramLink) {
+                          try {
+                            webApp.openTelegramLink(url)
+                            return
+                          } catch (error) {
+                            console.warn('openTelegramLink failed for tg deep link:', error)
+                          }
+                        }
+                        window.location.href = url
                       } else if (url) {
                         window.open(url, '_blank', 'noopener,noreferrer')
                       }
