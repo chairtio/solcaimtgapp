@@ -77,27 +77,39 @@ function TaskConfettiBurst({ active }: { active: boolean }) {
   if (!active) return null
 
   const pieces = [
-    { x: -82, y: -120, r: -220, delay: 0, color: 'bg-primary' },
-    { x: -54, y: -96, r: -145, delay: 25, color: 'bg-foreground' },
-    { x: -28, y: -132, r: -260, delay: 10, color: 'bg-secondary' },
-    { x: -8, y: -104, r: -185, delay: 55, color: 'bg-muted-foreground' },
-    { x: 18, y: -140, r: 190, delay: 15, color: 'bg-primary' },
-    { x: 42, y: -92, r: 135, delay: 40, color: 'bg-foreground' },
-    { x: 68, y: -126, r: 245, delay: 65, color: 'bg-secondary' },
-    { x: 96, y: -102, r: 165, delay: 5, color: 'bg-muted-foreground' },
-    { x: -114, y: -54, r: -120, delay: 35, color: 'bg-primary/80' },
-    { x: 114, y: -48, r: 120, delay: 45, color: 'bg-foreground/90' },
+    { x: -150, y: -170, r: -280, delay: 0, color: 'bg-primary' },
+    { x: -128, y: -132, r: -220, delay: 30, color: 'bg-foreground' },
+    { x: -96, y: -188, r: -310, delay: 10, color: 'bg-secondary' },
+    { x: -74, y: -118, r: -175, delay: 55, color: 'bg-muted-foreground' },
+    { x: -48, y: -162, r: -245, delay: 18, color: 'bg-primary/90' },
+    { x: -18, y: -204, r: -330, delay: 70, color: 'bg-foreground/90' },
+    { x: 8, y: -144, r: 210, delay: 40, color: 'bg-secondary' },
+    { x: 28, y: -190, r: 260, delay: 5, color: 'bg-primary' },
+    { x: 52, y: -126, r: 155, delay: 95, color: 'bg-foreground' },
+    { x: 78, y: -178, r: 290, delay: 25, color: 'bg-muted-foreground' },
+    { x: 104, y: -138, r: 180, delay: 60, color: 'bg-primary/85' },
+    { x: 132, y: -204, r: 340, delay: 45, color: 'bg-foreground/80' },
+    { x: -170, y: -82, r: -150, delay: 110, color: 'bg-secondary/90' },
+    { x: -118, y: -58, r: -100, delay: 145, color: 'bg-primary/80' },
+    { x: -66, y: -72, r: -130, delay: 160, color: 'bg-foreground/90' },
+    { x: -8, y: -46, r: -110, delay: 125, color: 'bg-muted-foreground' },
+    { x: 44, y: -54, r: 115, delay: 150, color: 'bg-primary' },
+    { x: 98, y: -62, r: 135, delay: 170, color: 'bg-secondary' },
+    { x: 154, y: -50, r: 150, delay: 95, color: 'bg-foreground' },
+    { x: -28, y: -236, r: -360, delay: 135, color: 'bg-primary/75' },
+    { x: 22, y: -228, r: 320, delay: 175, color: 'bg-foreground/75' },
+    { x: 72, y: -222, r: 285, delay: 120, color: 'bg-secondary/75' },
   ] as const
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[120] overflow-hidden">
+    <div className="pointer-events-none fixed inset-0 z-[190] overflow-hidden">
       <style jsx global>{`
         @keyframes task-confetti-pop {
           0% {
-            transform: translate(-50%, -50%) translate3d(0, 0, 0) scale(0.3) rotate(0deg);
+            transform: translate(-50%, -50%) translate3d(0, 0, 0) scale(0.15) rotate(0deg);
             opacity: 0;
           }
-          15% {
+          10% {
             opacity: 1;
           }
           100% {
@@ -106,18 +118,18 @@ function TaskConfettiBurst({ active }: { active: boolean }) {
           }
         }
       `}</style>
-      <div className="absolute left-1/2 top-[44%]">
+      <div className="absolute left-1/2 top-[42%]">
         {pieces.map((piece, index) => (
           <span
             key={`${index}-${piece.delay}`}
             className={`absolute block rounded-sm ${piece.color}`}
             style={{
-              width: index % 3 === 0 ? '8px' : index % 3 === 1 ? '6px' : '4px',
-              height: index % 2 === 0 ? '14px' : '8px',
+              width: index % 3 === 0 ? '12px' : index % 3 === 1 ? '9px' : '7px',
+              height: index % 2 === 0 ? '20px' : '12px',
               '--x': `${piece.x}px`,
               '--y': `${piece.y}px`,
               '--r': `${piece.r}deg`,
-              animation: `task-confetti-pop 900ms cubic-bezier(0.16, 1, 0.3, 1) ${piece.delay}ms both`,
+              animation: `task-confetti-pop 1450ms cubic-bezier(0.16, 1, 0.3, 1) ${piece.delay}ms both`,
             } as CSSProperties}
           />
         ))}
@@ -253,7 +265,7 @@ t.me/solclaimxbot?start=${telegramId}`
 
   useEffect(() => {
     if (!taskConfettiToken) return
-    const timer = window.setTimeout(() => setTaskConfettiToken(0), 1100)
+    const timer = window.setTimeout(() => setTaskConfettiToken(0), 1750)
     return () => window.clearTimeout(timer)
   }, [taskConfettiToken])
 
@@ -2104,7 +2116,7 @@ t.me/solclaimxbot?start=${telegramId}`
                         ? {
                             title: 'Add your referral link to your Telegram bio',
                             body: 'Copy your referral link, open Telegram settings manually, paste it into your bio, then return here and tap Done.',
-                            copyText: user?.telegram_id ? `https://t.me/solclaimxbot?start=${user.telegram_id}` : '',
+                            copyText: user?.telegram_id ? `t.me/solclaimxbot?start=${user.telegram_id}` : '',
                             copyLabel: 'Copy referral link',
                           }
                         : {
