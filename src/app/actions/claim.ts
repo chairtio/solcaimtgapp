@@ -2,7 +2,7 @@
 
 import { Keypair, PublicKey } from '@solana/web3.js'
 import bs58 from 'bs58'
-import { closeEmptyTokenAccounts, getClaimableRent } from '@/lib/solana'
+import { closeEmptyTokenAccounts, getClaimableRent, getClaimableRentTotalsOnly } from '@/lib/solana'
 import {
   getWallets,
   getUserById,
@@ -58,7 +58,8 @@ export async function scanWalletForClaimableAction(publicKey: string): Promise<{
   totalRent: number
   accounts: { accountAddress: string; mintAddress: string; rentAmount: number; balance: number; tokenName?: string; tokenImage?: string; usdValue?: number; isDust?: boolean; programIdStr?: string }[]
 }> {
-  const result = await getClaimableRent(new PublicKey(publicKey))
+  // Batch scan only needs totals; skip Jupiter token lookups for speed.
+  const result = await getClaimableRentTotalsOnly(new PublicKey(publicKey))
   return {
     totalRent: result.totalRent,
     accounts: result.accounts,

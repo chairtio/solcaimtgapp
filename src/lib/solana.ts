@@ -34,7 +34,6 @@ import {
   TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddress,
-  getAccount,
   createCloseAccountInstruction,
   closeAccount as closeAccountHelper
 } from '@solana/spl-token'
@@ -95,26 +94,33 @@ export async function getWalletTokenAccounts(publicKey: PublicKey): Promise<Toke
 
   for (const programId of [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID]) {
     try {
-      const tokenAccounts = await connection.getTokenAccountsByOwner(publicKey, {
-        programId
-      })
+      // Fast path: a single RPC call for all token accounts (no per-account getAccount()).
+      // Matches the bot approach and is dramatically faster on wallets with many accounts.
+      const tokenAccounts = await connection.getParsedTokenAccountsByOwner(publicKey, { programId })
 
-      for (const { pubkey } of tokenAccounts.value) {
+      for (const item of tokenAccounts.value) {
         try {
-          const accountInfo = await getAccount(connection, pubkey, 'confirmed', programId)
-          const balance = Number(accountInfo.amount)
-          const isEmpty = balance === 0
+          const parsed = (item.account.data as any)?.parsed
+          const info = parsed?.info
+          const mintStr = info?.mint
+          const amountStr = info?.tokenAmount?.amount
+
+          if (!mintStr || typeof mintStr !== 'string' || typeof amountStr !== 'string') continue
+
+          const isEmpty = amountStr === '0'
+          // Keep backward-compatible number type; only zero-ness matters for claimable checks.
+          const balance = isEmpty ? 0 : Number(amountStr)
 
           accounts.push({
-            address: pubkey,
-            mint: accountInfo.mint,
+            address: item.pubkey,
+            mint: new PublicKey(mintStr),
             balance,
             rentAmount: RENT_EXEMPTION_LAMPORTS,
             isEmpty,
             programId
           })
         } catch (error) {
-          console.error(`Error processing token account ${pubkey.toString()}:`, error)
+          console.error(`Error processing parsed token account ${item.pubkey.toString()}:`, error)
         }
       }
     } catch (error) {
@@ -134,9 +140,8 @@ export async function getClaimableRent(publicKey: PublicKey): Promise<{
 }> {
   const tokenAccounts = await getWalletTokenAccounts(publicKey)
   
-  // We process all accounts for metadata; only empty ones (balance=0) are claimable. No burning.
-  
-  const accountsToProcess = tokenAccounts;
+  // Only empty accounts are claimable and shown; keep single-scan fast by processing empties only.
+  const accountsToProcess = tokenAccounts.filter((a) => a.isEmpty)
   
   // Fetch Jupiter token list for metadata enrichment
   let tokenMap = new Map<string, {name: string, logoURI: string}>()
@@ -188,29 +193,6 @@ export async function getClaimableRent(publicKey: PublicKey): Promise<{
     console.error('Failed to fetch token metadata from Jupiter', e)
   }
 
-  // Check prices for non-empty accounts
-  let priceMap = new Map<string, number>()
-  const nonEmptyMints = Array.from(new Set(accountsToProcess.filter(a => !a.isEmpty).map(a => a.mint.toString())))
-  
-  if (nonEmptyMints.length > 0) {
-    try {
-      // Jupiter Price API v4 allows querying multiple tokens
-      const ids = nonEmptyMints.join(',')
-      const response = await fetch(`https://price.jup.ag/v4/price?ids=${ids}`)
-      
-      if (response.ok) {
-        const data = await response.json()
-        if (data && data.data) {
-          Object.keys(data.data).forEach(mint => {
-            priceMap.set(mint, data.data[mint].price)
-          })
-        }
-      }
-    } catch (e) {
-      console.error('Failed to fetch prices from Jupiter', e)
-    }
-  }
-
   const accounts: ClaimableAccount[] = accountsToProcess.map(acc => {
     const mintStr = acc.mint.toString()
     const meta = tokenMap.get(mintStr)
@@ -219,25 +201,9 @@ export async function getClaimableRent(publicKey: PublicKey): Promise<{
     // than "Unknown Token" by using the first few chars of the mint address
     const fallbackName = `Token ${mintStr.slice(0, 4)}...${mintStr.slice(-4)}`
     
-    // Calculate USD value if not empty
-    let usdValue = 0;
-    let isDust = acc.isEmpty;
-    
-    if (!acc.isEmpty) {
-      const price = priceMap.get(mintStr) || 0;
-      // Assuming 6 decimals as a safe default if we don't have the exact decimals
-      // In a production app, we'd need to fetch the exact decimals for each token
-      const rawBalance = acc.balance;
-      // For simplicity in this demo, if it has no known price, we consider it dust (scam token)
-      // If it has a price, we check if total value is < $0.01
-      if (price === 0) {
-        isDust = true;
-      } else {
-        // Rough estimation: balance / 10^6 * price
-        usdValue = (rawBalance / 1000000) * price;
-        isDust = usdValue < 0.01;
-      }
-    }
+    // Claimable accounts are empty by definition; USD/dust is not relevant here.
+    const usdValue = 0
+    const isDust = true
     
     return {
       accountAddress: acc.address.toString(),
@@ -253,10 +219,32 @@ export async function getClaimableRent(publicKey: PublicKey): Promise<{
     }
   })
 
-  // Only return EMPTY accounts (balance=0). No burning - close empty only.
-  const claimableAccounts = accounts.filter(acc => acc.balance === 0)
-  const totalRent = claimableAccounts.reduce((sum, acc) => sum + acc.rentAmount, 0)
+  const totalRent = accounts.reduce((sum, acc) => sum + acc.rentAmount, 0)
+  return { totalRent, accounts }
+}
 
+/**
+ * Gets claimable rent amount for a wallet WITHOUT any Jupiter enrichment.
+ * Intended for batch scan where we only show totals (fastest path).
+ */
+export async function getClaimableRentTotalsOnly(publicKey: PublicKey): Promise<{
+  totalRent: number
+  accounts: ClaimableAccount[]
+}> {
+  const tokenAccounts = await getWalletTokenAccounts(publicKey)
+  const claimableAccounts: ClaimableAccount[] = tokenAccounts
+    .filter((acc) => acc.isEmpty)
+    .map((acc) => ({
+      accountAddress: acc.address.toString(),
+      mintAddress: acc.mint.toString(),
+      rentAmount: acc.rentAmount,
+      balance: acc.balance,
+      // Only used by claim flows; keep stable shape without extra lookups.
+      programId: acc.programId,
+      programIdStr: acc.programId?.toString(),
+    }))
+
+  const totalRent = claimableAccounts.reduce((sum, acc) => sum + acc.rentAmount, 0)
   return { totalRent, accounts: claimableAccounts }
 }
 
