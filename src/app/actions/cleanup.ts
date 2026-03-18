@@ -502,6 +502,54 @@ async function cleanupWalletTokens(params: {
     }
   }
 
+  // Final dust burn pass:
+  // After selling succeeds, there can still be tiny residual balances that prevent the account from
+  // being "empty" (amount=0) and therefore closeable by the subsequent claim step.
+  // If the remaining balance is still worth <$1, burn it so the account becomes closeable.
+  try {
+    const finalTokenAccounts = await getWalletTokenAccounts(userKp.publicKey)
+    const remainingToBurn = finalTokenAccounts.filter((t) => {
+      if (t.programId.toString() !== TOKEN_PROGRAM_ID_STR) return false
+      if (t.isEmpty) return false
+      if (!t.decimals || t.decimals === 0) return false
+      const mint = t.mint.toString()
+      const price = priceMap.get(mint)
+      if (price == null) return false
+      const uiAmount = amountRawToUi(t.amountRaw, t.decimals)
+      const usdValue = uiAmount * price
+      return Number.isFinite(usdValue) && usdValue < 1
+    })
+
+    for (const t of remainingToBurn) {
+      const mint = t.mint
+      const burnAmount = BigInt(t.amountRaw)
+      if (!(burnAmount > BigInt(0))) continue
+
+      const burnIx = createBurnCheckedInstruction(
+        t.address,
+        mint,
+        userKp.publicKey,
+        burnAmount,
+        t.decimals
+      )
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
+      const msg = new TransactionMessage({
+        payerKey: feePayer.publicKey,
+        recentBlockhash: blockhash,
+        instructions: [burnIx],
+      }).compileToV0Message()
+      const tx = new VersionedTransaction(msg)
+      tx.sign([feePayer, userKp])
+      const sig = await connection.sendTransaction(tx, { maxRetries: 2 })
+      await connection
+        .confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed')
+        .catch(() => null)
+      summary.burned++
+    }
+  } catch (e) {
+    summary.errors.push(`Final dust burn pass failed: ${e instanceof Error ? e.message : 'unknown'}`)
+  }
+
   return summary
 }
 

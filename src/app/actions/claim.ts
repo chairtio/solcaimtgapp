@@ -123,6 +123,12 @@ export async function executeClaimOnServer(params: {
   try {
     const { walletId, userId, claimableAccounts, publicKey } = params
 
+    // In some flows (ex: cleanup preview + rescan), the server may legitimately end up with
+    // zero closeable empty token accounts. Treat that as a success so the client doesn't throw.
+    if (!Array.isArray(claimableAccounts) || claimableAccounts.length === 0) {
+      return { success: true, closedCount: 0, netAmount: 0, signatures: [] }
+    }
+
     let keypair: Keypair
     if (params.privateKeyBase58) {
       try {
