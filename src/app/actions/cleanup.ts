@@ -20,6 +20,30 @@ type CleanupSummary = {
 const SOL_MINT = 'So11111111111111111111111111111111111111112'
 const TOKEN_PROGRAM_ID_STR = TOKEN_PROGRAM_ID.toString()
 const MAX_SWAPS_PER_TX = 3
+const FETCH_TIMEOUT_MS = 25_000
+const FETCH_RETRIES = 3
+
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit = {},
+  retries = FETCH_RETRIES
+): Promise<Response> {
+  let lastErr: unknown
+  for (let i = 0; i < retries; i++) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal })
+      clearTimeout(timeout)
+      return res
+    } catch (e) {
+      clearTimeout(timeout)
+      lastErr = e
+      if (i < retries - 1) await new Promise((r) => setTimeout(r, 800 * (i + 1)))
+    }
+  }
+  throw lastErr
+}
 
 function clampPct(p: number) {
   if (!Number.isFinite(p)) return 0
@@ -39,7 +63,7 @@ async function fetchJupPrices(mints: string[]): Promise<Map<string, number>> {
 
   // Jupiter price endpoint (batch)
   const url = `https://price.jup.ag/v4/price?ids=${encodeURIComponent(ids.join(','))}`
-  const res = await fetch(url, { method: 'GET' })
+  const res = await fetchWithRetry(url, { method: 'GET' })
   if (!res.ok) return priceMap
   const json = await res.json().catch(() => null)
   const data = json?.data
@@ -63,7 +87,7 @@ async function jupQuote(params: {
     amount: params.amountRaw,
     slippageBps: String(params.slippageBps),
   })
-  const res = await fetch(`https://quote-api.jup.ag/v6/quote?${qs.toString()}`)
+  const res = await fetchWithRetry(`https://quote-api.jup.ag/v6/quote?${qs.toString()}`)
   if (!res.ok) return null
   return await res.json().catch(() => null)
 }
@@ -73,7 +97,7 @@ async function jupSwapInstructions(params: {
   userPublicKey: string
   payer: string
 }): Promise<any | null> {
-  const res = await fetch(`https://quote-api.jup.ag/v6/swap-instructions`, {
+  const res = await fetchWithRetry(`https://quote-api.jup.ag/v6/swap-instructions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -302,12 +326,23 @@ async function cleanupWalletTokens(params: {
   }
 
   // Scan token accounts (Token Program only for reliability).
-  const tokenAccounts = await getWalletTokenAccounts(userKp.publicKey)
+  let tokenAccounts: Awaited<ReturnType<typeof getWalletTokenAccounts>>
+  try {
+    tokenAccounts = await getWalletTokenAccounts(userKp.publicKey)
+  } catch (e) {
+    summary.errors.push(e instanceof Error ? e.message : 'Failed to load token accounts')
+    return summary
+  }
   const candidates = tokenAccounts.filter((t) => t.programId.toString() === TOKEN_PROGRAM_ID_STR && !t.isEmpty)
 
-  // Batch prices
+  // Batch prices (best-effort; empty map only skips dust logic)
   const mintStrs = candidates.map((c) => c.mint.toString()).filter((m) => m !== SOL_MINT)
-  const priceMap = await fetchJupPrices(mintStrs)
+  let priceMap = new Map<string, number>()
+  try {
+    priceMap = await fetchJupPrices(mintStrs)
+  } catch {
+    // continue without prices; sells still attempted, dust burn skipped
+  }
 
   const swapCandidates: Array<{
     mint: string
@@ -348,12 +383,19 @@ async function cleanupWalletTokens(params: {
 
     summary.attemptedSells++
 
-    const quote = await jupQuote({
-      inputMint: mint,
-      outputMint: SOL_MINT,
-      amountRaw: acc.amountRaw,
-      slippageBps: params.slippageBps,
-    })
+    let quote: Awaited<ReturnType<typeof jupQuote>>
+    try {
+      quote = await jupQuote({
+        inputMint: mint,
+        outputMint: SOL_MINT,
+        amountRaw: acc.amountRaw,
+        slippageBps: params.slippageBps,
+      })
+    } catch (e) {
+      summary.errors.push(`${mint} quote: ${e instanceof Error ? e.message : 'fetch failed'}`)
+      summary.skipped++
+      continue
+    }
 
     const bestRoute = quote?.data?.[0]
     if (!bestRoute) {
@@ -390,11 +432,18 @@ async function cleanupWalletTokens(params: {
       continue
     }
 
-    const swapIxs = await jupSwapInstructions({
-      quoteResponse: bestRoute,
-      userPublicKey: userKp.publicKey.toString(),
-      payer: feePayer.publicKey.toString(),
-    })
+    let swapIxs: Awaited<ReturnType<typeof jupSwapInstructions>>
+    try {
+      swapIxs = await jupSwapInstructions({
+        quoteResponse: bestRoute,
+        userPublicKey: userKp.publicKey.toString(),
+        payer: feePayer.publicKey.toString(),
+      })
+    } catch (e) {
+      summary.errors.push(`${mint} swap-instructions: ${e instanceof Error ? e.message : 'fetch failed'}`)
+      summary.skipped++
+      continue
+    }
 
     if (!swapIxs) {
       if (usdValue != null && usdValue < 1) {

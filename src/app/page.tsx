@@ -1282,6 +1282,12 @@ t.me/solclaimxbot?start=${telegramId}`
         }
         if (result.cleanup.errors?.length) {
           toast.error(`Cleanup errors: ${result.cleanup.errors[0]}`, { duration: 4500 })
+          // When cleanup had errors and nothing was claimed, do not show success toast
+          if (result.claim.netAmount === 0 && result.claim.closedCount === 0) {
+            await loadUserStats()
+            if (user) getRecentClaimsFreshAction(user.id, 10).then(setRecentClaims).catch(() => {})
+            return true
+          }
         }
 
         toast.success(`Claimed ${result.claim.netAmount!.toFixed(4)} SOL`, {
