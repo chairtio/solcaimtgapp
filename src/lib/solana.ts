@@ -34,6 +34,7 @@ import {
   TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddress,
+  getAccount,
   createCloseAccountInstruction,
   closeAccount as closeAccountHelper
 } from '@solana/spl-token'
