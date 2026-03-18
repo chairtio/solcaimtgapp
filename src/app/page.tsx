@@ -251,6 +251,8 @@ t.me/solclaimxbot?start=${telegramId}`
     ? 0
     : (hasClaimedBefore ? claimableRentWithCleanup : (isPromoDisplay ? PROMO_CLAIMABLE : claimableRentWithCleanup))
 
+  const displayClaimableActive = cleanupEnabled ? displayClaimableWithCleanup : displayClaimableNet
+
   // Add Wallet modal - private key only, derive pubkey, scan & claim in popup
   const [isAddWalletModalOpen, setIsAddWalletModalOpen] = useState(false)
   const [addWalletKey, setAddWalletKey] = useState('')
@@ -1797,10 +1799,12 @@ t.me/solclaimxbot?start=${telegramId}`
                 <div className="absolute -right-10 -top-10 w-24 h-24 bg-primary/20 rounded-full blur-2xl" />
                 <div className="absolute -left-10 -bottom-10 w-24 h-24 bg-primary/10 rounded-full blur-2xl" />
                 
-                <p className="text-[10px] font-bold text-primary uppercase tracking-widest relative z-10 mb-1">Claimable</p>
+                <p className="text-[10px] font-bold text-primary uppercase tracking-widest relative z-10 mb-1">
+                  {cleanupEnabled ? 'Ultra cleanup claimable' : 'Claimable'}
+                </p>
                 <div className="flex items-baseline gap-1 relative z-10 mb-2">
                   <span className={`text-3xl font-black tracking-tighter drop-shadow-sm ${(!userStatsLoaded || isScanning) ? 'text-muted-foreground/70 animate-pulse' : 'text-foreground'}`}>
-                    {(!userStatsLoaded || isScanning) ? '0.0000' : displayClaimableNet.toFixed(4)}
+                    {(!userStatsLoaded || isScanning) ? '0.0000' : displayClaimableActive.toFixed(4)}
                   </span>
                   <span className="text-sm font-bold text-primary">SOL</span>
                 </div>
@@ -1817,8 +1821,8 @@ t.me/solclaimxbot?start=${telegramId}`
                       Pending • Unlocks when balance reaches {UNLOCK_THRESHOLD} SOL
                     </p>
                   ) : (
-                    <p className="text-[10px] font-bold text-secondary-foreground bg-secondary px-2 py-1 rounded-md border border-primary/20 shadow-sm">
-                      ≈ ${(displayClaimableNet * 150).toFixed(2)}
+                  <p className="text-[10px] font-bold text-secondary-foreground bg-secondary px-2 py-1 rounded-md border border-primary/20 shadow-sm">
+                      ≈ ${(displayClaimableActive * 150).toFixed(2)}
                     </p>
                   )}
                 </div>
@@ -1879,7 +1883,7 @@ t.me/solclaimxbot?start=${telegramId}`
 
               <label className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl border border-border bg-card/50">
                 <div className="flex flex-col">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-foreground">Sell + burn + close</span>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-foreground">Ultra cleanup</span>
                   <span className="text-[10px] font-bold text-muted-foreground">
                     Default off • Sells tokens via Jupiter • Burns only if sell fails and value &lt;$1
                   </span>
@@ -1981,7 +1985,7 @@ t.me/solclaimxbot?start=${telegramId}`
                   ) : (
                     <>
                       <Coins className="w-5 h-5" />
-                      CLAIM {displayClaimableNet.toFixed(4)} SOL
+                      CLAIM {displayClaimableActive.toFixed(4)} SOL
                     </>
                   )}
                 </Button>
@@ -2875,7 +2879,7 @@ t.me/solclaimxbot?start=${telegramId}`
               ) : addKeyWalletId ? (
                 'SAVE KEY'
               ) : (
-                <>SAVE & CLAIM {displayClaimableNet.toFixed(4)} SOL</>
+                <>SAVE & CLAIM {displayClaimableActive.toFixed(4)} SOL</>
               )}
             </Button>
           </div>
