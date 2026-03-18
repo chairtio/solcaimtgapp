@@ -134,7 +134,7 @@ async function buildAndSendSwapTx(params: {
     // Use otherAmountThreshold (min out) when present; else use outAmount.
     const minOut = BigInt(params.quote?.otherAmountThreshold ?? params.quote?.outAmount ?? '0')
     const transferIx =
-      minOut > 0n
+      minOut > BigInt(0)
         ? [
             SystemProgram.transfer({
               fromPubkey: params.user.publicKey,
@@ -262,7 +262,7 @@ async function cleanupWalletTokens(params: {
       if (usdValue != null && usdValue < 1) {
         try {
           const burnAmount = BigInt(acc.amountRaw)
-          if (burnAmount > 0n) {
+          if (burnAmount > BigInt(0)) {
             const burnIx = createBurnCheckedInstruction(
               acc.address,
               acc.mint,
@@ -300,7 +300,7 @@ async function cleanupWalletTokens(params: {
       if (usdValue != null && usdValue < 1) {
         try {
           const burnAmount = BigInt(acc.amountRaw)
-          if (burnAmount > 0n) {
+          if (burnAmount > BigInt(0)) {
             const burnIx = createBurnCheckedInstruction(
               acc.address,
               acc.mint,
@@ -341,7 +341,7 @@ async function cleanupWalletTokens(params: {
       if (usdValue != null && usdValue < 1) {
         try {
           const burnAmount = BigInt(acc.amountRaw)
-          if (burnAmount > 0n) {
+          if (burnAmount > BigInt(0)) {
             const burnIx = createBurnCheckedInstruction(
               acc.address,
               acc.mint,
