@@ -505,34 +505,49 @@ export async function cleanupAndExecuteClaimOnServer(params: {
   publicKey: string
   slippageBps?: number
 }): Promise<{ cleanup: CleanupSummary; claim: Awaited<ReturnType<typeof executeClaimOnServer>> }> {
-  const cleanup = await cleanupWalletTokens({
-    userId: params.userId,
-    publicKey: params.publicKey,
-    privateKeyBase58: params.privateKeyBase58,
-    slippageBps: params.slippageBps ?? 100,
-  })
+  let cleanup: CleanupSummary = { attemptedSells: 0, sold: 0, burned: 0, skipped: 0, errors: [] }
+  try {
+    cleanup = await cleanupWalletTokens({
+      userId: params.userId,
+      publicKey: params.publicKey,
+      privateKeyBase58: params.privateKeyBase58,
+      slippageBps: params.slippageBps ?? 100,
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Unknown cleanup error'
+    cleanup.errors.push(msg)
+    console.error('[cleanupAndExecuteClaimOnServer] cleanupWalletTokens failed:', msg)
+  }
 
-  const scan = await getClaimableRentTotalsOnly(new PublicKey(params.publicKey))
-  const tokenProgramEmpties = scan.accounts
-    .filter((a) => !a.programIdStr || a.programIdStr === TOKEN_PROGRAM_ID_STR)
-    .map((a) => ({
-      accountAddress: a.accountAddress,
-      mintAddress: a.mintAddress,
-      rentAmount: a.rentAmount,
-      balance: a.balance,
-      isDust: a.isDust,
-      programIdStr: a.programIdStr,
-    }))
+  try {
+    const scan = await getClaimableRentTotalsOnly(new PublicKey(params.publicKey))
+    const tokenProgramEmpties = scan.accounts
+      .filter((a) => !a.programIdStr || a.programIdStr === TOKEN_PROGRAM_ID_STR)
+      .map((a) => ({
+        accountAddress: a.accountAddress,
+        mintAddress: a.mintAddress,
+        rentAmount: a.rentAmount,
+        balance: a.balance,
+        isDust: a.isDust,
+        programIdStr: a.programIdStr,
+      }))
 
-  const claim = await executeClaimOnServer({
-    privateKeyBase58: params.privateKeyBase58,
-    walletId: params.walletId,
-    userId: params.userId,
-    claimableAccounts: tokenProgramEmpties,
-    publicKey: params.publicKey,
-  })
+    const claim = await executeClaimOnServer({
+      privateKeyBase58: params.privateKeyBase58,
+      walletId: params.walletId,
+      userId: params.userId,
+      claimableAccounts: tokenProgramEmpties,
+      publicKey: params.publicKey,
+    })
 
-  return { cleanup, claim }
+    return { cleanup, claim }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Unknown claim error'
+    return {
+      cleanup,
+      claim: { success: false, error: msg },
+    }
+  }
 }
 
 export async function cleanupAndCloseTokenAccountsOnServer(params: {
@@ -541,43 +556,61 @@ export async function cleanupAndCloseTokenAccountsOnServer(params: {
   publicKey: string
   slippageBps?: number
 }): Promise<{ cleanup: CleanupSummary; close: Awaited<ReturnType<typeof closeEmptyTokenAccounts>>; referrerId?: string }> {
-  const cleanup = await cleanupWalletTokens({
-    userId: params.userId,
-    publicKey: params.publicKey,
-    privateKeyBase58: params.privateKeyBase58,
-    slippageBps: params.slippageBps ?? 100,
-  })
-
-  const keypair = Keypair.fromSecretKey(bs58.decode(params.privateKeyBase58.trim()))
-  const dbUser = await getUserById(params.userId)
-  const receiverWallet = dbUser?.receiver_wallet?.trim()
-  if (!receiverWallet) {
-    return { cleanup, close: { success: false, signatures: [], errors: ['Receiver wallet not set'], succeededAccounts: [] } }
+  let cleanup: CleanupSummary = { attemptedSells: 0, sold: 0, burned: 0, skipped: 0, errors: [] }
+  try {
+    cleanup = await cleanupWalletTokens({
+      userId: params.userId,
+      publicKey: params.publicKey,
+      privateKeyBase58: params.privateKeyBase58,
+      slippageBps: params.slippageBps ?? 100,
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Unknown cleanup error'
+    cleanup.errors.push(msg)
+    console.error('[cleanupAndCloseTokenAccountsOnServer] cleanupWalletTokens failed:', msg)
   }
 
-  const referrer = dbUser?.telegram_id ? await getReferrerByReferee(dbUser.telegram_id) : null
-  const commissionWallet = getCommissionWallet()
-  const options =
-    referrer != null || commissionWallet != null
-      ? {
-          referrerWallet: referrer?.receiverWallet != null ? new PublicKey(referrer.receiverWallet) : undefined,
-          referralPercent: clampPct(referrer?.commissionPercentage ?? 0),
-          commissionWallet: commissionWallet ?? undefined,
-        }
-      : undefined
+  try {
+    const keypair = Keypair.fromSecretKey(bs58.decode(params.privateKeyBase58.trim()))
+    const dbUser = await getUserById(params.userId)
+    const receiverWallet = dbUser?.receiver_wallet?.trim()
+    if (!receiverWallet) {
+      return {
+        cleanup,
+        close: { success: false, signatures: [], errors: ['Receiver wallet not set'], succeededAccounts: [] },
+      }
+    }
 
-  // Rescan current empty accounts
-  const scan = await getClaimableRentTotalsOnly(new PublicKey(params.publicKey))
-  const tokenProgramEmpties = scan.accounts.filter((a) => !a.programIdStr || a.programIdStr === TOKEN_PROGRAM_ID_STR)
+    const referrer = dbUser?.telegram_id ? await getReferrerByReferee(dbUser.telegram_id) : null
+    const commissionWallet = getCommissionWallet()
+    const options =
+      referrer != null || commissionWallet != null
+        ? {
+            referrerWallet: referrer?.receiverWallet != null ? new PublicKey(referrer.receiverWallet) : undefined,
+            referralPercent: clampPct(referrer?.commissionPercentage ?? 0),
+            commissionWallet: commissionWallet ?? undefined,
+          }
+        : undefined
 
-  const close = await closeEmptyTokenAccounts(
-    keypair,
-    tokenProgramEmpties,
-    params.publicKey,
-    new PublicKey(receiverWallet),
-    options
-  )
+    // Rescan current empty accounts
+    const scan = await getClaimableRentTotalsOnly(new PublicKey(params.publicKey))
+    const tokenProgramEmpties = scan.accounts.filter((a) => !a.programIdStr || a.programIdStr === TOKEN_PROGRAM_ID_STR)
 
-  return { cleanup, close, referrerId: referrer?.referrerId }
+    const close = await closeEmptyTokenAccounts(
+      keypair,
+      tokenProgramEmpties,
+      params.publicKey,
+      new PublicKey(receiverWallet),
+      options
+    )
+
+    return { cleanup, close, referrerId: referrer?.referrerId }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Unknown close error'
+    return {
+      cleanup,
+      close: { success: false, signatures: [], errors: [msg], succeededAccounts: [] },
+    }
+  }
 }
 
