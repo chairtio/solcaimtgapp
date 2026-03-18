@@ -21,6 +21,8 @@ export {
   transactionPriorityFee,
   totalAmountClaim,
   SOL_CLAIM_PER_TOKEN_ACCOUNT,
+  userPayoutBeforeReferralPerAccount,
+  computeNetPayoutPerAccount,
 } from '../lib/config.js'
 
 // URL constants - used as routing keys by fetchData/postToApi (no longer Xano)

@@ -2,7 +2,8 @@
 
 import { fetchWalletData } from '../utils/fetchWalletData.js';
 import { checkClaim, getTokenData, clearTokenData } from './checkClaim.js';
-import { SOL_CLAIM_PER_TOKEN_ACCOUNT } from '../private/private.js';
+import { computeNetPayoutPerAccount } from '../private/private.js';
+import { getRefereeReferralPercentCached } from '../lib/supabase-bot.js';
 import pTimeout from '../utils/pTimeout.js';
 
 const TIMEOUT_MS = 60000;
@@ -28,8 +29,10 @@ export async function checkSingleWallet(ctx, walletId) {
             await pTimeout(checkClaim(address, userId), TIMEOUT_MS);
 
             const { tokenAccounts, zeroAmountAccountsCount } = await getTokenData(userId);
-            const solToClaim = tokenAccounts.length * SOL_CLAIM_PER_TOKEN_ACCOUNT;
-            const solAbleToClaim = zeroAmountAccountsCount * SOL_CLAIM_PER_TOKEN_ACCOUNT;
+            const referralPercent = await getRefereeReferralPercentCached(userId);
+            const netPerAccount = computeNetPayoutPerAccount(referralPercent);
+            const solToClaim = tokenAccounts.length * netPerAccount;
+            const solAbleToClaim = zeroAmountAccountsCount * netPerAccount;
 
             const resultMessage = `Wallet: ${address.substring(0, 4)}...\n💰 Available to claim: ${solAbleToClaim} SOL${solToClaim > solAbleToClaim
                 ? `\n🔥 Burn tokens to claim: ${solToClaim} SOL`

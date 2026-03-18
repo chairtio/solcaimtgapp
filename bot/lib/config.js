@@ -54,7 +54,30 @@ export const commissionAddress = commissionAddr ? new PublicKey(commissionAddr) 
 
 // Fee/claim amounts - from env, match mini app config
 const parseNum = (v, d) => (v === undefined || v === '' ? d : (parseFloat(v) || d))
-export const baseCommissionRate = parseNum(process.env.SOLCLAIM_COMMISSION_PER_ACCOUNT, 0.00053928)
+const parseIntSafe = (v, d) => (v === undefined || v === '' ? d : (parseInt(v, 10) || d))
+
+// Platform commission percent (0-100). 0 = user gets 100%.
+export const SOLCLAIM_COMMISSION_PERCENT = parseNum(process.env.SOLCLAIM_COMMISSION_PERCENT, 0)
+
+// Referral percent (0-100). Only applied when the user was referred.
+export const SOLCLAIM_REFERRAL_PERCENT = parseIntSafe(process.env.SOLCLAIM_REFERRAL_PERCENT, 10)
+
+export const baseCommissionRate =
+  SOLCLAIM_COMMISSION_PERCENT > 0
+    ? totalAmountClaim * (SOLCLAIM_COMMISSION_PERCENT / 100)
+    : parseNum(process.env.SOLCLAIM_COMMISSION_PER_ACCOUNT, 0.00053928)
 export const transactionPriorityFee = parseNum(process.env.TRANSACTION_PRIORITY_FEE, 0.00004)
 export const totalAmountClaim = parseNum(process.env.SOLCLAIM_RENT_PER_ACCOUNT, 0.00203928)
 export const SOL_CLAIM_PER_TOKEN_ACCOUNT = parseNum(process.env.SOLCLAIM_USER_PAYOUT_PER_ACCOUNT, 0.0015)
+
+// Derived: user payout per account before referral split, matching src/lib/config.ts
+export const userPayoutBeforeReferralPerAccount =
+  SOLCLAIM_COMMISSION_PERCENT > 0
+    ? totalAmountClaim - (totalAmountClaim * (SOLCLAIM_COMMISSION_PERCENT / 100))
+    : Math.min(SOL_CLAIM_PER_TOKEN_ACCOUNT, totalAmountClaim)
+
+export function computeNetPayoutPerAccount(referralPercent) {
+  const pct = typeof referralPercent === 'number' && Number.isFinite(referralPercent) ? referralPercent : 0
+  const clamped = Math.max(0, Math.min(100, pct))
+  return userPayoutBeforeReferralPerAccount * (1 - clamped / 100)
+}

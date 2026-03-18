@@ -4,6 +4,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { PublicKey } from '@solana/web3.js'
+import { redis } from './config.js'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -320,6 +321,47 @@ export async function getReferrerByRefereeTelegramId(refereeTelegramId) {
     telegram_id: referrer.telegram_id,
     commission_percentage: effectiveCommission
   }
+}
+
+/**
+ * Get effective referral percent for this referee (telegram_id), cached in Redis.
+ * Returns 0 when not referred.
+ */
+export async function getRefereeReferralPercentCached(refereeTelegramId) {
+  const tid = String(refereeTelegramId || '').trim()
+  if (!tid) return 0
+
+  const cacheKey = `ref_pct:${tid}`
+  try {
+    const cached = await redis.get(cacheKey)
+    if (cached != null) {
+      const n = parseInt(cached, 10)
+      return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0
+    }
+  } catch {
+    // ignore cache failures
+  }
+
+  let pct = 0
+  try {
+    const ref = await getReferrerByRefereeTelegramId(tid)
+    if (ref?.commission_percentage != null) {
+      const n = parseInt(String(ref.commission_percentage), 10)
+      pct = Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0
+    }
+  } catch {
+    pct = 0
+  }
+
+  try {
+    // Short TTL to avoid extra DB hits on repeated checks
+    await redis.set(cacheKey, String(pct), 'EX', 600)
+  } catch {
+    // ignore
+  }
+
+  // Fallback default when not referred is 0; caller may choose to use SOLCLAIM_REFERRAL_PERCENT only when referred.
+  return pct
 }
 
 /** Create referral payout. Xano: { telegram_user_id, amount, claim_id } */

@@ -1,9 +1,10 @@
 // storeMap/checkButton.js
 import { PublicKey } from "@solana/web3.js";
 import { checkClaim, getTokenData, clearTokenData } from './checkClaim.js';
-import { SOL_CLAIM_PER_TOKEN_ACCOUNT } from '../private/private.js';
+import { computeNetPayoutPerAccount } from '../private/private.js';
 import { deleteMessages } from '../utils/deleteMessages.js';
 import pTimeout from '../utils/pTimeout.js';
+import { getRefereeReferralPercentCached } from '../lib/supabase-bot.js';
 
 const TIMEOUT_MS = 60000;
 const BATCH_SIZE = 10;
@@ -74,6 +75,8 @@ export async function checkButton(ctx) {
         const totalWallets = validInput.length;
         let checkedWallets = 0;
         const startTime = Date.now();
+        const referralPercent = await getRefereeReferralPercentCached(userId);
+        const netPerAccount = computeNetPayoutPerAccount(referralPercent);
 
         const progressPromise = pTimeout(ctx.reply(`🟠 Checking 0/${totalWallets} wallets...`), 10000)
             .then(msg => progressMessage = msg);
@@ -96,8 +99,8 @@ export async function checkButton(ctx) {
                     await pTimeout(checkClaim(trimmedAddress, userId), timeoutPerBatch);
                     const { tokenAccounts, zeroAmountAccountsCount } = await getTokenData(userId);
 
-                    const solToClaim = tokenAccounts.length * SOL_CLAIM_PER_TOKEN_ACCOUNT;
-                    const solAbleToClaim = zeroAmountAccountsCount * SOL_CLAIM_PER_TOKEN_ACCOUNT;
+                    const solToClaim = tokenAccounts.length * netPerAccount;
+                    const solAbleToClaim = zeroAmountAccountsCount * netPerAccount;
 
                     return {
                         address: trimmedAddress,

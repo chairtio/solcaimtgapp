@@ -99,18 +99,6 @@ export async function getWalletTokenAccounts(publicKey: PublicKey): Promise<Toke
       // Matches the bot approach and is dramatically faster on wallets with many accounts.
       const tokenAccounts = await connection.getParsedTokenAccountsByOwner(publicKey, { programId })
 
-      // #region agent log
-      if (publicKey.toString() === 'qJTc8HqeoUYaeApE5ZyaKaByAjCfKQD5Qe7CFhet5Hu') {
-        const total = tokenAccounts.value.length
-        let empty = 0
-        for (const it of tokenAccounts.value) {
-          const amt = (it.account.data as any)?.parsed?.info?.tokenAmount?.amount
-          if (amt === '0') empty++
-        }
-        fetch('http://127.0.0.1:7566/ingest/3f7ca902-d31c-4040-8962-a7902685724e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'77deb6'},body:JSON.stringify({sessionId:'77deb6',runId:'pre-fix',hypothesisId:'H1',location:'src/lib/solana.ts:getWalletTokenAccounts',message:'Parsed token accounts by program',data:{owner:publicKey.toString(),programId:programId.toString(),total,empty},timestamp:Date.now()})}).catch(()=>{});
-      }
-      // #endregion
-
       for (const item of tokenAccounts.value) {
         try {
           const parsed = (item.account.data as any)?.parsed
@@ -233,14 +221,6 @@ export async function getClaimableRent(publicKey: PublicKey): Promise<{
   })
 
   const totalRent = accounts.reduce((sum, acc) => sum + acc.rentAmount, 0)
-
-  // #region agent log
-  if (publicKey.toString() === 'qJTc8HqeoUYaeApE5ZyaKaByAjCfKQD5Qe7CFhet5Hu') {
-    const rentSol = totalRent / 1e9
-    const expectedBotSol = accounts.filter(a => a.programIdStr === TOKEN_PROGRAM_ID.toString() || !a.programIdStr).length * 0.0015
-    fetch('http://127.0.0.1:7566/ingest/3f7ca902-d31c-4040-8962-a7902685724e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'77deb6'},body:JSON.stringify({sessionId:'77deb6',runId:'pre-fix',hypothesisId:'H2',location:'src/lib/solana.ts:getClaimableRent',message:'Claimable totals computed',data:{owner:publicKey.toString(),claimableAccounts:accounts.length,totalRentLamports:totalRent,totalRentSol:Number(rentSol.toFixed(6)),expectedBotSol:Number(expectedBotSol.toFixed(6))},timestamp:Date.now()})}).catch(()=>{});
-  }
-  // #endregion
 
   return { totalRent, accounts }
 }

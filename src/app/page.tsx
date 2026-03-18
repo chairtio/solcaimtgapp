@@ -41,6 +41,7 @@ import { getClaimableRent, isValidPublicKey } from '@/lib/solana'
 import { PublicKey, Keypair } from '@solana/web3.js'
 import bs58 from 'bs58'
 import { useTelegram } from '@/hooks/useTelegram'
+import { SOLCLAIM_USER_PAYOUT_BEFORE_REFERRAL } from '@/lib/config'
 import { 
   getWallets, 
   getWalletByPublicKey,
@@ -58,6 +59,7 @@ import { executeClaimOnServer, closeTokenAccountsOnServer, sendClaimNotification
 import { updateReceiverWallet } from '@/app/actions/user'
 import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardAction, getRecentClaimsAction, getRecentClaimsFreshAction, getUserStatsAction, getReferralStatsAction } from '@/app/actions/stats'
 import { getTasksForUser, verifyAndCompleteTask } from '@/app/actions/tasks'
+import { getMyReferralPercentAction } from '@/app/actions/referral'
 import { AdminDashboard } from '@/components/AdminDashboard'
 
 interface ClaimableAccount {
@@ -148,6 +150,31 @@ export default function SolClaimApp() {
   const [claimableAccounts, setClaimableAccounts] = useState<ClaimableAccount[]>([])
   const [isAccountsExpanded, setIsAccountsExpanded] = useState(false)
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
+
+  const [myReferralPercent, setMyReferralPercent] = useState(0)
+  const myReferralPercentRef = useRef(0)
+  const TOKEN_PROGRAM_ID_STR = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
+
+  useEffect(() => {
+    // Load once per session/user; do not block scans on this.
+    const tid = user?.telegram_id ? String(user.telegram_id) : ''
+    if (!tid) {
+      setMyReferralPercent(0)
+      myReferralPercentRef.current = 0
+      return
+    }
+    getMyReferralPercentAction(tid)
+      .then((res) => {
+        const pct = res?.referred ? Number(res.referralPercent ?? 0) : 0
+        const clamped = Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : 0
+        setMyReferralPercent(clamped)
+        myReferralPercentRef.current = clamped
+      })
+      .catch(() => {
+        setMyReferralPercent(0)
+        myReferralPercentRef.current = 0
+      })
+  }, [user?.telegram_id])
 
   // Wallet Management State
   const [savedWallets, setSavedWallets] = useState<any[]>([])
@@ -492,9 +519,14 @@ t.me/solclaimxbot?start=${telegramId}`
       }
 
       const result = await getClaimableRent(kp.publicKey)
-      setAddWalletModalRent(result.totalRent / 1000000000)
-      setAddWalletModalAccounts(result.accounts)
-      setAddWalletModalExpanded(result.accounts.length > 0)
+      const tokenProgramAccounts = result.accounts.filter((a) => !a.programIdStr || a.programIdStr === TOKEN_PROGRAM_ID_STR)
+      const referralPercent = myReferralPercentRef.current || 0
+      const netPerAccount = SOLCLAIM_USER_PAYOUT_BEFORE_REFERRAL * (1 - referralPercent / 100)
+      const netEstimate = tokenProgramAccounts.length * netPerAccount
+
+      setAddWalletModalRent(netEstimate)
+      setAddWalletModalAccounts(tokenProgramAccounts)
+      setAddWalletModalExpanded(tokenProgramAccounts.length > 0)
     } catch (e: any) {
       toast.error(e?.message?.includes('decode') ? 'Invalid private key format (Base58)' : (e?.message || 'Failed to scan'))
     } finally {
@@ -712,14 +744,18 @@ t.me/solclaimxbot?start=${telegramId}`
         setBatchScanScannedIds((prev) => [...prev, wallet.id])
         
         if (result.accounts.length > 0) {
-          const rentInSol = result.totalRent / 1000000000
+          const tokenProgramAccounts = result.accounts.filter((a) => !a.programIdStr || a.programIdStr === TOKEN_PROGRAM_ID_STR)
+          const referralPercent = myReferralPercentRef.current || 0
+          const netPerAccount = SOLCLAIM_USER_PAYOUT_BEFORE_REFERRAL * (1 - referralPercent / 100)
+          const rentInSol = tokenProgramAccounts.length * netPerAccount
+
           totalRent += rentInSol
-          totalAccounts += result.accounts.length
+          totalAccounts += tokenProgramAccounts.length
           
           walletsWithClaims.push({
             walletId: wallet.id,
             publicKey: wallet.public_key,
-            accounts: result.accounts,
+            accounts: tokenProgramAccounts,
             rent: rentInSol
           })
         }
@@ -888,9 +924,16 @@ t.me/solclaimxbot?start=${telegramId}`
 
     try {
       const result = await getClaimableRent(new PublicKey(publicKey))
-      setClaimableRent(result.totalRent / 1000000000) // Convert lamports to SOL
-      setClaimableAccounts(result.accounts)
-      if (!opts?.silent) toast.success(`Found ${result.accounts.length} claimable accounts`)
+      // Conservative: only Token Program accounts are actually closed in claims.
+      const tokenProgramAccounts = result.accounts.filter((a) => !a.programIdStr || a.programIdStr === TOKEN_PROGRAM_ID_STR)
+      setClaimableAccounts(tokenProgramAccounts)
+
+      const referralPercent = myReferralPercentRef.current || 0
+      const netPerAccount = SOLCLAIM_USER_PAYOUT_BEFORE_REFERRAL * (1 - referralPercent / 100)
+      const netEstimate = tokenProgramAccounts.length * netPerAccount
+
+      setClaimableRent(netEstimate)
+      if (!opts?.silent) toast.success(`Found ${tokenProgramAccounts.length} claimable accounts`)
     } catch (err) {
       if (!opts?.silent) toast.error('Failed to scan wallet. Please check the public key.')
       console.error(err)

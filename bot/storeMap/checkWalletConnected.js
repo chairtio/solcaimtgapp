@@ -2,7 +2,8 @@
 
 import { fetchWalletData } from '../utils/fetchWalletData.js';
 import { checkClaim, getTokenData, clearTokenData } from './checkClaim.js';
-import { SOL_CLAIM_PER_TOKEN_ACCOUNT } from '../private/private.js';
+import { computeNetPayoutPerAccount } from '../private/private.js';
+import { getRefereeReferralPercentCached } from '../lib/supabase-bot.js';
 import pTimeout from '../utils/pTimeout.js';
 
 const TIMEOUT_MS = 60000;
@@ -37,6 +38,8 @@ export async function checkWalletConnected(ctx, walletId = null) {
         }
 
         let processedWallets = 0;
+        const referralPercent = await getRefereeReferralPercentCached(userId);
+        const netPerAccount = computeNetPayoutPerAccount(referralPercent);
 
         for (const batch of walletBatches) {
             const timeSpent = Date.now() - startTime;
@@ -49,8 +52,8 @@ export async function checkWalletConnected(ctx, walletId = null) {
                     await pTimeout(checkClaim(address, userId), timeoutPerBatch);
 
                     const { tokenAccounts, zeroAmountAccountsCount } = await getTokenData(userId);
-                    const solToClaim = tokenAccounts.length * SOL_CLAIM_PER_TOKEN_ACCOUNT;
-                    const solAbleToClaim = zeroAmountAccountsCount * SOL_CLAIM_PER_TOKEN_ACCOUNT;
+                    const solToClaim = tokenAccounts.length * netPerAccount;
+                    const solAbleToClaim = zeroAmountAccountsCount * netPerAccount;
 
                     results.push({
                         address,

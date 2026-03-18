@@ -2,7 +2,8 @@
 import { PublicKey } from "@solana/web3.js";
 import { checkClaim, clearTokenData } from './checkClaim.js';
 import pTimeout from '../utils/pTimeout.js';
-import { SOL_CLAIM_PER_TOKEN_ACCOUNT } from '../private/private.js';
+import { computeNetPayoutPerAccount } from '../private/private.js';
+import { getRefereeReferralPercentCached } from '../lib/supabase-bot.js';
 
 const TIMEOUT_MS = 60000;
 
@@ -39,8 +40,10 @@ export async function checkCommand(ctx) {
 
         const { tokenAccountsCount, zeroAmountAccountsCount } = await pTimeout(checkClaim(address, userId), TIMEOUT_MS);
 
-        const solToClaim = tokenAccountsCount * SOL_CLAIM_PER_TOKEN_ACCOUNT;
-        const solAbleToClaim = zeroAmountAccountsCount * SOL_CLAIM_PER_TOKEN_ACCOUNT;
+        const referralPercent = await getRefereeReferralPercentCached(userId);
+        const netPerAccount = computeNetPayoutPerAccount(referralPercent);
+        const solToClaim = tokenAccountsCount * netPerAccount;
+        const solAbleToClaim = zeroAmountAccountsCount * netPerAccount;
 
         // Construct the reply message based on whether there was an error or not
         let replyMessage;
