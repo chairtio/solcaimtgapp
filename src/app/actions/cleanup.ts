@@ -63,7 +63,10 @@ async function fetchJupPrices(mints: string[]): Promise<Map<string, number>> {
 
   // Jupiter price endpoint (batch)
   const url = `https://price.jup.ag/v4/price?ids=${encodeURIComponent(ids.join(','))}`
-  const res = await fetchWithRetry(url, { method: 'GET' })
+  const res = await fetchWithRetry(url, {
+    method: 'GET',
+    headers: { Accept: 'application/json', 'User-Agent': 'SolClaim/1.0' },
+  })
   if (!res.ok) return priceMap
   const json = await res.json().catch(() => null)
   const data = json?.data
@@ -87,7 +90,9 @@ async function jupQuote(params: {
     amount: params.amountRaw,
     slippageBps: String(params.slippageBps),
   })
-  const res = await fetchWithRetry(`https://quote-api.jup.ag/v6/quote?${qs.toString()}`)
+  const res = await fetchWithRetry(`https://quote-api.jup.ag/v6/quote?${qs.toString()}`, {
+    headers: { Accept: 'application/json', 'User-Agent': 'SolClaim/1.0' },
+  })
   if (!res.ok) return null
   return await res.json().catch(() => null)
 }
@@ -99,7 +104,11 @@ async function jupSwapInstructions(params: {
 }): Promise<any | null> {
   const res = await fetchWithRetry(`https://quote-api.jup.ag/v6/swap-instructions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'User-Agent': 'SolClaim/1.0',
+    },
     body: JSON.stringify({
       quoteResponse: params.quoteResponse,
       userPublicKey: params.userPublicKey,
@@ -397,7 +406,9 @@ async function cleanupWalletTokens(params: {
       continue
     }
 
-    const bestRoute = quote?.data?.[0]
+    // v6 returns the quote at top level (routePlan, outAmount, etc.), not under .data[0]
+    const bestRoute =
+      quote && Array.isArray(quote?.routePlan) && quote.routePlan.length > 0 ? quote : null
     if (!bestRoute) {
       // No liquidity/quote. Burn only if we can prove value < $1.
       if (usdValue != null && usdValue < 1) {
