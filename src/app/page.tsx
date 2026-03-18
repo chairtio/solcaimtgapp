@@ -197,6 +197,8 @@ export default function SolClaimApp() {
   const [batchResults, setBatchResults] = useState<{
     totalRent: number,
     totalAccounts: number,
+    totalRentWithCleanup: number,
+    totalAccountsWithCleanup: number,
     walletsWithClaims: { walletId: string, publicKey: string, accounts: ClaimableAccount[], rent: number }[]
   } | null>(null)
   
@@ -816,26 +818,36 @@ t.me/solclaimxbot?start=${telegramId}`
     try {
       let totalRent = 0
       let totalAccounts = 0
+      let totalRentWithCleanup = 0
+      let totalAccountsWithCleanup = 0
       const walletsWithClaims = []
 
       for (const wallet of walletsToScan) {
         const result = await scanWalletForBatchProjectionAction(wallet.public_key)
         setBatchScanScannedIds((prev) => [...prev, wallet.id])
-        
-        if (result.emptyAccounts.length > 0) {
-          const tokenProgramAccounts = result.emptyAccounts.filter((a) => !a.programIdStr || a.programIdStr === TOKEN_PROGRAM_ID_STR)
-          const referralPercent = myReferralPercentRef.current || 0
-          const netPerAccount = SOLCLAIM_USER_PAYOUT_BEFORE_REFERRAL * (1 - referralPercent / 100)
-          const rentInSol = result.closeOnlyCount * netPerAccount
 
-          totalRent += rentInSol
-          totalAccounts += result.closeOnlyCount
-          
+        const closeOnlyCount = result.closeOnlyCount ?? 0
+        const cleanupEligibleCount = result.cleanupEligibleCount ?? 0
+
+        const referralPercent = myReferralPercentRef.current || 0
+        const netPerAccount = SOLCLAIM_USER_PAYOUT_BEFORE_REFERRAL * (1 - referralPercent / 100)
+
+        const rentInSolCloseOnly = closeOnlyCount * netPerAccount
+        const rentInSolWithCleanup = (closeOnlyCount + cleanupEligibleCount) * netPerAccount
+
+        totalRent += rentInSolCloseOnly
+        totalAccounts += closeOnlyCount
+        totalRentWithCleanup += rentInSolWithCleanup
+        totalAccountsWithCleanup += closeOnlyCount + cleanupEligibleCount
+
+        // Include wallet if it has close-only empties OR any cleanup-eligible non-empty token accounts.
+        if (closeOnlyCount > 0 || cleanupEligibleCount > 0) {
+          const tokenProgramAccounts = result.emptyAccounts.filter((a) => !a.programIdStr || a.programIdStr === TOKEN_PROGRAM_ID_STR)
           walletsWithClaims.push({
             walletId: wallet.id,
             publicKey: wallet.public_key,
             accounts: tokenProgramAccounts,
-            rent: rentInSol
+            rent: rentInSolCloseOnly
           })
         }
       }
@@ -843,6 +855,8 @@ t.me/solclaimxbot?start=${telegramId}`
       setBatchResults({
         totalRent,
         totalAccounts,
+        totalRentWithCleanup,
+        totalAccountsWithCleanup,
         walletsWithClaims
       })
 
@@ -906,62 +920,137 @@ t.me/solclaimxbot?start=${telegramId}`
             continue
           }
 
-          const result = await cleanupAndCloseTokenAccountsOnServer({
-            privateKeyBase58: wallet.encrypted_private_key,
-            userId: user.id,
-            publicKey: claimData.publicKey,
-            slippageBps: 100,
-          })
-
-          const succeededAccounts = result.close.succeededAccounts ?? []
-          if (succeededAccounts.length > 0) {
-            const succeededRent = succeededAccounts.reduce((s, a) => s + a.rentAmount, 0) / 1e9
-            const feeAmount = result.close.feeAmount ?? 0
-            const referrerAmount = result.close.referrerAmount ?? 0
-            const netAmount = succeededRent - feeAmount - referrerAmount
-            const sig = result.close.signatures[0] || ('batch_claim_' + Date.now())
-
-            const dbAccounts = succeededAccounts.map(acc => ({
-              wallet_id: wallet.id,
-              account_address: acc.accountAddress,
-              mint_address: acc.mintAddress,
-              balance: acc.balance,
-              rent_amount: acc.rentAmount,
-              is_empty: true,
-              last_scanned: new Date().toISOString()
-            }))
-
-            await upsertTokenAccounts(dbAccounts)
-
-            const tx = await createTransaction({
-              wallet_id: wallet.id,
-              signature: sig,
-              type: 'batch_claim',
-              status: 'confirmed',
-              sol_amount: netAmount,
-              accounts_closed: succeededAccounts.length,
-              fee_amount: feeAmount
+          if (cleanupEnabled) {
+            const result = await cleanupAndCloseTokenAccountsOnServer({
+              privateKeyBase58: wallet.encrypted_private_key,
+              userId: user.id,
+              publicKey: claimData.publicKey,
+              slippageBps: 100,
             })
 
-            if (referrerAmount > 0 && result.referrerId) {
-              await createReferralPayout({
-                referrer_id: result.referrerId,
-                amount: referrerAmount,
-                transaction_id: tx.id
-              })
-            }
+            const succeededAccounts = result.close.succeededAccounts ?? []
+            if (succeededAccounts.length > 0) {
+              const succeededRent = succeededAccounts.reduce((s, a) => s + a.rentAmount, 0) / 1e9
+              const feeAmount = result.close.feeAmount ?? 0
+              const referrerAmount = result.close.referrerAmount ?? 0
+              const netAmount = succeededRent - feeAmount - referrerAmount
+              const sig = result.close.signatures[0] || ('batch_claim_' + Date.now())
 
-            successfulClaims++
-            totalClaimedSol += netAmount
-            totalAccountsClosed += succeededAccounts.length
-            if (result.cleanup.sold > 0 || result.cleanup.burned > 0) {
-              toast.success(`Cleanup ${claimData.publicKey.slice(0, 4)}…: sold ${result.cleanup.sold}, burned ${result.cleanup.burned}`, { duration: 3500 })
-            }
-            if (succeededAccounts.length < claimData.accounts.length) {
-              console.warn(`Partial success: closed ${succeededAccounts.length}/${claimData.accounts.length} accounts for ${claimData.publicKey}`)
+              const dbAccounts = succeededAccounts.map((acc) => ({
+                wallet_id: wallet.id,
+                account_address: acc.accountAddress,
+                mint_address: acc.mintAddress,
+                balance: acc.balance,
+                rent_amount: acc.rentAmount,
+                is_empty: true,
+                last_scanned: new Date().toISOString()
+              }))
+
+              await upsertTokenAccounts(dbAccounts)
+
+              const tx = await createTransaction({
+                wallet_id: wallet.id,
+                signature: sig,
+                type: 'batch_claim',
+                status: 'confirmed',
+                sol_amount: netAmount,
+                accounts_closed: succeededAccounts.length,
+                fee_amount: feeAmount
+              })
+
+              if (referrerAmount > 0 && result.referrerId) {
+                await createReferralPayout({
+                  referrer_id: result.referrerId,
+                  amount: referrerAmount,
+                  transaction_id: tx.id
+                })
+              }
+
+              successfulClaims++
+              totalClaimedSol += netAmount
+              totalAccountsClosed += succeededAccounts.length
+              if (result.cleanup.sold > 0 || result.cleanup.burned > 0) {
+                toast.success(`Cleanup ${claimData.publicKey.slice(0, 4)}…: sold ${result.cleanup.sold}, burned ${result.cleanup.burned}`, { duration: 3500 })
+              }
+
+              if (succeededAccounts.length < (claimData.accounts?.length ?? 0)) {
+                console.warn(`Partial success: closed ${succeededAccounts.length}/${claimData.accounts.length} accounts for ${claimData.publicKey}`)
+              }
+            } else {
+              failedClaims++
             }
           } else {
-            failedClaims++
+            if (!claimData.accounts || claimData.accounts.length === 0) continue
+
+            const claimableForAction = claimData.accounts.map((a) => ({
+              accountAddress: a.accountAddress,
+              mintAddress: a.mintAddress,
+              rentAmount: a.rentAmount,
+              balance: a.balance,
+              isDust: a.isDust,
+              programIdStr: a.programIdStr
+            }))
+
+            const result = await closeTokenAccountsOnServer({
+              privateKeyBase58: wallet.encrypted_private_key,
+              userId: user.id,
+              claimableAccounts: claimableForAction,
+              publicKey: claimData.publicKey,
+            })
+
+            if (!result.success) {
+              failedClaims++
+              continue
+            }
+
+            const succeededAccounts = result.succeededAccounts ?? []
+            if (succeededAccounts.length > 0) {
+              const succeededRent = succeededAccounts.reduce((s, a) => s + a.rentAmount, 0) / 1e9
+              const feeAmount = result.feeAmount ?? 0
+              const referrerAmount = result.referrerAmount ?? 0
+              const netAmount = succeededRent - feeAmount - referrerAmount
+              const sig = result.signatures?.[0] || ('batch_claim_' + Date.now())
+
+              const dbAccounts = succeededAccounts.map((acc) => ({
+                wallet_id: wallet.id,
+                account_address: acc.accountAddress,
+                mint_address: acc.mintAddress,
+                balance: acc.balance,
+                rent_amount: acc.rentAmount,
+                is_empty: true,
+                last_scanned: new Date().toISOString()
+              }))
+
+              await upsertTokenAccounts(dbAccounts)
+
+              const tx = await createTransaction({
+                wallet_id: wallet.id,
+                signature: sig,
+                type: 'batch_claim',
+                status: 'confirmed',
+                sol_amount: netAmount,
+                accounts_closed: succeededAccounts.length,
+                fee_amount: feeAmount
+              })
+
+              if (referrerAmount > 0 && result.referrerId) {
+                await createReferralPayout({
+                  referrer_id: result.referrerId,
+                  amount: referrerAmount,
+                  transaction_id: tx.id
+                })
+              }
+
+              successfulClaims++
+              totalClaimedSol += netAmount
+              totalAccountsClosed += succeededAccounts.length
+
+              if (succeededAccounts.length < claimData.accounts.length) {
+                console.warn(`Partial success: closed ${succeededAccounts.length}/${claimData.accounts.length} accounts for ${claimData.publicKey}`)
+              }
+            } else {
+              failedClaims++
+            }
           }
         } catch (e) {
           console.error(`Failed to claim for wallet ${claimData.publicKey}:`, e)
@@ -2180,11 +2269,21 @@ t.me/solclaimxbot?start=${telegramId}`
                     <div className="p-3 rounded-xl bg-secondary/50 border-2 border-border flex justify-between items-center">
                       <div>
                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-0.5">Total</p>
-                        <p className="font-black text-xl text-foreground">{batchResults.totalRent.toFixed(4)} <span className="text-primary text-sm">SOL</span></p>
+                        <p className="font-black text-xl text-foreground">
+                          {(cleanupEnabled ? batchResults.totalRentWithCleanup : batchResults.totalRent).toFixed(4)}{' '}
+                          <span className="text-primary text-sm">SOL</span>
+                        </p>
+                        {!cleanupEnabled && batchResults.totalRentWithCleanup > batchResults.totalRent && (
+                          <p className="text-[10px] font-bold text-muted-foreground relative z-10 mt-0.5">
+                            With cleanup (est.): {batchResults.totalRentWithCleanup.toFixed(4)} SOL
+                          </p>
+                        )}
                       </div>
                       <div className="text-right">
                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-0.5">Accounts</p>
-                        <p className="font-black text-xl text-foreground">{batchResults.totalAccounts}</p>
+                        <p className="font-black text-xl text-foreground">
+                          {cleanupEnabled ? batchResults.totalAccountsWithCleanup : batchResults.totalAccounts}
+                        </p>
                       </div>
                     </div>
                     
@@ -2192,7 +2291,14 @@ t.me/solclaimxbot?start=${telegramId}`
                       <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold border-2 text-xs" onClick={() => setBatchResults(null)} disabled={isBatchClaiming}>
                         CANCEL
                       </Button>
-                      <Button className="flex-1 h-12 rounded-xl bg-primary text-primary-foreground font-black shadow-md shadow-primary/20 active:scale-[0.98] border border-primary-foreground/10 text-xs" onClick={claimAllWallets} disabled={isBatchClaiming || batchResults.totalAccounts === 0}>
+                      <Button
+                        className="flex-1 h-12 rounded-xl bg-primary text-primary-foreground font-black shadow-md shadow-primary/20 active:scale-[0.98] border border-primary-foreground/10 text-xs"
+                        onClick={claimAllWallets}
+                        disabled={
+                          isBatchClaiming ||
+                          (cleanupEnabled ? batchResults.totalAccountsWithCleanup : batchResults.totalAccounts) === 0
+                        }
+                      >
                         {isBatchClaiming ? <div className="flex items-center gap-2"><div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground"></div>CLAIMING...</div> : 'CLAIM ALL'}
                       </Button>
                     </div>

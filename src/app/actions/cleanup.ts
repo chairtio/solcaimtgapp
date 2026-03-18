@@ -19,6 +19,7 @@ type CleanupSummary = {
 
 const SOL_MINT = 'So11111111111111111111111111111111111111112'
 const TOKEN_PROGRAM_ID_STR = TOKEN_PROGRAM_ID.toString()
+const MAX_SWAPS_PER_TX = 3
 
 function clampPct(p: number) {
   if (!Number.isFinite(p)) return 0
@@ -162,6 +163,92 @@ async function buildAndSendSwapTx(params: {
   }
 }
 
+async function buildAndSendMultiSwapTx(params: {
+  user: Keypair
+  feePayer: Keypair
+  receiver: PublicKey
+  swaps: Array<{ quote: any; swapIxs: any }>
+}): Promise<{ ok: boolean; signature?: string; error?: string }> {
+  try {
+    const toIxs = (arr: any[]) =>
+      (Array.isArray(arr) ? arr : [])
+        .map((ix) => {
+          if (!ix?.programId || !ix?.accounts || !ix?.data) return null
+          return {
+            programId: new PublicKey(ix.programId),
+            keys: ix.accounts.map((a: any) => ({
+              pubkey: new PublicKey(a.pubkey),
+              isSigner: !!a.isSigner,
+              isWritable: !!a.isWritable,
+            })),
+            data: Buffer.from(ix.data, 'base64'),
+          }
+        })
+        .filter(Boolean)
+
+    const lookupTableAddressesSet = new Set<string>()
+    for (const s of params.swaps) {
+      const addrs: string[] = Array.isArray(s.swapIxs?.addressLookupTableAddresses)
+        ? s.swapIxs.addressLookupTableAddresses
+        : []
+      for (const a of addrs) lookupTableAddressesSet.add(a)
+    }
+    const lookupTableAddresses = Array.from(lookupTableAddressesSet)
+
+    const luts = await Promise.all(
+      lookupTableAddresses.map(async (addr) => {
+        try {
+          const res = await connection.getAddressLookupTable(new PublicKey(addr))
+          return res.value
+        } catch {
+          return null
+        }
+      })
+    )
+
+    const instructions: any[] = []
+
+    for (const s of params.swaps) {
+      const swapIxs = s.swapIxs
+
+      const computeBudget = toIxs(swapIxs?.computeBudgetInstructions)
+      const setup = toIxs(swapIxs?.setupInstructions)
+      const swapIx = toIxs([swapIxs?.swapInstruction])
+      const cleanup = toIxs(swapIxs?.cleanupInstruction ? [swapIxs.cleanupInstruction] : [])
+
+      // Transfer SOL proceeds (minimum expected) to receiver.
+      const minOut = BigInt(s.quote?.otherAmountThreshold ?? s.quote?.outAmount ?? '0')
+      const transferIx =
+        minOut > BigInt(0)
+          ? [
+              SystemProgram.transfer({
+                fromPubkey: params.user.publicKey,
+                toPubkey: params.receiver,
+                lamports: Number(minOut),
+              }),
+            ]
+          : []
+
+      instructions.push(...computeBudget, ...setup, ...swapIx, ...cleanup, ...transferIx)
+    }
+
+    const { blockhash } = await connection.getLatestBlockhash()
+    const message = new TransactionMessage({
+      payerKey: params.feePayer.publicKey,
+      recentBlockhash: blockhash,
+      instructions,
+    }).compileToV0Message(luts.filter(Boolean) as any)
+
+    const tx = new VersionedTransaction(message)
+    tx.sign([params.feePayer, params.user])
+    const sig = await connection.sendTransaction(tx, { maxRetries: 2 })
+    return { ok: true, signature: sig }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Multi-swap tx failed'
+    return { ok: false, error: msg }
+  }
+}
+
 async function cleanupWalletTokens(params: {
   userId: string
   publicKey: string
@@ -217,6 +304,14 @@ async function cleanupWalletTokens(params: {
   // Batch prices
   const mintStrs = candidates.map((c) => c.mint.toString()).filter((m) => m !== SOL_MINT)
   const priceMap = await fetchJupPrices(mintStrs)
+
+  const swapCandidates: Array<{
+    mint: string
+    acc: (typeof candidates)[number]
+    quote: any
+    swapIxs: any
+    usdValue: number | null
+  }> = []
 
   for (const acc of candidates) {
     const mint = acc.mint.toString()
@@ -326,28 +421,58 @@ async function cleanupWalletTokens(params: {
       continue
     }
 
-    const swapRes = await buildAndSendSwapTx({
+    // Defer execution: we will attempt true multi-swap execution in chunks.
+    swapCandidates.push({
+      mint,
+      acc,
+      quote: bestRoute,
+      swapIxs,
+      usdValue,
+    })
+  }
+
+  // Attempt multi-swap execution per chunk; fall back to per-token swaps on failure.
+  for (let i = 0; i < swapCandidates.length; i += MAX_SWAPS_PER_TX) {
+    const chunk = swapCandidates.slice(i, i + MAX_SWAPS_PER_TX)
+    const multiRes = await buildAndSendMultiSwapTx({
       user: userKp,
       feePayer,
       receiver: receiverPk,
-      quote: bestRoute,
-      swapIxs,
+      swaps: chunk.map((c) => ({ quote: c.quote, swapIxs: c.swapIxs })),
     })
 
-    if (swapRes.ok) {
-      summary.sold++
-    } else {
+    if (multiRes.ok) {
+      summary.sold += chunk.length
+      continue
+    }
+
+    summary.errors.push(`Multi-swap tx failed: ${multiRes.error || 'unknown'}`)
+
+    for (const c of chunk) {
+      const swapRes = await buildAndSendSwapTx({
+        user: userKp,
+        feePayer,
+        receiver: receiverPk,
+        quote: c.quote,
+        swapIxs: c.swapIxs,
+      })
+
+      if (swapRes.ok) {
+        summary.sold++
+        continue
+      }
+
       // Swap failed; burn only if <$1
-      if (usdValue != null && usdValue < 1) {
+      if (c.usdValue != null && c.usdValue < 1) {
         try {
-          const burnAmount = BigInt(acc.amountRaw)
+          const burnAmount = BigInt(c.acc.amountRaw)
           if (burnAmount > BigInt(0)) {
             const burnIx = createBurnCheckedInstruction(
-              acc.address,
-              acc.mint,
+              c.acc.address,
+              c.acc.mint,
               userKp.publicKey,
               burnAmount,
-              acc.decimals
+              c.acc.decimals
             )
             const { blockhash } = await connection.getLatestBlockhash()
             const msg = new TransactionMessage({
@@ -361,11 +486,11 @@ async function cleanupWalletTokens(params: {
             summary.burned++
           } else summary.skipped++
         } catch (e) {
-          summary.errors.push(`Burn failed for ${mint}: ${e instanceof Error ? e.message : 'unknown'}`)
+          summary.errors.push(`Burn failed for ${c.mint}: ${e instanceof Error ? e.message : 'unknown'}`)
         }
       } else {
         summary.skipped++
-        summary.errors.push(`Sell failed for ${mint}: ${swapRes.error || 'unknown'}`)
+        summary.errors.push(`Sell failed for ${c.mint}: ${swapRes.error || 'unknown'}`)
       }
     }
   }
