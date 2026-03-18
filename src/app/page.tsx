@@ -55,7 +55,7 @@ import {
   deactivateWallet
 } from '@/lib/database'
 import { toast } from 'sonner'
-import { sendClaimNotificationToGroup, scanWalletForBatchProjectionAction } from '@/app/actions/claim'
+import { executeClaimOnServer, sendClaimNotificationToGroup, scanWalletForBatchProjectionAction } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
 import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardAction, getRecentClaimsAction, getRecentClaimsFreshAction, getUserStatsAction, getReferralStatsAction } from '@/app/actions/stats'
 import { getTasksForUser, verifyAndCompleteTask } from '@/app/actions/tasks'
