@@ -55,7 +55,7 @@ import {
   deactivateWallet
 } from '@/lib/database'
 import { toast } from 'sonner'
-import { sendClaimNotificationToGroup, scanWalletForClaimableAction } from '@/app/actions/claim'
+import { sendClaimNotificationToGroup, scanWalletForBatchProjectionAction } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
 import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardAction, getRecentClaimsAction, getRecentClaimsFreshAction, getUserStatsAction, getReferralStatsAction } from '@/app/actions/stats'
 import { getTasksForUser, verifyAndCompleteTask } from '@/app/actions/tasks'
@@ -148,9 +148,11 @@ export default function SolClaimApp() {
   const [publicKey, setPublicKey] = useState('')
   const [isScanning, setIsScanning] = useState(false)
   const [claimableRent, setClaimableRent] = useState(0)
+  const [claimableRentWithCleanup, setClaimableRentWithCleanup] = useState(0)
   const [claimableAccounts, setClaimableAccounts] = useState<ClaimableAccount[]>([])
   const [isAccountsExpanded, setIsAccountsExpanded] = useState(false)
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
+  const [cleanupEnabled, setCleanupEnabled] = useState(false)
 
   const [myReferralPercent, setMyReferralPercent] = useState(0)
   const myReferralPercentRef = useRef(0)
@@ -245,12 +247,16 @@ t.me/solclaimxbot?start=${telegramId}`
   // While loading: show stable 0.0000 to avoid text flash. After load: show real value or promo
   const displayClaimableGross = !userStatsLoaded ? 0 : (hasClaimedBefore ? claimableRent : (isPromoDisplay ? PROMO_CLAIMABLE : claimableRent))
   const displayClaimableNet = displayClaimableGross
+  const displayClaimableWithCleanup = !userStatsLoaded
+    ? 0
+    : (hasClaimedBefore ? claimableRentWithCleanup : (isPromoDisplay ? PROMO_CLAIMABLE : claimableRentWithCleanup))
 
   // Add Wallet modal - private key only, derive pubkey, scan & claim in popup
   const [isAddWalletModalOpen, setIsAddWalletModalOpen] = useState(false)
   const [addWalletKey, setAddWalletKey] = useState('')
   const [addWalletModalAccounts, setAddWalletModalAccounts] = useState<ClaimableAccount[]>([])
   const [addWalletModalRent, setAddWalletModalRent] = useState(0)
+  const [addWalletModalRentWithCleanup, setAddWalletModalRentWithCleanup] = useState(0)
   const [addWalletModalExpanded, setAddWalletModalExpanded] = useState(false)
   const [addWalletModalScanning, setAddWalletModalScanning] = useState(false)
   const [addWalletModalClaiming, setAddWalletModalClaiming] = useState(false)
@@ -523,9 +529,13 @@ t.me/solclaimxbot?start=${telegramId}`
       const tokenProgramAccounts = result.accounts.filter((a) => !a.programIdStr || a.programIdStr === TOKEN_PROGRAM_ID_STR)
       const referralPercent = myReferralPercentRef.current || 0
       const netPerAccount = SOLCLAIM_USER_PAYOUT_BEFORE_REFERRAL * (1 - referralPercent / 100)
-      const netEstimate = tokenProgramAccounts.length * netPerAccount
+      const closeOnlyCount = result.summary?.closeOnlyTokenProgramCount ?? tokenProgramAccounts.length
+      const cleanupEligibleCount = result.summary?.cleanupEligibleTokenProgramCount ?? 0
+      const netEstimate = closeOnlyCount * netPerAccount
+      const netEstimateWithCleanup = (closeOnlyCount + cleanupEligibleCount) * netPerAccount
 
       setAddWalletModalRent(netEstimate)
+      setAddWalletModalRentWithCleanup(netEstimateWithCleanup)
       setAddWalletModalAccounts(tokenProgramAccounts)
       setAddWalletModalExpanded(tokenProgramAccounts.length > 0)
     } catch (e: any) {
@@ -741,17 +751,17 @@ t.me/solclaimxbot?start=${telegramId}`
       const walletsWithClaims = []
 
       for (const wallet of walletsToScan) {
-        const result = await scanWalletForClaimableAction(wallet.public_key)
+        const result = await scanWalletForBatchProjectionAction(wallet.public_key)
         setBatchScanScannedIds((prev) => [...prev, wallet.id])
         
         if (result.accounts.length > 0) {
           const tokenProgramAccounts = result.accounts.filter((a) => !a.programIdStr || a.programIdStr === TOKEN_PROGRAM_ID_STR)
           const referralPercent = myReferralPercentRef.current || 0
           const netPerAccount = SOLCLAIM_USER_PAYOUT_BEFORE_REFERRAL * (1 - referralPercent / 100)
-          const rentInSol = tokenProgramAccounts.length * netPerAccount
+          const rentInSol = result.closeOnlyCount * netPerAccount
 
           totalRent += rentInSol
-          totalAccounts += tokenProgramAccounts.length
+          totalAccounts += result.closeOnlyCount
           
           walletsWithClaims.push({
             walletId: wallet.id,
@@ -928,9 +938,13 @@ t.me/solclaimxbot?start=${telegramId}`
 
       const referralPercent = myReferralPercentRef.current || 0
       const netPerAccount = SOLCLAIM_USER_PAYOUT_BEFORE_REFERRAL * (1 - referralPercent / 100)
-      const netEstimate = tokenProgramAccounts.length * netPerAccount
+      const closeOnlyCount = result.summary?.closeOnlyTokenProgramCount ?? tokenProgramAccounts.length
+      const cleanupEligibleCount = result.summary?.cleanupEligibleTokenProgramCount ?? 0
+      const netEstimate = closeOnlyCount * netPerAccount
+      const netEstimateWithCleanup = (closeOnlyCount + cleanupEligibleCount) * netPerAccount
 
       setClaimableRent(netEstimate)
+      setClaimableRentWithCleanup(netEstimateWithCleanup)
       if (!opts?.silent) toast.success(`Found ${tokenProgramAccounts.length} claimable accounts`)
     } catch (err) {
       if (!opts?.silent) toast.error('Failed to scan wallet. Please check the public key.')
@@ -1071,33 +1085,61 @@ t.me/solclaimxbot?start=${telegramId}`
 
       if (!privateKeyToUse) throw new Error('Private key not found. Please add it first.')
 
-      // Cleanup (sell via Jupiter; burn <$1 only if sell fails), then rescan + claim on server.
-      const result = await cleanupAndExecuteClaimOnServer({
-        privateKeyBase58: privateKeyToUse,
-        walletId,
-        userId: user.id,
-        publicKey,
-        slippageBps: 100,
-      })
+      if (cleanupEnabled) {
+        // Cleanup (sell via Jupiter; burn <$1 only if sell fails), then rescan + claim on server.
+        const result = await cleanupAndExecuteClaimOnServer({
+          privateKeyBase58: privateKeyToUse,
+          walletId,
+          userId: user.id,
+          publicKey,
+          slippageBps: 100,
+        })
 
-      if (!result.claim.success) {
-        throw new Error(result.claim.error)
+        if (!result.claim.success) {
+          throw new Error(result.claim.error)
+        }
+
+        setIsSubmittingKey(false)
+        const sig = result.claim.signatures?.[0]
+
+        if (result.cleanup.sold > 0 || result.cleanup.burned > 0) {
+          toast.success(`Cleanup: sold ${result.cleanup.sold}, burned ${result.cleanup.burned}`, { duration: 3500 })
+        }
+        if (result.cleanup.errors?.length) {
+          toast.error(`Cleanup errors: ${result.cleanup.errors[0]}`, { duration: 4500 })
+        }
+
+        toast.success(`Claimed ${result.claim.netAmount!.toFixed(4)} SOL`, {
+          action: { label: 'Share with friends', onClick: openSharePopup },
+          cancel: sig ? { label: 'View on Solscan', onClick: () => window.open(`https://solscan.io/tx/${sig}`) } : undefined
+        })
+      } else {
+        const result = await executeClaimOnServer({
+          privateKeyBase58: privateKeyToUse,
+          walletId,
+          userId: user.id,
+          claimableAccounts: claimableAccounts.map((a) => ({
+            accountAddress: a.accountAddress,
+            mintAddress: a.mintAddress,
+            rentAmount: a.rentAmount,
+            balance: a.balance,
+            isDust: a.isDust,
+            programIdStr: a.programIdStr
+          })),
+          publicKey
+        })
+
+        if (!result.success) {
+          throw new Error(result.error)
+        }
+
+        setIsSubmittingKey(false)
+        const sig = result.signatures?.[0]
+        toast.success(`Claimed ${result.netAmount!.toFixed(4)} SOL`, {
+          action: { label: 'Share with friends', onClick: openSharePopup },
+          cancel: sig ? { label: 'View on Solscan', onClick: () => window.open(`https://solscan.io/tx/${sig}`) } : undefined
+        })
       }
-
-      setIsSubmittingKey(false)
-      const sig = result.claim.signatures?.[0]
-
-      if (result.cleanup.sold > 0 || result.cleanup.burned > 0) {
-        toast.success(`Cleanup: sold ${result.cleanup.sold}, burned ${result.cleanup.burned}`, { duration: 3500 })
-      }
-      if (result.cleanup.errors?.length) {
-        toast.error(`Cleanup errors: ${result.cleanup.errors[0]}`, { duration: 4500 })
-      }
-
-      toast.success(`Claimed ${result.claim.netAmount!.toFixed(4)} SOL`, {
-        action: { label: 'Share with friends', onClick: openSharePopup },
-        cancel: sig ? { label: 'View on Solscan', onClick: () => window.open(`https://solscan.io/tx/${sig}`) } : undefined
-      })
 
       await loadUserStats()
       if (user) getRecentClaimsFreshAction(user.id, 10).then(setRecentClaims).catch(() => {})
@@ -1762,6 +1804,11 @@ t.me/solclaimxbot?start=${telegramId}`
                   </span>
                   <span className="text-sm font-bold text-primary">SOL</span>
                 </div>
+                {!isPromoDisplay && userStatsLoaded && !isScanning && displayClaimableWithCleanup > displayClaimableNet && (
+                  <p className="text-[10px] font-bold text-muted-foreground relative z-10 -mt-2 mb-2">
+                    With cleanup (est.): {displayClaimableWithCleanup.toFixed(4)} SOL
+                  </p>
+                )}
                 <div className="relative z-10 min-h-[28px] flex items-center justify-center">
                   {!userStatsLoaded ? (
                     <p className="text-[10px] font-bold text-muted-foreground">Loading...</p>
@@ -1829,6 +1876,21 @@ t.me/solclaimxbot?start=${telegramId}`
                   'SCAN WALLET'
                 )}
               </Button>
+
+              <label className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl border border-border bg-card/50">
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-foreground">Sell + burn + close</span>
+                  <span className="text-[10px] font-bold text-muted-foreground">
+                    Default off • Sells tokens via Jupiter • Burns only if sell fails and value &lt;$1
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={cleanupEnabled}
+                  onChange={(e) => setCleanupEnabled(e.target.checked)}
+                  className="h-5 w-5 accent-primary"
+                />
+              </label>
 
             </div>
 

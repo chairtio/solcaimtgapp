@@ -144,9 +144,21 @@ export async function getWalletTokenAccounts(publicKey: PublicKey): Promise<Toke
 export async function getClaimableRent(publicKey: PublicKey): Promise<{
   totalRent: number
   accounts: ClaimableAccount[]
+  summary: {
+    closeOnlyTokenProgramCount: number
+    cleanupEligibleTokenProgramCount: number
+  }
 }> {
   const tokenAccounts = await getWalletTokenAccounts(publicKey)
-  
+
+  const closeOnlyTokenProgramCount = tokenAccounts.filter(
+    (a) => a.isEmpty && a.programId.toString() === TOKEN_PROGRAM_ID.toString()
+  ).length
+  // Projection only: non-empty Token Program accounts with decimals > 0 (skip NFTs / unknown)
+  const cleanupEligibleTokenProgramCount = tokenAccounts.filter(
+    (a) => !a.isEmpty && a.programId.toString() === TOKEN_PROGRAM_ID.toString() && a.decimals > 0
+  ).length
+
   // Only empty accounts are claimable and shown; keep single-scan fast by processing empties only.
   const accountsToProcess = tokenAccounts.filter((a) => a.isEmpty)
   
@@ -228,7 +240,11 @@ export async function getClaimableRent(publicKey: PublicKey): Promise<{
 
   const totalRent = accounts.reduce((sum, acc) => sum + acc.rentAmount, 0)
 
-  return { totalRent, accounts }
+  return {
+    totalRent,
+    accounts,
+    summary: { closeOnlyTokenProgramCount, cleanupEligibleTokenProgramCount },
+  }
 }
 
 /**

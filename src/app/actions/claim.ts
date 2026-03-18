@@ -2,7 +2,7 @@
 
 import { Keypair, PublicKey } from '@solana/web3.js'
 import bs58 from 'bs58'
-import { closeEmptyTokenAccounts, getClaimableRent, getClaimableRentTotalsOnly } from '@/lib/solana'
+import { closeEmptyTokenAccounts, getClaimableRent, getClaimableRentTotalsOnly, getWalletTokenAccounts, RENT_EXEMPTION_LAMPORTS } from '@/lib/solana'
 import {
   getWallets,
   getUserById,
@@ -64,6 +64,30 @@ export async function scanWalletForClaimableAction(publicKey: string): Promise<{
     totalRent: result.totalRent,
     accounts: result.accounts,
   }
+}
+
+/** Batch scan helper: return empty accounts plus projection counts (no Jupiter). */
+export async function scanWalletForBatchProjectionAction(publicKey: string): Promise<{
+  closeOnlyCount: number
+  cleanupEligibleCount: number
+  accounts: { accountAddress: string; mintAddress: string; rentAmount: number; balance: number; programIdStr?: string }[]
+}> {
+  const pk = new PublicKey(publicKey)
+  const tokenAccounts = await getWalletTokenAccounts(pk)
+  const closeOnlyCount = tokenAccounts.filter((a) => a.isEmpty && a.programId.toString() === 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').length
+  const cleanupEligibleCount = tokenAccounts.filter((a) => !a.isEmpty && a.programId.toString() === 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' && a.decimals > 0).length
+
+  const accounts = tokenAccounts
+    .filter((a) => a.isEmpty)
+    .map((a) => ({
+      accountAddress: a.address.toString(),
+      mintAddress: a.mint.toString(),
+      rentAmount: RENT_EXEMPTION_LAMPORTS,
+      balance: 0,
+      programIdStr: a.programId.toString(),
+    }))
+
+  return { closeOnlyCount, cleanupEligibleCount, accounts }
 }
 
 export interface ClaimableAccountForAction {
