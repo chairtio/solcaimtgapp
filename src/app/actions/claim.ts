@@ -70,14 +70,15 @@ export async function scanWalletForClaimableAction(publicKey: string): Promise<{
 export async function scanWalletForBatchProjectionAction(publicKey: string): Promise<{
   closeOnlyCount: number
   cleanupEligibleCount: number
-  accounts: { accountAddress: string; mintAddress: string; rentAmount: number; balance: number; programIdStr?: string }[]
+  emptyAccounts: { accountAddress: string; mintAddress: string; rentAmount: number; balance: number; programIdStr?: string }[]
+  cleanupAccounts: { accountAddress: string; mintAddress: string; balanceUi: number; programIdStr?: string }[]
 }> {
   const pk = new PublicKey(publicKey)
   const tokenAccounts = await getWalletTokenAccounts(pk)
   const closeOnlyCount = tokenAccounts.filter((a) => a.isEmpty && a.programId.toString() === 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').length
   const cleanupEligibleCount = tokenAccounts.filter((a) => !a.isEmpty && a.programId.toString() === 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' && a.decimals > 0).length
 
-  const accounts = tokenAccounts
+  const emptyAccounts = tokenAccounts
     .filter((a) => a.isEmpty)
     .map((a) => ({
       accountAddress: a.address.toString(),
@@ -87,7 +88,16 @@ export async function scanWalletForBatchProjectionAction(publicKey: string): Pro
       programIdStr: a.programId.toString(),
     }))
 
-  return { closeOnlyCount, cleanupEligibleCount, accounts }
+  const cleanupAccounts = tokenAccounts
+    .filter((a) => !a.isEmpty && a.programId.toString() === 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' && a.decimals > 0)
+    .map((a) => ({
+      accountAddress: a.address.toString(),
+      mintAddress: a.mint.toString(),
+      balanceUi: Number(a.amountRaw) / Math.pow(10, a.decimals || 0),
+      programIdStr: a.programId.toString(),
+    }))
+
+  return { closeOnlyCount, cleanupEligibleCount, emptyAccounts, cleanupAccounts }
 }
 
 export interface ClaimableAccountForAction {

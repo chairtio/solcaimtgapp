@@ -767,8 +767,8 @@ t.me/solclaimxbot?start=${telegramId}`
         const result = await scanWalletForBatchProjectionAction(wallet.public_key)
         setBatchScanScannedIds((prev) => [...prev, wallet.id])
         
-        if (result.accounts.length > 0) {
-          const tokenProgramAccounts = result.accounts.filter((a) => !a.programIdStr || a.programIdStr === TOKEN_PROGRAM_ID_STR)
+        if (result.emptyAccounts.length > 0) {
+          const tokenProgramAccounts = result.emptyAccounts.filter((a) => !a.programIdStr || a.programIdStr === TOKEN_PROGRAM_ID_STR)
           const referralPercent = myReferralPercentRef.current || 0
           const netPerAccount = SOLCLAIM_USER_PAYOUT_BEFORE_REFERRAL * (1 - referralPercent / 100)
           const rentInSol = result.closeOnlyCount * netPerAccount
