@@ -55,7 +55,7 @@ import {
   deactivateWallet
 } from '@/lib/database'
 import { toast } from 'sonner'
-import { executeClaimOnServer, sendClaimNotificationToGroup, scanWalletForBatchProjectionAction } from '@/app/actions/claim'
+import { closeTokenAccountsOnServer, executeClaimOnServer, sendClaimNotificationToGroup, scanWalletForBatchProjectionAction } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
 import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardAction, getRecentClaimsAction, getRecentClaimsFreshAction, getUserStatsAction, getReferralStatsAction } from '@/app/actions/stats'
 import { getTasksForUser, verifyAndCompleteTask } from '@/app/actions/tasks'
@@ -150,6 +150,9 @@ export default function SolClaimApp() {
   const [claimableRent, setClaimableRent] = useState(0)
   const [claimableRentWithCleanup, setClaimableRentWithCleanup] = useState(0)
   const [claimableAccounts, setClaimableAccounts] = useState<ClaimableAccount[]>([])
+  const [cleanupEligibleAccounts, setCleanupEligibleAccounts] = useState<ClaimableAccount[]>([])
+  const [cleanupEligibleTokenCount, setCleanupEligibleTokenCount] = useState(0)
+  const [hasScannedOnce, setHasScannedOnce] = useState(false)
   const [isAccountsExpanded, setIsAccountsExpanded] = useState(false)
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
   const [cleanupEnabled, setCleanupEnabled] = useState(false)
@@ -252,17 +255,7 @@ t.me/solclaimxbot?start=${telegramId}`
     : (hasClaimedBefore ? claimableRentWithCleanup : (isPromoDisplay ? PROMO_CLAIMABLE : claimableRentWithCleanup))
 
   const displayClaimableActive = cleanupEnabled ? displayClaimableWithCleanup : displayClaimableNet
-  const estimatedNetPerAccount =
-    !userStatsLoaded || claimableAccounts.length === 0
-      ? 0
-      : (SOLCLAIM_USER_PAYOUT_BEFORE_REFERRAL * (1 - (myReferralPercentRef.current || 0) / 100))
-  const extraCleanupAccounts =
-    cleanupEnabled && estimatedNetPerAccount > 0
-      ? Math.max(
-          0,
-          Math.round((displayClaimableWithCleanup - displayClaimableNet) / estimatedNetPerAccount)
-        )
-      : 0
+  const accountsToShow = cleanupEnabled ? [...claimableAccounts, ...cleanupEligibleAccounts] : claimableAccounts
 
   // Add Wallet modal - private key only, derive pubkey, scan & claim in popup
   const [isAddWalletModalOpen, setIsAddWalletModalOpen] = useState(false)
@@ -559,7 +552,10 @@ t.me/solclaimxbot?start=${telegramId}`
   }
 
   const handleAddWalletClaim = async () => {
-    if (!user || !addWalletKey.trim() || addWalletModalAccounts.length === 0) return
+    if (!user || !addWalletKey.trim()) return
+    const canCloseOnly = !cleanupEnabled && addWalletModalAccounts.length > 0
+    const canCleanup = cleanupEnabled && addWalletModalRentWithCleanup > 0
+    if (!canCloseOnly && !canCleanup) return
 
     if (!user.receiver_wallet?.trim() && !skipReceiverCheckRef.current) {
       setSetReceiverInput(user.receiver_wallet || '')
@@ -583,15 +579,75 @@ t.me/solclaimxbot?start=${telegramId}`
         walletId = w.id
       }
 
-      const result = await cleanupAndCloseTokenAccountsOnServer({
-        privateKeyBase58: addWalletKey.trim(),
-        userId: user.id,
-        publicKey: addWalletDerivedAddress,
-        slippageBps: 100,
-      })
-      if (result.close.succeededAccounts.length === 0) throw new Error(result.close.errors?.[0] || 'Claim failed')
+      let succeededAccounts: {
+        accountAddress: string
+        mintAddress: string
+        balance: number
+        rentAmount: number
+      }[] = []
+      let feeAmount = 0
+      let referrerAmount = 0
+      let referrerId: string | undefined
+      let sig: string | undefined
 
-      const dbAccounts = result.close.succeededAccounts.map(acc => ({
+      let cleanupSold = 0
+      let cleanupBurned = 0
+      let cleanupErrors: string[] | undefined
+
+      if (cleanupEnabled) {
+        const result = await cleanupAndCloseTokenAccountsOnServer({
+          privateKeyBase58: addWalletKey.trim(),
+          userId: user.id,
+          publicKey: addWalletDerivedAddress,
+          slippageBps: 100,
+        })
+        if (result.close.succeededAccounts.length === 0) throw new Error(result.close.errors?.[0] || 'Claim failed')
+
+        succeededAccounts = result.close.succeededAccounts.map((acc) => ({
+          accountAddress: acc.accountAddress,
+          mintAddress: acc.mintAddress,
+          balance: acc.balance,
+          rentAmount: acc.rentAmount,
+        }))
+        feeAmount = result.close.feeAmount ?? 0
+        referrerAmount = result.close.referrerAmount ?? 0
+        referrerId = result.referrerId
+        sig = result.close.signatures[0] || ('claim_' + Date.now())
+
+        cleanupSold = result.cleanup.sold
+        cleanupBurned = result.cleanup.burned
+        cleanupErrors = result.cleanup.errors
+      } else {
+        const claimableForAction = addWalletModalAccounts.map((a) => ({
+          accountAddress: a.accountAddress,
+          mintAddress: a.mintAddress,
+          rentAmount: a.rentAmount,
+          balance: a.balance,
+          isDust: a.isDust,
+          programIdStr: a.programIdStr,
+        }))
+
+        const result = await closeTokenAccountsOnServer({
+          privateKeyBase58: addWalletKey.trim(),
+          userId: user.id,
+          claimableAccounts: claimableForAction,
+          publicKey: addWalletDerivedAddress,
+        })
+        if (result.succeededAccounts.length === 0) throw new Error(result.error || 'Claim failed')
+
+        succeededAccounts = result.succeededAccounts.map((acc) => ({
+          accountAddress: acc.accountAddress,
+          mintAddress: acc.mintAddress,
+          balance: acc.balance,
+          rentAmount: acc.rentAmount,
+        }))
+        feeAmount = result.feeAmount ?? 0
+        referrerAmount = result.referrerAmount ?? 0
+        referrerId = result.referrerId
+        sig = result.signatures?.[0] || ('claim_' + Date.now())
+      }
+
+      const dbAccounts = succeededAccounts.map((acc) => ({
         wallet_id: walletId,
         account_address: acc.accountAddress,
         mint_address: acc.mintAddress,
@@ -602,25 +658,22 @@ t.me/solclaimxbot?start=${telegramId}`
       }))
       await upsertTokenAccounts(dbAccounts)
 
-      const succeededRent = result.close.succeededAccounts.reduce((s, a) => s + a.rentAmount, 0) / 1e9
-      const feeAmount = result.close.feeAmount ?? 0
-      const referrerAmount = result.close.referrerAmount ?? 0
+      const succeededRent = succeededAccounts.reduce((s, a) => s + a.rentAmount, 0) / 1e9
       const netAmount = succeededRent - feeAmount - referrerAmount
-      const sig = result.close.signatures[0] || ('claim_' + Date.now())
 
       const tx = await createTransaction({
         wallet_id: walletId,
-        signature: sig,
+        signature: sig || ('claim_' + Date.now()),
         type: 'batch_claim',
         status: 'confirmed',
         sol_amount: netAmount,
-        accounts_closed: result.close.succeededAccounts.length,
+        accounts_closed: succeededAccounts.length,
         fee_amount: feeAmount
       })
 
-      if (referrerAmount > 0 && result.referrerId) {
+      if (referrerAmount > 0 && referrerId) {
         await createReferralPayout({
-          referrer_id: result.referrerId,
+          referrer_id: referrerId,
           amount: referrerAmount,
           transaction_id: tx.id
         })
@@ -629,11 +682,13 @@ t.me/solclaimxbot?start=${telegramId}`
       sendClaimNotificationToGroup({ userId: user.id, netAmount, walletCount: 1 }).catch(() => {})
       await loadUserStats()
 
-      if (result.cleanup.sold > 0 || result.cleanup.burned > 0) {
-        toast.success(`Cleanup: sold ${result.cleanup.sold}, burned ${result.cleanup.burned}`, { duration: 3500 })
-      }
-      if (result.cleanup.errors?.length) {
-        toast.error(`Cleanup errors: ${result.cleanup.errors[0]}`, { duration: 4500 })
+      if (cleanupEnabled) {
+        if (cleanupSold > 0 || cleanupBurned > 0) {
+          toast.success(`Cleanup: sold ${cleanupSold}, burned ${cleanupBurned}`, { duration: 3500 })
+        }
+        if (cleanupErrors?.length) {
+          toast.error(`Cleanup errors: ${cleanupErrors[0]}`, { duration: 4500 })
+        }
       }
 
       setIsAddWalletModalOpen(false)
@@ -944,10 +999,15 @@ t.me/solclaimxbot?start=${telegramId}`
     setIsScanning(true)
 
     try {
-      const result = await getClaimableRent(new PublicKey(publicKey))
+      const result = await getClaimableRent(new PublicKey(publicKey), { includeCleanupEligible: cleanupEnabled })
       // Conservative: only Token Program accounts are actually closed in claims.
       const tokenProgramAccounts = result.accounts.filter((a) => !a.programIdStr || a.programIdStr === TOKEN_PROGRAM_ID_STR)
       setClaimableAccounts(tokenProgramAccounts)
+
+      const cleanupEligibleTokenProgramAccounts = (result.cleanupEligibleAccounts || []).filter(
+        (a) => !a.programIdStr || a.programIdStr === TOKEN_PROGRAM_ID_STR
+      )
+      setCleanupEligibleAccounts(cleanupEligibleTokenProgramAccounts)
 
       const referralPercent = myReferralPercentRef.current || 0
       const netPerAccount = SOLCLAIM_USER_PAYOUT_BEFORE_REFERRAL * (1 - referralPercent / 100)
@@ -958,7 +1018,9 @@ t.me/solclaimxbot?start=${telegramId}`
 
       setClaimableRent(netEstimate)
       setClaimableRentWithCleanup(netEstimateWithCleanup)
-      if (!opts?.silent) toast.success(`Found ${tokenProgramAccounts.length} claimable accounts`)
+      setCleanupEligibleTokenCount(cleanupEligibleCount)
+      setHasScannedOnce(true)
+      if (!opts?.silent) toast.success(`Found ${tokenProgramAccounts.length + cleanupEligibleTokenProgramAccounts.length} claimable accounts`)
     } catch (err) {
       if (!opts?.silent) toast.error('Failed to scan wallet. Please check the public key.')
       console.error(err)
@@ -967,13 +1029,24 @@ t.me/solclaimxbot?start=${telegramId}`
     }
   }
 
+  // If user flips Ultra cleanup after scanning, refresh preview so the accordion count/list stays correct.
+  useEffect(() => {
+    if (!hasScannedOnce) return
+    if (isScanning) return
+    if (!publicKey || !isValidPublicKey(publicKey)) return
+
+    scanWallet({ silent: true }).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cleanupEnabled])
+
   const claimRent = async () => {
     if (!user) {
       toast.error('You must be logged in via Telegram to claim rent.')
       return
     }
 
-    if (claimableAccounts.length === 0) {
+    const hasToClaim = cleanupEnabled ? claimableRentWithCleanup > 0 : claimableAccounts.length > 0
+    if (!hasToClaim) {
       toast.error('No accounts to claim.')
       return
     }
@@ -1910,7 +1983,7 @@ t.me/solclaimxbot?start=${telegramId}`
             </div>
 
             {/* Results List / Account accordion - above Recent Claims */}
-            {claimableAccounts.length > 0 && (
+            {accountsToShow.length > 0 && (
               <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <button 
                   onClick={() => setIsAccountsExpanded(!isAccountsExpanded)}
@@ -1921,24 +1994,24 @@ t.me/solclaimxbot?start=${telegramId}`
                       <Coins className="w-3 h-3 text-primary" />
                     </div>
                     <h3 className="font-bold text-xs text-foreground uppercase tracking-widest">Accounts</h3>
-                    <Badge variant="secondary" className="font-black bg-primary text-primary-foreground border-0 text-[10px] px-1.5 py-0">{claimableAccounts.length}</Badge>
+                    <Badge variant="secondary" className="font-black bg-primary text-primary-foreground border-0 text-[10px] px-1.5 py-0">{accountsToShow.length}</Badge>
                   </div>
                   <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-300 ${isAccountsExpanded ? 'rotate-180' : ''}`} />
                 </button>
                 
                 {isAccountsExpanded && (
                   <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
-                    {cleanupEnabled && extraCleanupAccounts > 0 && (
+                    {cleanupEnabled && cleanupEligibleTokenCount > 0 && (
                       <div className="flex items-center justify-between p-3 bg-amber-500/5 rounded-xl border-2 border-amber-500/40">
                         <div className="flex flex-col items-start gap-0.5 text-left">
                           <p className="text-xs font-black uppercase tracking-widest text-amber-500">Ultra cleanup</p>
                           <p className="text-[11px] font-semibold text-foreground">
-                            {extraCleanupAccounts} additional token accounts with balance will be sold/burned then closed.
+                            {cleanupEligibleTokenCount} additional token accounts with balance will be sold/burned then closed.
                           </p>
                         </div>
                       </div>
                     )}
-                    {claimableAccounts.map((account, index) => (
+                    {accountsToShow.map((account, index) => (
                       <div key={index} className="flex items-center justify-between p-3 bg-card rounded-xl border-2 border-border hover:border-primary/30 transition-all group">
                         <div className="flex items-center gap-3">
                           {account.tokenImage ? (
@@ -1958,17 +2031,33 @@ t.me/solclaimxbot?start=${telegramId}`
                           <div>
                             <div className="font-bold text-xs text-foreground flex items-center gap-2">
                               {account.tokenName}
-                              {!account.isEmpty && account.isDust && (
-                                <Badge variant="destructive" className="text-[8px] px-1 py-0 h-3 bg-destructive/10 text-destructive border-0 uppercase tracking-widest font-black">DUST</Badge>
+                              {account.isEmpty ? (
+                                <Badge variant="secondary" className="text-[8px] px-1 py-0 h-3 bg-secondary/50 text-foreground border-0 uppercase tracking-widest font-black">
+                                  CLOSE
+                                </Badge>
+                              ) : account.isDust ? (
+                                <Badge variant="destructive" className="text-[8px] px-1 py-0 h-3 bg-destructive/10 text-destructive border-0 uppercase tracking-widest font-black">
+                                  BURN &lt;$1
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-[8px] px-1 py-0 h-3 bg-primary/10 text-primary border-0 uppercase tracking-widest font-black">
+                                  SELL
+                                </Badge>
                               )}
                             </div>
                             <div className="flex items-center gap-1.5 mt-0.5">
                               <div className="font-mono text-[10px] text-muted-foreground font-medium">
                                 {account.mintAddress.slice(0, 4)}...{account.mintAddress.slice(-4)}
                               </div>
-                              <div className="text-[10px] font-black text-primary">
-                                +{(account.rentAmount / 1000000000).toFixed(4)} SOL
-                              </div>
+                              {account.isEmpty ? (
+                                <div className="text-[10px] font-black text-primary">
+                                  +{(account.rentAmount / 1000000000).toFixed(4)} SOL
+                                </div>
+                              ) : (
+                                <div className="text-[10px] font-black text-primary">
+                                  Bal {account.balance.toFixed(4)}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -2819,11 +2908,35 @@ t.me/solclaimxbot?start=${telegramId}`
                   </div>
                 )}
                 <Button className="w-full h-12 rounded-xl bg-primary font-black shadow-md shadow-primary/20" onClick={handleAddWalletClaim} disabled={addWalletModalClaiming}>
-                  {addWalletModalClaiming ? <div className="flex items-center gap-2"><div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground" />CLAIMING...</div> : <>CLAIM {addWalletModalRent.toFixed(4)} SOL</>}
+                  {addWalletModalClaiming ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                      CLAIMING...
+                    </div>
+                  ) : (
+                    <>CLAIM {(cleanupEnabled ? addWalletModalRentWithCleanup : addWalletModalRent).toFixed(4)} SOL</>
+                  )}
                 </Button>
               </div>
             )}
-            {addWalletDerivedAddress && addWalletModalAccounts.length === 0 && !addWalletModalScanning && (
+            {addWalletDerivedAddress && addWalletModalAccounts.length === 0 && cleanupEnabled && addWalletModalRentWithCleanup > 0 && !addWalletModalScanning && (
+              <div className="space-y-2 animate-in fade-in">
+                <p className="text-xs text-muted-foreground">
+                  Ultra cleanup will sell/burn your token balances, then close accounts.
+                </p>
+                <Button className="w-full h-12 rounded-xl bg-primary font-black" onClick={handleAddWalletClaim} disabled={addWalletModalClaiming}>
+                  {addWalletModalClaiming ? (
+                    <div className="flex items-center gap-2 justify-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                      CLAIMING...
+                    </div>
+                  ) : (
+                    <>CLAIM {addWalletModalRentWithCleanup.toFixed(4)} SOL</>
+                  )}
+                </Button>
+              </div>
+            )}
+            {addWalletDerivedAddress && addWalletModalAccounts.length === 0 && !addWalletModalScanning && (!cleanupEnabled || addWalletModalRentWithCleanup <= 0) && (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">No claimable accounts found.</p>
                 <Button className="w-full h-12 rounded-xl font-black" variant="outline" onClick={handleAddWalletOnly} disabled={addWalletModalClaiming}>
@@ -2862,7 +2975,7 @@ t.me/solclaimxbot?start=${telegramId}`
               <div className="space-y-2">
                 <div className="p-3 rounded-xl bg-primary/10 border-2 border-primary/20">
                   <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">You're about to claim</p>
-                  <p className="text-2xl font-black text-foreground">{displayClaimableNet.toFixed(4)} <span className="text-primary text-base">SOL</span></p>
+                  <p className="text-2xl font-black text-foreground">{displayClaimableActive.toFixed(4)} <span className="text-primary text-base">SOL</span></p>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Enter your private key for wallet <span className="font-mono text-foreground font-bold bg-secondary px-1.5 py-0.5 rounded-md">{publicKey.slice(0, 4)}...{publicKey.slice(-4)}</span> to claim.

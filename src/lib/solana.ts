@@ -64,6 +64,8 @@ export interface ClaimableAccount {
   accountAddress: string
   mintAddress: string
   rentAmount: number
+  /** True for empty accounts that will be closed immediately. */
+  isEmpty?: boolean
   balance: number
   tokenName?: string
   tokenImage?: string
@@ -110,7 +112,12 @@ export async function getWalletTokenAccounts(publicKey: PublicKey): Promise<Toke
           const decimals = info?.tokenAmount?.decimals
 
           if (!mintStr || typeof mintStr !== 'string' || typeof amountStr !== 'string') continue
-          const decimalsNum = typeof decimals === 'number' && Number.isFinite(decimals) ? decimals : 0
+          const decimalsNum =
+            typeof decimals === 'number' && Number.isFinite(decimals)
+              ? decimals
+              : typeof decimals === 'string' && decimals.trim() !== '' && Number.isFinite(Number(decimals))
+                ? Number(decimals)
+                : 0
 
           const isEmpty = amountStr === '0'
           // Keep backward-compatible number type; only zero-ness matters for claimable checks.
@@ -141,14 +148,22 @@ export async function getWalletTokenAccounts(publicKey: PublicKey): Promise<Toke
 /**
  * Gets claimable rent amount for a wallet, including checking token values
  */
-export async function getClaimableRent(publicKey: PublicKey): Promise<{
+export async function getClaimableRent(
+  publicKey: PublicKey,
+  opts?: {
+    /** When true, enrich non-empty cleanup-eligible tokens for UI preview (sell/burn then close). */
+    includeCleanupEligible?: boolean
+  }
+): Promise<{
   totalRent: number
   accounts: ClaimableAccount[]
+  cleanupEligibleAccounts: ClaimableAccount[]
   summary: {
     closeOnlyTokenProgramCount: number
     cleanupEligibleTokenProgramCount: number
   }
 }> {
+  const includeCleanupEligible = !!opts?.includeCleanupEligible
   const tokenAccounts = await getWalletTokenAccounts(publicKey)
 
   const closeOnlyTokenProgramCount = tokenAccounts.filter(
@@ -161,12 +176,23 @@ export async function getClaimableRent(publicKey: PublicKey): Promise<{
 
   // Only empty accounts are claimable and shown; keep single-scan fast by processing empties only.
   const accountsToProcess = tokenAccounts.filter((a) => a.isEmpty)
-  
-  // Fetch Jupiter token list for metadata enrichment
-  let tokenMap = new Map<string, {name: string, logoURI: string}>()
+
+  const cleanupEligibleAccountsToProcess = includeCleanupEligible
+    ? tokenAccounts.filter(
+        (a) => !a.isEmpty && a.programId.toString() === TOKEN_PROGRAM_ID.toString() && a.decimals > 0
+      )
+    : []
+
+  // Fetch Jupiter token list for metadata enrichment (empties + optionally cleanup-eligible)
+  let tokenMap = new Map<string, { name: string; logoURI: string }>()
   try {
     // Collect all unique mints
-    const uniqueMints = Array.from(new Set(accountsToProcess.map(acc => acc.mint.toString())))
+    const uniqueMints = Array.from(
+      new Set([
+        ...accountsToProcess.map((acc) => acc.mint.toString()),
+        ...cleanupEligibleAccountsToProcess.map((acc) => acc.mint.toString()),
+      ])
+    )
 
     // Seed tokenMap from cache and only fetch missing mints
     const missingMints: string[] = []
@@ -212,7 +238,7 @@ export async function getClaimableRent(publicKey: PublicKey): Promise<{
     console.error('Failed to fetch token metadata from Jupiter', e)
   }
 
-  const accounts: ClaimableAccount[] = accountsToProcess.map(acc => {
+  const accounts: ClaimableAccount[] = accountsToProcess.map((acc) => {
     const mintStr = acc.mint.toString()
     const meta = tokenMap.get(mintStr)
     
@@ -220,19 +246,14 @@ export async function getClaimableRent(publicKey: PublicKey): Promise<{
     // than "Unknown Token" by using the first few chars of the mint address
     const fallbackName = `Token ${mintStr.slice(0, 4)}...${mintStr.slice(-4)}`
     
-    // Claimable accounts are empty by definition; USD/dust is not relevant here.
-    const usdValue = 0
-    const isDust = true
-    
     return {
       accountAddress: acc.address.toString(),
       mintAddress: mintStr,
       rentAmount: acc.rentAmount,
-      balance: acc.balance,
+      isEmpty: true,
+      balance: 0,
       tokenName: meta?.name || fallbackName,
       tokenImage: meta?.logoURI,
-      usdValue,
-      isDust,
       programId: acc.programId,
       programIdStr: acc.programId?.toString()
     }
@@ -240,9 +261,86 @@ export async function getClaimableRent(publicKey: PublicKey): Promise<{
 
   const totalRent = accounts.reduce((sum, acc) => sum + acc.rentAmount, 0)
 
+  // Cleanup preview list: non-empty Token Program accounts that are eligible for sell/burn then close.
+  // We enrich with Jupiter metadata + price so UI can show BURN <$1 vs SELL.
+  const cleanupEligibleAccounts: ClaimableAccount[] = (() => {
+    if (cleanupEligibleAccountsToProcess.length === 0) return []
+
+    return cleanupEligibleAccountsToProcess.map((acc) => {
+      const mintStr = acc.mint.toString()
+      const meta = tokenMap.get(mintStr)
+
+      const fallbackName = `Token ${mintStr.slice(0, 4)}...${mintStr.slice(-4)}`
+
+      const decimals = acc.decimals || 0
+      const uiBalance = Number(acc.amountRaw) / Math.pow(10, decimals || 0)
+
+      // usdValue/isDust are filled after fetching prices (below); keep undefined for now.
+      return {
+        accountAddress: acc.address.toString(),
+        mintAddress: mintStr,
+        rentAmount: acc.rentAmount,
+        isEmpty: false,
+        balance: Number.isFinite(uiBalance) ? uiBalance : 0,
+        tokenName: meta?.name || fallbackName,
+        tokenImage: meta?.logoURI,
+        usdValue: undefined,
+        isDust: undefined,
+        programId: acc.programId,
+        programIdStr: acc.programId?.toString(),
+      }
+    })
+  })()
+
+  // Fill usdValue/isDust for cleanup preview.
+  if (includeCleanupEligible && cleanupEligibleAccounts.length > 0) {
+    try {
+      const ids = cleanupEligibleAccounts.map((a) => a.mintAddress).filter(Boolean)
+      const uniqueIds = Array.from(new Set(ids))
+      const chunkSize = 100
+      const priceMap = new Map<string, number>()
+
+      const chunks: string[][] = []
+      for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+        chunks.push(uniqueIds.slice(i, i + chunkSize))
+      }
+
+      await Promise.all(
+        chunks.map(async (mints) => {
+          try {
+            const url = `https://price.jup.ag/v4/price?ids=${encodeURIComponent(mints.join(','))}`
+            const res = await fetch(url, { method: 'GET' })
+            if (!res.ok) return
+            const json = await res.json().catch(() => null)
+            const data = json?.data
+            if (!data || typeof data !== 'object') return
+            for (const mint of Object.keys(data)) {
+              const p = Number(data[mint]?.price)
+              if (Number.isFinite(p)) priceMap.set(mint, p)
+            }
+          } catch {
+            // best-effort; leave usdValue undefined
+          }
+        })
+      )
+
+      for (const acc of cleanupEligibleAccounts) {
+        const price = priceMap.get(acc.mintAddress)
+        if (price != null) {
+          const usdValue = acc.balance * price
+          acc.usdValue = usdValue
+          acc.isDust = Number.isFinite(usdValue) && usdValue < 1
+        }
+      }
+    } catch {
+      // best-effort; keep usdValue/isDust undefined
+    }
+  }
+
   return {
     totalRent,
     accounts,
+    cleanupEligibleAccounts,
     summary: { closeOnlyTokenProgramCount, cleanupEligibleTokenProgramCount },
   }
 }
