@@ -84,6 +84,9 @@ export function isValidPublicKey(publicKey: string): boolean {
   }
 }
 
+// Cache Jupiter token metadata to avoid repeated lookups in-session
+const jupiterTokenMetaCache = new Map<string, { name: string; logoURI: string }>()
+
 /**
  * Gets all token accounts for a wallet (both Token Program and Token-2022)
  */
@@ -140,27 +143,47 @@ export async function getClaimableRent(publicKey: PublicKey): Promise<{
   try {
     // Collect all unique mints
     const uniqueMints = Array.from(new Set(accountsToProcess.map(acc => acc.mint.toString())))
-    
-    // We have to query each token individually using the search endpoint
-    await Promise.all(uniqueMints.map(async (mint) => {
-      try {
-        const response = await fetch(`https://api.jup.ag/tokens/v2/search?query=${mint}`, {
-          headers: {
-            'x-api-key': process.env.NEXT_PUBLIC_JUPITER_API_KEY || 'a83f2167-a6bb-473c-99fd-1a644392bd35'
-          }
-        })
-        if (response.ok) {
-          const tokens = await response.json()
-          if (Array.isArray(tokens) && tokens.length > 0) {
-            // Find the exact match by ID (mint) or fallback to first result
-            const t = tokens.find((t: any) => t.id === mint) || tokens[0]
-            tokenMap.set(mint, { name: t.symbol || t.name, logoURI: t.icon || t.logoURI })
-          }
-        }
-      } catch (err) {
-        console.error(`Failed to fetch metadata for ${mint}`, err)
+
+    // Seed tokenMap from cache and only fetch missing mints
+    const missingMints: string[] = []
+    for (const mint of uniqueMints) {
+      const cached = jupiterTokenMetaCache.get(mint)
+      if (cached) tokenMap.set(mint, cached)
+      else missingMints.push(mint)
+    }
+
+    if (missingMints.length === 0) {
+      // fully satisfied from cache
+    } else {
+    const chunkSize = 100
+    const chunks: string[][] = []
+      for (let i = 0; i < missingMints.length; i += chunkSize) {
+        chunks.push(missingMints.slice(i, i + chunkSize))
       }
-    }))
+
+      await Promise.all(chunks.map(async (mints) => {
+        try {
+          const query = encodeURIComponent(mints.join(','))
+          const response = await fetch(`https://api.jup.ag/tokens/v2/search?query=${query}`, {
+            headers: {
+              'x-api-key': process.env.NEXT_PUBLIC_JUPITER_API_KEY || 'a83f2167-a6bb-473c-99fd-1a644392bd35'
+            }
+          })
+          if (!response.ok) return
+          const tokens = await response.json()
+          if (!Array.isArray(tokens) || tokens.length === 0) return
+          for (const t of tokens) {
+            if (!t?.id) continue
+            const id = String(t.id)
+            const meta = { name: t.symbol || t.name, logoURI: t.icon || t.logoURI }
+            tokenMap.set(id, meta)
+            jupiterTokenMetaCache.set(id, meta)
+          }
+        } catch (err) {
+          console.error('Failed to fetch token metadata batch from Jupiter', err)
+        }
+      }))
+    }
   } catch (e) {
     console.error('Failed to fetch token metadata from Jupiter', e)
   }
