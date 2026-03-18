@@ -60,7 +60,7 @@ export const SOLCLAIM_COMMISSION_PER_ACCOUNT = hasPlatformCommission
  */
 export const SOLCLAIM_USER_PAYOUT_BEFORE_REFERRAL = hasPlatformCommission
   ? SOLCLAIM_RENT_PER_ACCOUNT - SOLCLAIM_COMMISSION_PER_ACCOUNT
-  : Math.min(SOLCLAIM_USER_PAYOUT_PER_ACCOUNT, SOLCLAIM_RENT_PER_ACCOUNT)
+  : SOLCLAIM_RENT_PER_ACCOUNT
 
 /** Commission wallet address (required when SOLCLAIM_COMMISSION_PERCENT > 0). */
 export function getCommissionWallet(): PublicKey | null {

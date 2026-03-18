@@ -74,7 +74,7 @@ export const SOL_CLAIM_PER_TOKEN_ACCOUNT = parseNum(process.env.SOLCLAIM_USER_PA
 export const userPayoutBeforeReferralPerAccount =
   SOLCLAIM_COMMISSION_PERCENT > 0
     ? totalAmountClaim - (totalAmountClaim * (SOLCLAIM_COMMISSION_PERCENT / 100))
-    : Math.min(SOL_CLAIM_PER_TOKEN_ACCOUNT, totalAmountClaim)
+    : totalAmountClaim
 
 export function computeNetPayoutPerAccount(referralPercent) {
   const pct = typeof referralPercent === 'number' && Number.isFinite(referralPercent) ? referralPercent : 0
