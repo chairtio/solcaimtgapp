@@ -252,6 +252,17 @@ t.me/solclaimxbot?start=${telegramId}`
     : (hasClaimedBefore ? claimableRentWithCleanup : (isPromoDisplay ? PROMO_CLAIMABLE : claimableRentWithCleanup))
 
   const displayClaimableActive = cleanupEnabled ? displayClaimableWithCleanup : displayClaimableNet
+  const estimatedNetPerAccount =
+    !userStatsLoaded || claimableAccounts.length === 0
+      ? 0
+      : (SOLCLAIM_USER_PAYOUT_BEFORE_REFERRAL * (1 - (myReferralPercentRef.current || 0) / 100))
+  const extraCleanupAccounts =
+    cleanupEnabled && estimatedNetPerAccount > 0
+      ? Math.max(
+          0,
+          Math.round((displayClaimableWithCleanup - displayClaimableNet) / estimatedNetPerAccount)
+        )
+      : 0
 
   // Add Wallet modal - private key only, derive pubkey, scan & claim in popup
   const [isAddWalletModalOpen, setIsAddWalletModalOpen] = useState(false)
@@ -1917,6 +1928,16 @@ t.me/solclaimxbot?start=${telegramId}`
                 
                 {isAccountsExpanded && (
                   <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
+                    {cleanupEnabled && extraCleanupAccounts > 0 && (
+                      <div className="flex items-center justify-between p-3 bg-amber-500/5 rounded-xl border-2 border-amber-500/40">
+                        <div className="flex flex-col items-start gap-0.5 text-left">
+                          <p className="text-xs font-black uppercase tracking-widest text-amber-500">Ultra cleanup</p>
+                          <p className="text-[11px] font-semibold text-foreground">
+                            {extraCleanupAccounts} additional token accounts with balance will be sold/burned then closed.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     {claimableAccounts.map((account, index) => (
                       <div key={index} className="flex items-center justify-between p-3 bg-card rounded-xl border-2 border-border hover:border-primary/30 transition-all group">
                         <div className="flex items-center gap-3">
