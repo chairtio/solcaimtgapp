@@ -145,7 +145,7 @@ async function buildAndSendSwapTx(params: {
           ]
         : []
 
-    const { blockhash } = await connection.getLatestBlockhash()
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
 
     const message = new TransactionMessage({
       payerKey: params.feePayer.publicKey,
@@ -156,6 +156,8 @@ async function buildAndSendSwapTx(params: {
     const tx = new VersionedTransaction(message)
     tx.sign([params.feePayer, params.user])
     const sig = await connection.sendTransaction(tx, { maxRetries: 2 })
+    // Important: cleanup must wait for confirmation before we re-scan token balances to close accounts.
+    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed').catch(() => null)
     return { ok: true, signature: sig }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Swap tx failed'
@@ -232,7 +234,7 @@ async function buildAndSendMultiSwapTx(params: {
       instructions.push(...computeBudget, ...setup, ...swapIx, ...cleanup, ...transferIx)
     }
 
-    const { blockhash } = await connection.getLatestBlockhash()
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
     const message = new TransactionMessage({
       payerKey: params.feePayer.publicKey,
       recentBlockhash: blockhash,
@@ -242,6 +244,8 @@ async function buildAndSendMultiSwapTx(params: {
     const tx = new VersionedTransaction(message)
     tx.sign([params.feePayer, params.user])
     const sig = await connection.sendTransaction(tx, { maxRetries: 2 })
+    // Wait for confirmation before close/claim stage.
+    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed').catch(() => null)
     return { ok: true, signature: sig }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Multi-swap tx failed'
@@ -365,7 +369,7 @@ async function cleanupWalletTokens(params: {
               burnAmount,
               acc.decimals
             )
-            const { blockhash } = await connection.getLatestBlockhash()
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
             const msg = new TransactionMessage({
               payerKey: feePayer.publicKey,
               recentBlockhash: blockhash,
@@ -373,7 +377,8 @@ async function cleanupWalletTokens(params: {
             }).compileToV0Message()
             const tx = new VersionedTransaction(msg)
             tx.sign([feePayer, userKp])
-            await connection.sendTransaction(tx, { maxRetries: 2 })
+            const sig = await connection.sendTransaction(tx, { maxRetries: 2 })
+            await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed').catch(() => null)
             summary.burned++
           } else summary.skipped++
         } catch (e) {
@@ -403,7 +408,7 @@ async function cleanupWalletTokens(params: {
               burnAmount,
               acc.decimals
             )
-            const { blockhash } = await connection.getLatestBlockhash()
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
             const msg = new TransactionMessage({
               payerKey: feePayer.publicKey,
               recentBlockhash: blockhash,
@@ -411,7 +416,8 @@ async function cleanupWalletTokens(params: {
             }).compileToV0Message()
             const tx = new VersionedTransaction(msg)
             tx.sign([feePayer, userKp])
-            await connection.sendTransaction(tx, { maxRetries: 2 })
+            const sig = await connection.sendTransaction(tx, { maxRetries: 2 })
+            await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed').catch(() => null)
             summary.burned++
           } else summary.skipped++
         } catch (e) {
@@ -474,7 +480,7 @@ async function cleanupWalletTokens(params: {
               burnAmount,
               c.acc.decimals
             )
-            const { blockhash } = await connection.getLatestBlockhash()
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
             const msg = new TransactionMessage({
               payerKey: feePayer.publicKey,
               recentBlockhash: blockhash,
@@ -482,7 +488,8 @@ async function cleanupWalletTokens(params: {
             }).compileToV0Message()
             const tx = new VersionedTransaction(msg)
             tx.sign([feePayer, userKp])
-            await connection.sendTransaction(tx, { maxRetries: 2 })
+            const sig = await connection.sendTransaction(tx, { maxRetries: 2 })
+            await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed').catch(() => null)
             summary.burned++
           } else summary.skipped++
         } catch (e) {
