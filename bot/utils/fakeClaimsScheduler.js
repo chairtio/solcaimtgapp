@@ -55,15 +55,33 @@ function pickRandomName() {
   return randomChoice(NAMES)
 }
 
+const ORANGE_MIN = 0.0015
+const YELLOW_MIN = 0.01
+const GREEN_MIN = 0.1
+
+function pickBracket() {
+  const r = Math.random()
+  if (r < 0.4) return 'orange' // 40%
+  if (r < 0.7) return 'yellow' // 30%
+  return 'green' // 30%
+}
+
+function pickAmountByBracket() {
+  const bracket = pickBracket()
+  if (bracket === 'orange') return randomFloat(ORANGE_MIN, 0.0099, 4)
+  if (bracket === 'yellow') return randomFloat(YELLOW_MIN, 0.0999, 4)
+  return randomFloat(GREEN_MIN, 2, 4)
+}
+
 function sendFakeClaim() {
-  const amount = randomFloat(0.002, 2)
+  const amount = pickAmountByBracket()
   const walletCount = randomInt(1, 3)
   const name = pickRandomName()
 
   let icon = '🔴'
-  if (amount >= 0.1) icon = '🟢'
-  else if (amount >= 0.01) icon = '🟡'
-  else if (amount >= 0.0015) icon = '🟠'
+  if (amount >= GREEN_MIN) icon = '🟢'
+  else if (amount >= YELLOW_MIN) icon = '🟡'
+  else if (amount >= ORANGE_MIN) icon = '🟠'
 
   const walletText = walletCount === 1 ? 'wallet' : 'wallets'
   const text = `${icon} New claim: ${amount.toFixed(4)} SOL from ${walletCount} ${walletText} by ${name}`
