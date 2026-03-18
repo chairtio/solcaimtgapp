@@ -51,6 +51,8 @@ export interface TokenAccountInfo {
   address: PublicKey
   mint: PublicKey
   balance: number
+  amountRaw: string
+  decimals: number
   rentAmount: number
   isEmpty: boolean
   programId: typeof TOKEN_PROGRAM_ID | typeof TOKEN_2022_PROGRAM_ID
@@ -105,8 +107,10 @@ export async function getWalletTokenAccounts(publicKey: PublicKey): Promise<Toke
           const info = parsed?.info
           const mintStr = info?.mint
           const amountStr = info?.tokenAmount?.amount
+          const decimals = info?.tokenAmount?.decimals
 
           if (!mintStr || typeof mintStr !== 'string' || typeof amountStr !== 'string') continue
+          const decimalsNum = typeof decimals === 'number' && Number.isFinite(decimals) ? decimals : 0
 
           const isEmpty = amountStr === '0'
           // Keep backward-compatible number type; only zero-ness matters for claimable checks.
@@ -116,6 +120,8 @@ export async function getWalletTokenAccounts(publicKey: PublicKey): Promise<Toke
             address: item.pubkey,
             mint: new PublicKey(mintStr),
             balance,
+            amountRaw: amountStr,
+            decimals: decimalsNum,
             rentAmount: RENT_EXEMPTION_LAMPORTS,
             isEmpty,
             programId

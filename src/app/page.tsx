@@ -55,11 +55,12 @@ import {
   deactivateWallet
 } from '@/lib/database'
 import { toast } from 'sonner'
-import { executeClaimOnServer, closeTokenAccountsOnServer, sendClaimNotificationToGroup, scanWalletForClaimableAction } from '@/app/actions/claim'
+import { sendClaimNotificationToGroup, scanWalletForClaimableAction } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
 import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardAction, getRecentClaimsAction, getRecentClaimsFreshAction, getUserStatsAction, getReferralStatsAction } from '@/app/actions/stats'
 import { getTasksForUser, verifyAndCompleteTask } from '@/app/actions/tasks'
 import { getMyReferralPercentAction } from '@/app/actions/referral'
+import { cleanupAndExecuteClaimOnServer, cleanupAndCloseTokenAccountsOnServer } from '@/app/actions/cleanup'
 import { AdminDashboard } from '@/components/AdminDashboard'
 
 interface ClaimableAccount {
@@ -559,22 +560,15 @@ t.me/solclaimxbot?start=${telegramId}`
         walletId = w.id
       }
 
-      const result = await closeTokenAccountsOnServer({
+      const result = await cleanupAndCloseTokenAccountsOnServer({
         privateKeyBase58: addWalletKey.trim(),
         userId: user.id,
-        claimableAccounts: addWalletModalAccounts.map((a) => ({
-          accountAddress: a.accountAddress,
-          mintAddress: a.mintAddress,
-          rentAmount: a.rentAmount,
-          balance: a.balance,
-          isDust: a.isDust,
-          programIdStr: a.programIdStr
-        })),
-        publicKey: addWalletDerivedAddress
+        publicKey: addWalletDerivedAddress,
+        slippageBps: 100,
       })
-      if (result.succeededAccounts.length === 0) throw new Error(result.error || 'Claim failed')
+      if (result.close.succeededAccounts.length === 0) throw new Error(result.close.errors?.[0] || 'Claim failed')
 
-      const dbAccounts = result.succeededAccounts.map(acc => ({
+      const dbAccounts = result.close.succeededAccounts.map(acc => ({
         wallet_id: walletId,
         account_address: acc.accountAddress,
         mint_address: acc.mintAddress,
@@ -585,11 +579,11 @@ t.me/solclaimxbot?start=${telegramId}`
       }))
       await upsertTokenAccounts(dbAccounts)
 
-      const succeededRent = result.succeededAccounts.reduce((s, a) => s + a.rentAmount, 0) / 1e9
-      const feeAmount = result.feeAmount ?? 0
-      const referrerAmount = result.referrerAmount ?? 0
+      const succeededRent = result.close.succeededAccounts.reduce((s, a) => s + a.rentAmount, 0) / 1e9
+      const feeAmount = result.close.feeAmount ?? 0
+      const referrerAmount = result.close.referrerAmount ?? 0
       const netAmount = succeededRent - feeAmount - referrerAmount
-      const sig = result.signatures[0] || ('claim_' + Date.now())
+      const sig = result.close.signatures[0] || ('claim_' + Date.now())
 
       const tx = await createTransaction({
         wallet_id: walletId,
@@ -597,7 +591,7 @@ t.me/solclaimxbot?start=${telegramId}`
         type: 'batch_claim',
         status: 'confirmed',
         sol_amount: netAmount,
-        accounts_closed: result.succeededAccounts.length,
+        accounts_closed: result.close.succeededAccounts.length,
         fee_amount: feeAmount
       })
 
@@ -611,6 +605,13 @@ t.me/solclaimxbot?start=${telegramId}`
 
       sendClaimNotificationToGroup({ userId: user.id, netAmount, walletCount: 1 }).catch(() => {})
       await loadUserStats()
+
+      if (result.cleanup.sold > 0 || result.cleanup.burned > 0) {
+        toast.success(`Cleanup: sold ${result.cleanup.sold}, burned ${result.cleanup.burned}`, { duration: 3500 })
+      }
+      if (result.cleanup.errors?.length) {
+        toast.error(`Cleanup errors: ${result.cleanup.errors[0]}`, { duration: 4500 })
+      }
 
       setIsAddWalletModalOpen(false)
       setAddWalletKey('')
@@ -827,27 +828,20 @@ t.me/solclaimxbot?start=${telegramId}`
             continue
           }
 
-          const result = await closeTokenAccountsOnServer({
+          const result = await cleanupAndCloseTokenAccountsOnServer({
             privateKeyBase58: wallet.encrypted_private_key,
             userId: user.id,
-            claimableAccounts: claimData.accounts.map((a) => ({
-              accountAddress: a.accountAddress,
-              mintAddress: a.mintAddress,
-              rentAmount: a.rentAmount,
-              balance: a.balance,
-              isDust: a.isDust,
-              programIdStr: a.programIdStr
-            })),
-            publicKey: claimData.publicKey
+            publicKey: claimData.publicKey,
+            slippageBps: 100,
           })
 
-          const succeededAccounts = result.succeededAccounts ?? []
+          const succeededAccounts = result.close.succeededAccounts ?? []
           if (succeededAccounts.length > 0) {
             const succeededRent = succeededAccounts.reduce((s, a) => s + a.rentAmount, 0) / 1e9
-            const feeAmount = result.feeAmount ?? 0
-            const referrerAmount = result.referrerAmount ?? 0
+            const feeAmount = result.close.feeAmount ?? 0
+            const referrerAmount = result.close.referrerAmount ?? 0
             const netAmount = succeededRent - feeAmount - referrerAmount
-            const sig = result.signatures[0] || ('batch_claim_' + Date.now())
+            const sig = result.close.signatures[0] || ('batch_claim_' + Date.now())
 
             const dbAccounts = succeededAccounts.map(acc => ({
               wallet_id: wallet.id,
@@ -881,6 +875,10 @@ t.me/solclaimxbot?start=${telegramId}`
 
             successfulClaims++
             totalClaimedSol += netAmount
+            totalAccountsClosed += succeededAccounts.length
+            if (result.cleanup.sold > 0 || result.cleanup.burned > 0) {
+              toast.success(`Cleanup ${claimData.publicKey.slice(0, 4)}…: sold ${result.cleanup.sold}, burned ${result.cleanup.burned}`, { duration: 3500 })
+            }
             if (succeededAccounts.length < claimData.accounts.length) {
               console.warn(`Partial success: closed ${succeededAccounts.length}/${claimData.accounts.length} accounts for ${claimData.publicKey}`)
             }
@@ -1046,6 +1044,7 @@ t.me/solclaimxbot?start=${telegramId}`
 
       // If we have a private key (either passed directly or we need to fetch it)
       let keypair: Keypair | null = null;
+      let privateKeyToUse: string | undefined = privateKeyString;
       
       if (privateKeyString) {
         try {
@@ -1063,35 +1062,39 @@ t.me/solclaimxbot?start=${telegramId}`
         }
         
         try {
+          privateKeyToUse = wallet.encrypted_private_key
           keypair = Keypair.fromSecretKey(bs58.decode(wallet.encrypted_private_key));
         } catch (e) {
           throw new Error('Stored private key is invalid');
         }
       }
 
-      // Execute on server so FEE_PAYER_PRIVATE_KEY is available (not exposed to client)
-      const result = await executeClaimOnServer({
-        privateKeyBase58: privateKeyString,
+      if (!privateKeyToUse) throw new Error('Private key not found. Please add it first.')
+
+      // Cleanup (sell via Jupiter; burn <$1 only if sell fails), then rescan + claim on server.
+      const result = await cleanupAndExecuteClaimOnServer({
+        privateKeyBase58: privateKeyToUse,
         walletId,
         userId: user.id,
-        claimableAccounts: claimableAccounts.map((a) => ({
-          accountAddress: a.accountAddress,
-          mintAddress: a.mintAddress,
-          rentAmount: a.rentAmount,
-          balance: a.balance,
-          isDust: a.isDust,
-          programIdStr: a.programIdStr
-        })),
-        publicKey
+        publicKey,
+        slippageBps: 100,
       })
 
-      if (!result.success) {
-        throw new Error(result.error)
+      if (!result.claim.success) {
+        throw new Error(result.claim.error)
       }
 
       setIsSubmittingKey(false)
-      const sig = result.signatures?.[0]
-      toast.success(`Claimed ${result.netAmount!.toFixed(4)} SOL`, {
+      const sig = result.claim.signatures?.[0]
+
+      if (result.cleanup.sold > 0 || result.cleanup.burned > 0) {
+        toast.success(`Cleanup: sold ${result.cleanup.sold}, burned ${result.cleanup.burned}`, { duration: 3500 })
+      }
+      if (result.cleanup.errors?.length) {
+        toast.error(`Cleanup errors: ${result.cleanup.errors[0]}`, { duration: 4500 })
+      }
+
+      toast.success(`Claimed ${result.claim.netAmount!.toFixed(4)} SOL`, {
         action: { label: 'Share with friends', onClick: openSharePopup },
         cancel: sig ? { label: 'View on Solscan', onClick: () => window.open(`https://solscan.io/tx/${sig}`) } : undefined
       })
