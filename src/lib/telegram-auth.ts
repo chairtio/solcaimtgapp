@@ -77,14 +77,14 @@ export function validateInitData(initData: string): ValidatedInitData | null {
 
 /**
  * Extract initData from request headers.
- * Accepts X-Telegram-Init-Data or Authorization: Bearer <initData>
+ * Accepts X-Telegram-Init-Data only.
+ *
+ * IMPORTANT: Do NOT accept initData via Authorization headers.
+ * Authorization is often logged/handled specially by proxies and middleware.
  */
 export function getInitDataFromRequest(request: Request): string | null {
   const fromHeader = request.headers.get('X-Telegram-Init-Data')
   if (fromHeader) return fromHeader
-
-  const auth = request.headers.get('Authorization')
-  if (auth?.startsWith('Bearer ')) return auth.slice(7)
 
   return null
 }

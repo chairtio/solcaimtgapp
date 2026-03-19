@@ -5,7 +5,16 @@ import { createClient } from '@supabase/supabase-js'
  * Health check endpoint to verify Supabase connectivity.
  * Hit GET /api/health after deploy to confirm env vars are set on Vercel.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  // Lock down in production: this endpoint touches privileged credentials.
+  if (process.env.NODE_ENV === 'production') {
+    const expected = process.env.HEALTHCHECK_SECRET?.trim()
+    const provided = request.headers.get('X-Healthcheck-Secret')?.trim()
+    if (!expected || provided !== expected) {
+      return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
+    }
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
 
