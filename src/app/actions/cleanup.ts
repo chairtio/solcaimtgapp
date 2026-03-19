@@ -1,6 +1,6 @@
 'use server'
 
-import { Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction } from '@solana/web3.js'
+import { Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction, ComputeBudgetProgram } from '@solana/web3.js'
 import bs58 from 'bs58'
 import { connection, getWalletTokenAccounts, getClaimableRentTotalsOnly } from '@/lib/solana'
 import { getUserById, getReferrerByReferee } from '@/lib/database'
@@ -20,6 +20,9 @@ type CleanupSummary = {
 const SOL_MINT = 'So11111111111111111111111111111111111111112'
 const TOKEN_PROGRAM_ID_STR = TOKEN_PROGRAM_ID.toString()
 const MAX_SWAPS_PER_TX = 3
+const BURN_BATCH_SIZE = 10
+const BURN_COMPUTE_UNITS = 100_000
+const BURN_COMPUTE_PRICE_MICROLAMPORTS = 50_000
 const FETCH_TIMEOUT_MS = 25_000
 const FETCH_RETRIES = 3
 
@@ -54,6 +57,65 @@ function amountRawToUi(amountRaw: string, decimals: number): number {
   const n = Number(amountRaw)
   if (!Number.isFinite(n)) return 0
   return n / Math.pow(10, decimals || 0)
+}
+
+/** Burn candidate: one token account to burn (bot-style batch: multiple burns in one tx). */
+type BurnCandidate = {
+  address: PublicKey
+  mint: PublicKey
+  amountRaw: string
+  decimals: number
+  mintStr?: string
+}
+
+/** Send one or more transactions each with up to BURN_BATCH_SIZE burn instructions (like bot burnall.js). */
+async function sendBatchBurns(
+  params: {
+    user: Keypair
+    feePayer: Keypair
+    candidates: BurnCandidate[]
+    summary: CleanupSummary
+  }
+): Promise<void> {
+  const { user, feePayer, candidates, summary } = params
+  if (candidates.length === 0) return
+  for (let i = 0; i < candidates.length; i += BURN_BATCH_SIZE) {
+    const batch = candidates.slice(i, i + BURN_BATCH_SIZE)
+    const instructions = [
+      ComputeBudgetProgram.setComputeUnitLimit({ units: BURN_COMPUTE_UNITS }),
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: BURN_COMPUTE_PRICE_MICROLAMPORTS }),
+      ...batch.map((b) =>
+        createBurnCheckedInstruction(
+          b.address,
+          b.mint,
+          user.publicKey,
+          BigInt(b.amountRaw),
+          b.decimals
+        )
+      ),
+    ]
+    try {
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
+      const msg = new TransactionMessage({
+        payerKey: feePayer.publicKey,
+        recentBlockhash: blockhash,
+        instructions,
+      }).compileToV0Message()
+      const tx = new VersionedTransaction(msg)
+      tx.sign([feePayer, user])
+      const sig = await connection.sendTransaction(tx, { maxRetries: 2 })
+      await connection
+        .confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed')
+        .catch(() => null)
+      summary.burned += batch.length
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : 'unknown'
+      summary.errors.push(`Burn batch failed: ${errMsg}`)
+      for (const b of batch) {
+        summary.errors.push(`Burn failed for ${b.mintStr ?? b.mint.toString()}: ${errMsg}`)
+      }
+    }
+  }
 }
 
 async function fetchJupPrices(mints: string[]): Promise<Map<string, number>> {
@@ -360,6 +422,7 @@ async function cleanupWalletTokens(params: {
     swapIxs: any
     usdValue: number | null
   }> = []
+  const burnCandidates: BurnCandidate[] = []
 
   for (const acc of candidates) {
     const mint = acc.mint.toString()
@@ -410,34 +473,16 @@ async function cleanupWalletTokens(params: {
     const bestRoute =
       quote && Array.isArray(quote?.routePlan) && quote.routePlan.length > 0 ? quote : null
     if (!bestRoute) {
-      // No liquidity/quote. Burn only if we can prove value < $1.
-      if (usdValue != null && usdValue < 1) {
-        try {
-          const burnAmount = BigInt(acc.amountRaw)
-          if (burnAmount > BigInt(0)) {
-            const burnIx = createBurnCheckedInstruction(
-              acc.address,
-              acc.mint,
-              userKp.publicKey,
-              burnAmount,
-              acc.decimals
-            )
-            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
-            const msg = new TransactionMessage({
-              payerKey: feePayer.publicKey,
-              recentBlockhash: blockhash,
-              instructions: [burnIx],
-            }).compileToV0Message()
-            const tx = new VersionedTransaction(msg)
-            tx.sign([feePayer, userKp])
-            const sig = await connection.sendTransaction(tx, { maxRetries: 2 })
-            await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed').catch(() => null)
-            summary.burned++
-          } else summary.skipped++
-        } catch (e) {
-          summary.errors.push(`Burn failed for ${mint}: ${e instanceof Error ? e.message : 'unknown'}`)
-        }
-      } else {
+      // No liquidity/quote. Burn only if we can prove value < $1 (batch later).
+      if (usdValue != null && usdValue < 1 && BigInt(acc.amountRaw) > BigInt(0)) {
+        burnCandidates.push({
+          address: acc.address,
+          mint: acc.mint,
+          amountRaw: acc.amountRaw,
+          decimals: acc.decimals,
+          mintStr: mint,
+        })
+      } else if (usdValue == null || usdValue >= 1) {
         summary.skipped++
       }
       continue
@@ -457,33 +502,17 @@ async function cleanupWalletTokens(params: {
     }
 
     if (!swapIxs) {
-      if (usdValue != null && usdValue < 1) {
-        try {
-          const burnAmount = BigInt(acc.amountRaw)
-          if (burnAmount > BigInt(0)) {
-            const burnIx = createBurnCheckedInstruction(
-              acc.address,
-              acc.mint,
-              userKp.publicKey,
-              burnAmount,
-              acc.decimals
-            )
-            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
-            const msg = new TransactionMessage({
-              payerKey: feePayer.publicKey,
-              recentBlockhash: blockhash,
-              instructions: [burnIx],
-            }).compileToV0Message()
-            const tx = new VersionedTransaction(msg)
-            tx.sign([feePayer, userKp])
-            const sig = await connection.sendTransaction(tx, { maxRetries: 2 })
-            await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed').catch(() => null)
-            summary.burned++
-          } else summary.skipped++
-        } catch (e) {
-          summary.errors.push(`Burn failed for ${mint}: ${e instanceof Error ? e.message : 'unknown'}`)
-        }
-      } else summary.skipped++
+      if (usdValue != null && usdValue < 1 && BigInt(acc.amountRaw) > BigInt(0)) {
+        burnCandidates.push({
+          address: acc.address,
+          mint: acc.mint,
+          amountRaw: acc.amountRaw,
+          decimals: acc.decimals,
+          mintStr: mint,
+        })
+      } else {
+        summary.skipped++
+      }
       continue
     }
 
@@ -496,6 +525,14 @@ async function cleanupWalletTokens(params: {
       usdValue,
     })
   }
+
+  // Batch burn tokens that had no route or no swap instructions (bot-style: multiple burns per tx).
+  await sendBatchBurns({
+    user: userKp,
+    feePayer,
+    candidates: burnCandidates,
+    summary,
+  })
 
   // Attempt multi-swap execution per chunk; fall back to per-token swaps on failure.
   for (let i = 0; i < swapCandidates.length; i += MAX_SWAPS_PER_TX) {
@@ -514,6 +551,7 @@ async function cleanupWalletTokens(params: {
 
     summary.errors.push(`Multi-swap tx failed: ${multiRes.error || 'unknown'}`)
 
+    const fallbackBurnCandidates: BurnCandidate[] = []
     for (const c of chunk) {
       const swapRes = await buildAndSendSwapTx({
         user: userKp,
@@ -528,84 +566,56 @@ async function cleanupWalletTokens(params: {
         continue
       }
 
-      // Swap failed; burn only if <$1
-      if (c.usdValue != null && c.usdValue < 1) {
-        try {
-          const burnAmount = BigInt(c.acc.amountRaw)
-          if (burnAmount > BigInt(0)) {
-            const burnIx = createBurnCheckedInstruction(
-              c.acc.address,
-              c.acc.mint,
-              userKp.publicKey,
-              burnAmount,
-              c.acc.decimals
-            )
-            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
-            const msg = new TransactionMessage({
-              payerKey: feePayer.publicKey,
-              recentBlockhash: blockhash,
-              instructions: [burnIx],
-            }).compileToV0Message()
-            const tx = new VersionedTransaction(msg)
-            tx.sign([feePayer, userKp])
-            const sig = await connection.sendTransaction(tx, { maxRetries: 2 })
-            await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed').catch(() => null)
-            summary.burned++
-          } else summary.skipped++
-        } catch (e) {
-          summary.errors.push(`Burn failed for ${c.mint}: ${e instanceof Error ? e.message : 'unknown'}`)
-        }
+      // Swap failed; queue burn only if <$1 (batch send after loop)
+      if (c.usdValue != null && c.usdValue < 1 && BigInt(c.acc.amountRaw) > BigInt(0)) {
+        fallbackBurnCandidates.push({
+          address: c.acc.address,
+          mint: c.acc.mint,
+          amountRaw: c.acc.amountRaw,
+          decimals: c.acc.decimals,
+          mintStr: c.mint,
+        })
       } else {
         summary.skipped++
         summary.errors.push(`Sell failed for ${c.mint}: ${swapRes.error || 'unknown'}`)
       }
     }
+    await sendBatchBurns({
+      user: userKp,
+      feePayer,
+      candidates: fallbackBurnCandidates,
+      summary,
+    })
   }
 
-  // Final dust burn pass:
-  // After selling succeeds, there can still be tiny residual balances that prevent the account from
-  // being "empty" (amount=0) and therefore closeable by the subsequent claim step.
-  // If the remaining balance is still worth <$1, burn it so the account becomes closeable.
+  // Final dust burn pass: batch burn remaining <$1 balances so accounts become closeable (bot-style).
   try {
     const finalTokenAccounts = await getWalletTokenAccounts(userKp.publicKey)
-    const remainingToBurn = finalTokenAccounts.filter((t) => {
-      if (t.programId.toString() !== TOKEN_PROGRAM_ID_STR) return false
-      if (t.isEmpty) return false
-      if (!t.decimals || t.decimals === 0) return false
-      const mint = t.mint.toString()
-      const price = priceMap.get(mint)
-      if (price == null) return false
-      const uiAmount = amountRawToUi(t.amountRaw, t.decimals)
-      const usdValue = uiAmount * price
-      return Number.isFinite(usdValue) && usdValue < 1
+    const remainingToBurn: BurnCandidate[] = finalTokenAccounts
+      .filter((t) => {
+        if (t.programId.toString() !== TOKEN_PROGRAM_ID_STR) return false
+        if (t.isEmpty) return false
+        if (!t.decimals || t.decimals === 0) return false
+        const mint = t.mint.toString()
+        const price = priceMap.get(mint)
+        if (price == null) return false
+        const uiAmount = amountRawToUi(t.amountRaw, t.decimals)
+        const usdValue = uiAmount * price
+        return Number.isFinite(usdValue) && usdValue < 1 && BigInt(t.amountRaw) > BigInt(0)
+      })
+      .map((t) => ({
+        address: t.address,
+        mint: t.mint,
+        amountRaw: t.amountRaw,
+        decimals: t.decimals,
+        mintStr: t.mint.toString(),
+      }))
+    await sendBatchBurns({
+      user: userKp,
+      feePayer,
+      candidates: remainingToBurn,
+      summary,
     })
-
-    for (const t of remainingToBurn) {
-      const mint = t.mint
-      const burnAmount = BigInt(t.amountRaw)
-      if (!(burnAmount > BigInt(0))) continue
-
-      const burnIx = createBurnCheckedInstruction(
-        t.address,
-        mint,
-        userKp.publicKey,
-        burnAmount,
-        t.decimals
-      )
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
-      const msg = new TransactionMessage({
-        payerKey: feePayer.publicKey,
-        recentBlockhash: blockhash,
-        instructions: [burnIx],
-      }).compileToV0Message()
-      const tx = new VersionedTransaction(msg)
-      tx.sign([feePayer, userKp])
-      const sig = await connection.sendTransaction(tx, { maxRetries: 2 })
-      await connection
-        .confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed')
-        .catch(() => null)
-      summary.burned++
-    }
   } catch (e) {
     summary.errors.push(`Final dust burn pass failed: ${e instanceof Error ? e.message : 'unknown'}`)
   }
