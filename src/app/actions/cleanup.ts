@@ -8,6 +8,7 @@ import { FEE_PAYER_PRIVATE_KEY, getCommissionWallet } from '@/lib/config'
 import { closeEmptyTokenAccounts } from '@/lib/solana'
 import { TOKEN_PROGRAM_ID, getAccount, createBurnCheckedInstruction } from '@solana/spl-token'
 import { executeClaimOnServer } from '@/app/actions/claim'
+import type { ClaimableAccountForAction } from '@/app/actions/claim'
 
 type CleanupSummary = {
   attemptedSells: number
@@ -531,9 +532,31 @@ export async function cleanupAndExecuteClaimOnServer(params: {
   publicKey: string
   slippageBps?: number
 }): Promise<{ cleanup: CleanupSummary; claim: Awaited<ReturnType<typeof executeClaimOnServer>> }> {
-  let cleanup: CleanupSummary = { attemptedSells: 0, sold: 0, burned: 0, skipped: 0, errors: [] }
+  const cleanup = await ultraCleanupWalletTokensOnServer({
+    privateKeyBase58: params.privateKeyBase58,
+    userId: params.userId,
+    publicKey: params.publicKey,
+    slippageBps: params.slippageBps ?? 100,
+  })
+
+  const claim = await ultraRescanAndExecuteClaimOnServer({
+    privateKeyBase58: params.privateKeyBase58,
+    walletId: params.walletId,
+    userId: params.userId,
+    publicKey: params.publicKey,
+  })
+
+  return { cleanup, claim }
+}
+
+export async function ultraCleanupWalletTokensOnServer(params: {
+  privateKeyBase58: string
+  userId: string
+  publicKey: string
+  slippageBps?: number
+}): Promise<CleanupSummary> {
   try {
-    cleanup = await cleanupWalletTokens({
+    return await cleanupWalletTokens({
       userId: params.userId,
       publicKey: params.publicKey,
       privateKeyBase58: params.privateKeyBase58,
@@ -541,13 +564,20 @@ export async function cleanupAndExecuteClaimOnServer(params: {
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Unknown cleanup error'
-    cleanup.errors.push(msg)
-    console.error('[cleanupAndExecuteClaimOnServer] cleanupWalletTokens failed:', msg)
+    return { attemptedSells: 0, sold: 0, burned: 0, skipped: 0, errors: [msg] }
   }
+}
 
+export async function ultraRescanAndExecuteClaimOnServer(params: {
+  privateKeyBase58: string
+  walletId: string
+  userId: string
+  publicKey: string
+}): Promise<Awaited<ReturnType<typeof executeClaimOnServer>>> {
+  let claim: Awaited<ReturnType<typeof executeClaimOnServer>>
   try {
     const scan = await getClaimableRentTotalsOnly(new PublicKey(params.publicKey))
-    const tokenProgramEmpties = scan.accounts
+    const tokenProgramEmpties: ClaimableAccountForAction[] = scan.accounts
       .filter((a) => !a.programIdStr || a.programIdStr === TOKEN_PROGRAM_ID_STR)
       .map((a) => ({
         accountAddress: a.accountAddress,
@@ -558,22 +588,18 @@ export async function cleanupAndExecuteClaimOnServer(params: {
         programIdStr: a.programIdStr,
       }))
 
-    const claim = await executeClaimOnServer({
+    claim = await executeClaimOnServer({
       privateKeyBase58: params.privateKeyBase58,
       walletId: params.walletId,
       userId: params.userId,
       claimableAccounts: tokenProgramEmpties,
       publicKey: params.publicKey,
     })
-
-    return { cleanup, claim }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Unknown claim error'
-    return {
-      cleanup,
-      claim: { success: false, error: msg },
-    }
+    claim = { success: false, error: msg }
   }
+  return claim
 }
 
 export async function cleanupAndCloseTokenAccountsOnServer(params: {

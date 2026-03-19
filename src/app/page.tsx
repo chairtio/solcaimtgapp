@@ -61,6 +61,7 @@ import { getTotalClaimedAction, getTotalClaimingUsersAction, getLeaderboardActio
 import { getTasksForUser, verifyAndCompleteTask } from '@/app/actions/tasks'
 import { getMyReferralPercentAction } from '@/app/actions/referral'
 import { cleanupAndExecuteClaimOnServer, cleanupAndCloseTokenAccountsOnServer } from '@/app/actions/cleanup'
+import { ultraCleanupWalletTokensOnServer, ultraRescanAndExecuteClaimOnServer } from '@/app/actions/cleanup'
 import { AdminDashboard } from '@/components/AdminDashboard'
 
 interface ClaimableAccount {
@@ -156,6 +157,7 @@ export default function SolClaimApp() {
   const [isAccountsExpanded, setIsAccountsExpanded] = useState(false)
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
   const [cleanupEnabled, setCleanupEnabled] = useState(false)
+  const [ultraCleanupStage, setUltraCleanupStage] = useState<'selling' | 'burning' | 'claiming' | null>(null)
 
   const [myReferralPercent, setMyReferralPercent] = useState(0)
   const myReferralPercentRef = useRef(0)
@@ -1261,36 +1263,47 @@ t.me/solclaimxbot?start=${telegramId}`
       if (!privateKeyToUse) throw new Error('Private key not found. Please add it first.')
 
       if (cleanupEnabled) {
-        // Cleanup (sell via Jupiter; burn <$1 only if sell fails), then rescan + claim on server.
-        const result = await cleanupAndExecuteClaimOnServer({
+        // Ultra cleanup: SELL/BURN first, then rescan + CLAIM.
+        setUltraCleanupStage('selling')
+        const cleanup = await ultraCleanupWalletTokensOnServer({
           privateKeyBase58: privateKeyToUse,
-          walletId,
           userId: user.id,
           publicKey,
           slippageBps: 100,
         })
 
-        if (!result.claim.success) {
-          throw new Error(result.claim.error)
+        setUltraCleanupStage(cleanup.burned > 0 ? 'burning' : 'selling')
+
+        setUltraCleanupStage('claiming')
+        const claim = await ultraRescanAndExecuteClaimOnServer({
+          privateKeyBase58: privateKeyToUse,
+          walletId,
+          userId: user.id,
+          publicKey,
+        })
+
+        if (!claim.success) {
+          throw new Error(claim.error)
         }
 
+        setUltraCleanupStage(null)
         setIsSubmittingKey(false)
-        const sig = result.claim.signatures?.[0]
+        const sig = claim.signatures?.[0]
 
-        if (result.cleanup.sold > 0 || result.cleanup.burned > 0) {
-          toast.success(`Cleanup: sold ${result.cleanup.sold}, burned ${result.cleanup.burned}`, { duration: 3500 })
+        if (cleanup.sold > 0 || cleanup.burned > 0) {
+          toast.success(`Cleanup: sold ${cleanup.sold}, burned ${cleanup.burned}`, { duration: 3500 })
         }
-        if (result.cleanup.errors?.length) {
-          toast.error(`Cleanup errors: ${result.cleanup.errors[0]}`, { duration: 4500 })
+        if (cleanup.errors?.length) {
+          toast.error(`Cleanup errors: ${cleanup.errors[0]}`, { duration: 4500 })
           // When cleanup had errors and nothing was claimed, do not show success toast
-          if (result.claim.netAmount === 0 && result.claim.closedCount === 0) {
+          if (claim.netAmount === 0 && claim.closedCount === 0) {
             await loadUserStats()
             if (user) getRecentClaimsFreshAction(user.id, 10).then(setRecentClaims).catch(() => {})
             return true
           }
         }
 
-        toast.success(`Claimed ${result.claim.netAmount!.toFixed(4)} SOL`, {
+        toast.success(`Claimed ${claim.netAmount!.toFixed(4)} SOL`, {
           action: { label: 'Share with friends', onClick: openSharePopup },
           cancel: sig ? { label: 'View on Solscan', onClick: () => window.open(`https://solscan.io/tx/${sig}`) } : undefined
         })
@@ -1334,6 +1347,7 @@ t.me/solclaimxbot?start=${telegramId}`
       console.error('Error executing claim:', err)
       toast.error(err.message || 'Failed to execute claim.')
       setIsSubmittingKey(false)
+      setUltraCleanupStage(null)
       return false;
     }
   }
@@ -3120,7 +3134,9 @@ t.me/solclaimxbot?start=${telegramId}`
               {isSubmittingKey ? (
                 <div className="flex items-center gap-2">
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground"></div>
-                  SAVING...
+                  {cleanupEnabled && !addKeyWalletId
+                    ? `${(ultraCleanupStage ?? 'processing').toUpperCase()}...`
+                    : 'SAVING...'}
                 </div>
               ) : addKeyWalletId ? (
                 'SAVE KEY'
