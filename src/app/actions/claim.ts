@@ -4,14 +4,16 @@ import { Keypair, PublicKey } from '@solana/web3.js'
 import bs58 from 'bs58'
 import { closeEmptyTokenAccounts, getClaimableRent, getClaimableRentTotalsOnly, getWalletTokenAccounts, RENT_EXEMPTION_LAMPORTS } from '@/lib/solana'
 import {
-  getWallets,
+  getWalletByPublicKey,
+  getWalletWithEncryptedPrivateKey,
   getUserById,
   getReferrerByReferee,
   upsertTokenAccounts,
   createTransaction,
   createReferralPayout,
-} from '@/lib/database'
+} from '@/lib/database-admin'
 import { getCommissionWallet } from '@/lib/config'
+import { requireTelegramUser } from '@/lib/telegram-user'
 
 /**
  * Sends a claim notification to the Telegram group claims topic.
@@ -116,12 +118,13 @@ export interface ClaimableAccountForAction {
 export async function executeClaimOnServer(params: {
   privateKeyBase58?: string
   walletId: string
-  userId: string
+  telegramInitData: string
   claimableAccounts: ClaimableAccountForAction[]
   publicKey: string
 }): Promise<{ success: boolean; error?: string; closedCount?: number; netAmount?: number; signatures?: string[] }> {
   try {
-    const { walletId, userId, claimableAccounts, publicKey } = params
+    const { walletId, telegramInitData, claimableAccounts, publicKey } = params
+    const { userId } = await requireTelegramUser(telegramInitData)
 
     // In some flows (ex: cleanup preview + rescan), the server may legitimately end up with
     // zero closeable empty token accounts. Treat that as a success so the client doesn't throw.
@@ -130,6 +133,14 @@ export async function executeClaimOnServer(params: {
     }
 
     let keypair: Keypair
+    const wallet = await getWalletWithEncryptedPrivateKey(walletId, userId)
+    if (!wallet) {
+      return { success: false, error: 'Wallet not found.' }
+    }
+    if (wallet.public_key !== publicKey) {
+      return { success: false, error: 'Wallet does not match scanned address.' }
+    }
+
     if (params.privateKeyBase58) {
       try {
         keypair = Keypair.fromSecretKey(bs58.decode(params.privateKeyBase58.trim()))
@@ -137,9 +148,7 @@ export async function executeClaimOnServer(params: {
         return { success: false, error: 'Invalid private key format.' }
       }
     } else {
-      const wallets = await getWallets(userId)
-      const wallet = wallets.find((w) => w.id === walletId)
-      if (!wallet?.encrypted_private_key) {
+      if (!wallet.encrypted_private_key) {
         return { success: false, error: 'Private key not found. Please add it first.' }
       }
       try {
@@ -250,8 +259,9 @@ export async function executeClaimOnServer(params: {
  * and batch claim - runs on server so FEE_PAYER_PRIVATE_KEY is available.
  */
 export async function closeTokenAccountsOnServer(params: {
-  privateKeyBase58: string
-  userId: string
+  walletId: string
+  privateKeyBase58?: string
+  telegramInitData: string
   claimableAccounts: ClaimableAccountForAction[]
   publicKey: string
 }): Promise<{
@@ -264,11 +274,39 @@ export async function closeTokenAccountsOnServer(params: {
   referrerId?: string
 }> {
   try {
-    const keypair = Keypair.fromSecretKey(bs58.decode(params.privateKeyBase58.trim()))
+    const { userId } = await requireTelegramUser(params.telegramInitData)
+    const wallet = await getWalletByPublicKey(userId, params.publicKey)
+    if (!wallet) {
+      return { success: false, error: 'Wallet not found.', signatures: [], succeededAccounts: [] }
+    }
+    if (wallet.id !== params.walletId) {
+      return { success: false, error: 'Wallet does not match walletId.', signatures: [], succeededAccounts: [] }
+    }
+
+    // Load keypair either from user-provided private key, or from stored DB secret.
+    let keypair: Keypair
+    if (params.privateKeyBase58) {
+      try {
+        keypair = Keypair.fromSecretKey(bs58.decode(params.privateKeyBase58.trim()))
+      } catch {
+        return { success: false, error: 'Invalid private key format.', signatures: [], succeededAccounts: [] }
+      }
+    } else {
+      const walletWithKey = await getWalletWithEncryptedPrivateKey(params.walletId, userId)
+      if (!walletWithKey?.encrypted_private_key) {
+        return { success: false, error: 'Private key not found. Please add it first.', signatures: [], succeededAccounts: [] }
+      }
+      try {
+        keypair = Keypair.fromSecretKey(bs58.decode(walletWithKey.encrypted_private_key))
+      } catch {
+        return { success: false, error: 'Stored private key is invalid.', signatures: [], succeededAccounts: [] }
+      }
+    }
+
     if (keypair.publicKey.toString() !== params.publicKey) {
       return { success: false, error: 'Wallet does not match.', signatures: [], succeededAccounts: [] }
     }
-    const dbUser = await getUserById(params.userId)
+    const dbUser = await getUserById(userId)
     const receiverWallet = dbUser?.receiver_wallet?.trim()
     if (!receiverWallet) {
       return { success: false, error: 'Set your receiver wallet in Settings first.', signatures: [], succeededAccounts: [] }

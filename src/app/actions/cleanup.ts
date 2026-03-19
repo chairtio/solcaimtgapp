@@ -3,12 +3,13 @@
 import { Keypair, PublicKey, TransactionMessage, VersionedTransaction, ComputeBudgetProgram } from '@solana/web3.js'
 import bs58 from 'bs58'
 import { connection, getWalletTokenAccounts, getClaimableRentTotalsOnly } from '@/lib/solana'
-import { getUserById, getReferrerByReferee } from '@/lib/database'
+import { getUserById, getReferrerByReferee, getWalletByPublicKey, getWalletWithEncryptedPrivateKey } from '@/lib/database-admin'
 import { FEE_PAYER_PRIVATE_KEY, getCommissionWallet } from '@/lib/config'
 import { closeEmptyTokenAccounts } from '@/lib/solana'
 import { TOKEN_PROGRAM_ID, getAccount, createBurnCheckedInstruction } from '@solana/spl-token'
 import { executeClaimOnServer } from '@/app/actions/claim'
 import type { ClaimableAccountForAction } from '@/app/actions/claim'
+import { requireTelegramUser } from '@/lib/telegram-user'
 
 type CleanupSummary = {
   attemptedSells: number
@@ -320,8 +321,9 @@ async function signUltraTransaction(params: {
 
 async function cleanupWalletTokens(params: {
   userId: string
+  walletId: string
   publicKey: string
-  privateKeyBase58: string
+  privateKeyBase58?: string
   slippageBps: number
 }): Promise<CleanupSummary> {
   const summary: CleanupSummary = { attemptedSells: 0, sold: 0, burned: 0, skipped: 0, errors: [] }
@@ -335,7 +337,16 @@ async function cleanupWalletTokens(params: {
   let userKp: Keypair
   let feePayer: Keypair
   try {
-    userKp = Keypair.fromSecretKey(bs58.decode(params.privateKeyBase58.trim()))
+    if (params.privateKeyBase58) {
+      userKp = Keypair.fromSecretKey(bs58.decode(params.privateKeyBase58.trim()))
+    } else {
+      const walletWithKey = await getWalletWithEncryptedPrivateKey(params.walletId, params.userId)
+      if (!walletWithKey?.encrypted_private_key) {
+        summary.errors.push('Private key not found. Please add it first.')
+        return summary
+      }
+      userKp = Keypair.fromSecretKey(bs58.decode(walletWithKey.encrypted_private_key))
+    }
   } catch {
     summary.errors.push('Invalid private key')
     return summary
@@ -349,6 +360,16 @@ async function cleanupWalletTokens(params: {
 
   if (userKp.publicKey.toString() !== params.publicKey) {
     summary.errors.push('Wallet does not match public key')
+    return summary
+  }
+
+  const wallet = await getWalletByPublicKey(params.userId, params.publicKey)
+  if (!wallet) {
+    summary.errors.push('Wallet not found for user')
+    return summary
+  }
+  if (wallet.id !== params.walletId) {
+    summary.errors.push('Wallet does not match walletId')
     return summary
   }
 
@@ -526,38 +547,42 @@ async function cleanupWalletTokens(params: {
 }
 
 export async function cleanupAndExecuteClaimOnServer(params: {
-  privateKeyBase58: string
   walletId: string
-  userId: string
+  privateKeyBase58?: string
+  telegramInitData: string
   publicKey: string
   slippageBps?: number
 }): Promise<{ cleanup: CleanupSummary; claim: Awaited<ReturnType<typeof executeClaimOnServer>> }> {
   const cleanup = await ultraCleanupWalletTokensOnServer({
-    privateKeyBase58: params.privateKeyBase58,
-    userId: params.userId,
+    telegramInitData: params.telegramInitData,
+    walletId: params.walletId,
     publicKey: params.publicKey,
+    privateKeyBase58: params.privateKeyBase58,
     slippageBps: params.slippageBps ?? 100,
   })
 
   const claim = await ultraRescanAndExecuteClaimOnServer({
-    privateKeyBase58: params.privateKeyBase58,
     walletId: params.walletId,
-    userId: params.userId,
     publicKey: params.publicKey,
+    telegramInitData: params.telegramInitData,
+    privateKeyBase58: params.privateKeyBase58,
   })
 
   return { cleanup, claim }
 }
 
 export async function ultraCleanupWalletTokensOnServer(params: {
-  privateKeyBase58: string
-  userId: string
+  telegramInitData: string
+  walletId: string
+  privateKeyBase58?: string
   publicKey: string
   slippageBps?: number
 }): Promise<CleanupSummary> {
   try {
+    const { userId } = await requireTelegramUser(params.telegramInitData)
     return await cleanupWalletTokens({
-      userId: params.userId,
+      userId,
+      walletId: params.walletId,
       publicKey: params.publicKey,
       privateKeyBase58: params.privateKeyBase58,
       slippageBps: params.slippageBps ?? 100,
@@ -569,9 +594,9 @@ export async function ultraCleanupWalletTokensOnServer(params: {
 }
 
 export async function ultraRescanAndExecuteClaimOnServer(params: {
-  privateKeyBase58: string
   walletId: string
-  userId: string
+  telegramInitData: string
+  privateKeyBase58?: string
   publicKey: string
 }): Promise<Awaited<ReturnType<typeof executeClaimOnServer>>> {
   let claim: Awaited<ReturnType<typeof executeClaimOnServer>>
@@ -589,9 +614,9 @@ export async function ultraRescanAndExecuteClaimOnServer(params: {
       }))
 
     claim = await executeClaimOnServer({
-      privateKeyBase58: params.privateKeyBase58,
       walletId: params.walletId,
-      userId: params.userId,
+      telegramInitData: params.telegramInitData,
+      privateKeyBase58: params.privateKeyBase58,
       claimableAccounts: tokenProgramEmpties,
       publicKey: params.publicKey,
     })
@@ -603,15 +628,18 @@ export async function ultraRescanAndExecuteClaimOnServer(params: {
 }
 
 export async function cleanupAndCloseTokenAccountsOnServer(params: {
-  privateKeyBase58: string
-  userId: string
+  telegramInitData: string
+  walletId: string
+  privateKeyBase58?: string
   publicKey: string
   slippageBps?: number
 }): Promise<{ cleanup: CleanupSummary; close: Awaited<ReturnType<typeof closeEmptyTokenAccounts>>; referrerId?: string }> {
   let cleanup: CleanupSummary = { attemptedSells: 0, sold: 0, burned: 0, skipped: 0, errors: [] }
   try {
+    const { userId } = await requireTelegramUser(params.telegramInitData)
     cleanup = await cleanupWalletTokens({
-      userId: params.userId,
+      userId,
+      walletId: params.walletId,
       publicKey: params.publicKey,
       privateKeyBase58: params.privateKeyBase58,
       slippageBps: params.slippageBps ?? 100,
@@ -623,8 +651,43 @@ export async function cleanupAndCloseTokenAccountsOnServer(params: {
   }
 
   try {
-    const keypair = Keypair.fromSecretKey(bs58.decode(params.privateKeyBase58.trim()))
-    const dbUser = await getUserById(params.userId)
+    const { userId } = await requireTelegramUser(params.telegramInitData)
+
+    let keypair: Keypair
+    if (params.privateKeyBase58) {
+      keypair = Keypair.fromSecretKey(bs58.decode(params.privateKeyBase58.trim()))
+    } else {
+      const walletWithKey = await getWalletWithEncryptedPrivateKey(params.walletId, userId)
+      if (!walletWithKey?.encrypted_private_key) {
+        return {
+          cleanup,
+          close: { success: false, signatures: [], errors: ['Private key not found. Please add it first.'], succeededAccounts: [] },
+        }
+      }
+      keypair = Keypair.fromSecretKey(bs58.decode(walletWithKey.encrypted_private_key))
+    }
+
+    if (keypair.publicKey.toString() !== params.publicKey) {
+      return {
+        cleanup,
+        close: { success: false, signatures: [], errors: ['Wallet does not match scanned address.'], succeededAccounts: [] },
+      }
+    }
+
+    const wallet = await getWalletByPublicKey(userId, params.publicKey)
+    if (!wallet) {
+      return {
+        cleanup,
+        close: { success: false, signatures: [], errors: ['Wallet not found for user'], succeededAccounts: [] },
+      }
+    }
+    if (wallet.id !== params.walletId) {
+      return {
+        cleanup,
+        close: { success: false, signatures: [], errors: ['Wallet does not match walletId.'], succeededAccounts: [] },
+      }
+    }
+    const dbUser = await getUserById(userId)
     const receiverWallet = dbUser?.receiver_wallet?.trim()
     if (!receiverWallet) {
       return {

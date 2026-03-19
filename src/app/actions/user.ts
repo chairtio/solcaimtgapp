@@ -1,6 +1,6 @@
 'use server'
 
-import { updateUser } from '@/lib/database'
+import { updateUser } from '@/lib/database-admin'
 
 /**
  * Updates the user's receiver wallet address. Validates format before saving.

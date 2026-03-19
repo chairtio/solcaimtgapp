@@ -1,6 +1,6 @@
 'use server'
 
-import { getReferrerByReferee } from '@/lib/database'
+import { getReferrerByReferee } from '@/lib/database-admin'
 
 export async function getMyReferralPercentAction(telegramId?: string): Promise<{
   referred: boolean

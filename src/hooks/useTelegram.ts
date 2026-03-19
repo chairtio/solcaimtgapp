@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
-import { getUser, createUser, updateUser, type User } from '@/lib/database'
+import { useState, useEffect, useRef } from 'react'
+import type { User } from '@/lib/database'
+import { upsertTelegramUserAction } from '@/app/actions/telegram-user'
 
 interface TelegramUser {
   id: number
@@ -38,6 +39,7 @@ export function useTelegram() {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const initDataRef = useRef<string | null>(null)
 
   useEffect(() => {
     const initTelegram = async () => {
@@ -71,6 +73,7 @@ export function useTelegram() {
 
           webApp = window.Telegram.WebApp
           const initData = webApp.initDataUnsafe
+          initDataRef.current = webApp.initData ?? null
 
           if (!initData.user) {
             setError('Unable to get user information from Telegram')
@@ -85,40 +88,13 @@ export function useTelegram() {
           webApp.ready()
         }
 
-        // Check if user exists in database (with degraded fallback if DB fails)
+        // Upsert user in database (server validates initData integrity)
         let dbUser: User | null = null
         let dbError: string | null = null
 
         try {
-          dbUser = await getUser(telegramUser.id.toString())
-
-          if (!dbUser) {
-            dbUser = await createUser({
-              telegram_id: telegramUser.id.toString(),
-              username: telegramUser.username,
-              first_name: telegramUser.first_name,
-              last_name: telegramUser.last_name,
-              photo_url: telegramUser.photo_url,
-              is_premium: telegramUser.is_premium || false
-            })
-          } else {
-            const needsUpdate =
-              dbUser.username !== telegramUser.username ||
-              dbUser.first_name !== telegramUser.first_name ||
-              dbUser.last_name !== telegramUser.last_name ||
-              dbUser.photo_url !== telegramUser.photo_url ||
-              dbUser.is_premium !== (telegramUser.is_premium || false)
-
-            if (needsUpdate) {
-              dbUser = await updateUser(telegramUser.id.toString(), {
-                username: telegramUser.username,
-                first_name: telegramUser.first_name,
-                last_name: telegramUser.last_name,
-                photo_url: telegramUser.photo_url,
-                is_premium: telegramUser.is_premium || false
-              })
-            }
-          }
+          if (!webApp?.initData) throw new Error('Missing Telegram initData')
+          dbUser = await upsertTelegramUserAction(webApp.initData)
         } catch (dbErr) {
           console.error('Database error (using limited mode):', dbErr)
           const errMsg = dbErr instanceof Error ? dbErr.message : String(dbErr)
@@ -175,9 +151,9 @@ export function useTelegram() {
   }, [])
 
   const refreshUser = async (): Promise<User | null> => {
-    if (!user?.telegram_id) return null
+    if (!initDataRef.current) return null
     try {
-      const dbUser = await getUser(user.telegram_id)
+      const dbUser = await upsertTelegramUserAction(initDataRef.current)
       if (dbUser) {
         setUser(dbUser)
         return dbUser

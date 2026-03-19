@@ -170,7 +170,7 @@ export async function markUserBotBlocked(telegramId: string): Promise<void> {
 export async function getWallets(userId: string): Promise<Wallet[]> {
   const { data, error } = await supabaseAdmin
     .from('wallets')
-    .select('*')
+    .select('id, user_id, public_key, status, created_at, updated_at')
     .eq('user_id', userId)
     .eq('status', 'active')
 
@@ -182,7 +182,7 @@ export async function getWallets(userId: string): Promise<Wallet[]> {
 export async function getWalletByPublicKey(userId: string, publicKey: string): Promise<Wallet | null> {
   const { data, error } = await supabaseAdmin
     .from('wallets')
-    .select('*')
+    .select('id, user_id, public_key, status, created_at, updated_at')
     .eq('user_id', userId)
     .eq('public_key', publicKey)
     .maybeSingle()
@@ -244,7 +244,7 @@ export async function deactivateWallet(walletId: string): Promise<boolean> {
 export async function getUserWalletsWithStats(userId: string) {
   const { data: wallets, error: walletsError } = await supabaseAdmin
     .from('wallets')
-    .select('*')
+    .select('id, user_id, public_key, status, created_at, updated_at, encrypted_private_key')
     .eq('user_id', userId)
     .eq('status', 'active')
 
@@ -261,15 +261,83 @@ export async function getUserWalletsWithStats(userId: string) {
 
   if (txsError) throw txsError
 
-  return wallets.map(w => {
-    const walletTxs = txs?.filter(t => t.wallet_id === w.id) || []
+  return wallets.map((w) => {
+    const walletTxs = txs?.filter((t) => t.wallet_id === w.id) || []
     const totalClaimed = walletTxs.reduce((sum, t) => sum + Number(t.sol_amount), 0)
+    // Never return `encrypted_private_key` to the client.
+    const { encrypted_private_key: _encryptedPrivateKey, ...safeWallet } = w as any
     return {
-      ...w,
+      ...safeWallet,
       total_claimed: totalClaimed,
-      has_key: !!w.encrypted_private_key
+      has_key: !!_encryptedPrivateKey,
     }
   })
+}
+
+// Secret-bearing wallet fetches (server-side only).
+export async function getWalletsWithEncryptedPrivateKeys(userId: string): Promise<Wallet[]> {
+  const { data, error } = await supabaseAdmin
+    .from('wallets')
+    .select('id, user_id, public_key, encrypted_private_key, salt, status, created_at, updated_at')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+
+  if (error) throw error
+  return data || []
+}
+
+export async function getWalletWithEncryptedPrivateKey(walletId: string, userId: string): Promise<Wallet | null> {
+  const { data, error } = await supabaseAdmin
+    .from('wallets')
+    .select('id, user_id, public_key, encrypted_private_key, salt, status, created_at, updated_at')
+    .eq('id', walletId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
+export async function getWalletMetaByPublicKey(
+  userId: string,
+  publicKey: string,
+): Promise<{ id: string; user_id: string; public_key: string; status: Wallet['status']; has_key: boolean; created_at: string; updated_at: string } | null> {
+  const { data, error } = await supabaseAdmin
+    .from('wallets')
+    .select('id, user_id, public_key, status, created_at, updated_at, encrypted_private_key')
+    .eq('user_id', userId)
+    .eq('public_key', publicKey)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) return null
+
+  const { encrypted_private_key: encryptedPrivateKey, ...rest } = data as any
+  return {
+    ...(rest as any),
+    has_key: !!encryptedPrivateKey,
+  }
+}
+
+export async function getWalletMetaById(
+  userId: string,
+  walletId: string,
+): Promise<{ id: string; user_id: string; public_key: string; status: Wallet['status']; has_key: boolean; created_at: string; updated_at: string } | null> {
+  const { data, error } = await supabaseAdmin
+    .from('wallets')
+    .select('id, user_id, public_key, status, created_at, updated_at, encrypted_private_key')
+    .eq('user_id', userId)
+    .eq('id', walletId)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) return null
+
+  const { encrypted_private_key: encryptedPrivateKey, ...rest } = data as any
+  return {
+    ...(rest as any),
+    has_key: !!encryptedPrivateKey,
+  }
 }
 
 // Token account operations

@@ -49,7 +49,7 @@ export async function GET(
     const [walletsRes, claimTotalsRes, usersRes] = await Promise.all([
       supabaseAdmin
         .from('wallets')
-        .select('id, user_id, public_key, status, created_at, encrypted_private_key')
+        .select('id, user_id, public_key, status, created_at')
         .in('user_id', userIds),
       supabaseAdmin
         .from('user_claim_totals')

@@ -45,7 +45,7 @@ export async function GET(
     const userIds = (attributions || []).map((r) => r.user_id)
     if (userIds.length === 0) {
       const header =
-        'campaign_id,campaign_name,source_code,user_id,telegram_id,username,wallet_id,public_key,encrypted_private_key,status,wallet_created_at,has_claimed,total_sol_claimed,total_accounts_closed'
+        'campaign_id,campaign_name,source_code,user_id,telegram_id,username,wallet_id,public_key,status,wallet_created_at,has_claimed,total_sol_claimed,total_accounts_closed'
       return new NextResponse(header + '\n', {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
@@ -61,7 +61,7 @@ export async function GET(
         .in('id', userIds),
       supabaseAdmin
         .from('wallets')
-        .select('id, user_id, public_key, encrypted_private_key, status, created_at')
+        .select('id, user_id, public_key, status, created_at')
         .in('user_id', userIds),
       supabaseAdmin
         .from('user_claim_totals')
@@ -77,7 +77,7 @@ export async function GET(
     const claimMap = new Map(claims.map((c) => [c.user_id, c]))
 
     const header =
-      'campaign_id,campaign_name,source_code,user_id,telegram_id,username,wallet_id,public_key,encrypted_private_key,status,wallet_created_at,has_claimed,total_sol_claimed,total_accounts_closed'
+      'campaign_id,campaign_name,source_code,user_id,telegram_id,username,wallet_id,public_key,status,wallet_created_at,has_claimed,total_sol_claimed,total_accounts_closed'
 
     const rows = wallets.map((w) => {
       const user = userMap.get(w.user_id)
@@ -95,7 +95,6 @@ export async function GET(
         user?.username ?? '',
         w.id,
         w.public_key,
-        w.encrypted_private_key ?? '',
         w.status,
         w.created_at,
         hasClaimed,
