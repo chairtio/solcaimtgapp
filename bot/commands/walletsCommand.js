@@ -89,12 +89,11 @@ export const handleWalletInfo = async (ctx, walletId) => {
     try {
         const wallet = await fetchData(`${urlTelegramWallet}/${walletId}`);
         const walletInfo = `🔐 Wallet Info:\n` +
-            `Address: \`${wallet.public_key}\`\n\n` +
+            `Address: ${wallet.public_key}\n\n` +
             `✅ This bot will never display your private key.\n` +
             `Claims/trades are executed server-side using your saved key.`;
 
         await ctx.editMessageText(walletInfo, {
-            parse_mode: 'MarkdownV2',
             reply_markup: {
                 inline_keyboard: [
                     [{ text: '🔎 Check', callback_data: `checkWalletConnected_${wallet.id}` }, { text: '💰 Claim', callback_data: `claim_${wallet.id}` }],
@@ -106,7 +105,7 @@ export const handleWalletInfo = async (ctx, walletId) => {
         return wallet;
     } catch (error) {
         console.error('Error fetching wallet info:', error);
-        await ctx.reply('Failed to fetch wallet info. Please try again later.');
+        await ctx.reply(`Failed to fetch wallet info: ${error?.message || 'unknown error'}`);
         return null;
     }
 };
