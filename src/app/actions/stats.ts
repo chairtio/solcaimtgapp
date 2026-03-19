@@ -9,9 +9,11 @@ import {
   getUserStats,
   getReferralPayoutStats,
 } from '@/lib/database-admin'
+import { requireTelegramUser } from '@/lib/telegram-user'
 
 /** Cached user stats (has claimed?) – used for balance display. Revalidates every 5 min since it only changes on claim. */
-export async function getUserStatsAction(userId: string) {
+export async function getUserStatsAction(telegramInitData: string) {
+  const { userId } = await requireTelegramUser(telegramInitData)
   const cached = unstable_cache(
     () => getUserStats(userId),
     ['user-stats', userId],
@@ -64,7 +66,8 @@ export async function getTotalClaimingUsersAction() {
 }
 
 /** Recent claims – cached 10s for fast repeat loads. Use getRecentClaimsFreshAction after claim. */
-export async function getRecentClaimsAction(userId: string, limit = 10) {
+export async function getRecentClaimsAction(telegramInitData: string, limit = 10) {
+  const { userId } = await requireTelegramUser(telegramInitData)
   const cached = unstable_cache(
     () => getRecentClaims(userId, limit),
     ['recent-claims', userId, String(limit)],
@@ -74,7 +77,8 @@ export async function getRecentClaimsAction(userId: string, limit = 10) {
 }
 
 /** Recent claims – no cache. Use after successful claim for immediate refresh. */
-export async function getRecentClaimsFreshAction(userId: string, limit = 10) {
+export async function getRecentClaimsFreshAction(telegramInitData: string, limit = 10) {
+  const { userId } = await requireTelegramUser(telegramInitData)
   return getRecentClaims(userId, limit)
 }
 

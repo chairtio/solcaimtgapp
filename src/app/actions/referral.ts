@@ -1,11 +1,13 @@
 'use server'
 
 import { getReferrerByReferee } from '@/lib/database-admin'
+import { requireTelegramUser } from '@/lib/telegram-user'
 
-export async function getMyReferralPercentAction(telegramId?: string): Promise<{
+export async function getMyReferralPercentAction(telegramInitData: string): Promise<{
   referred: boolean
   referralPercent: number
 }> {
+  const { telegramId } = await requireTelegramUser(telegramInitData)
   const tid = String(telegramId || '').trim()
   if (!tid) return { referred: false, referralPercent: 0 }
 

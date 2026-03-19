@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getInitDataFromRequest, validateInitData } from '@/lib/telegram-auth'
 
 const TELEGRAM_API = 'https://api.telegram.org'
 const TIMEOUT_MS = 15000
@@ -15,6 +16,16 @@ function abbreviateUserId(id: string | number): string {
  * Forwards airdrop request message to Telegram group (AirdropTopics thread)
  */
 export async function POST(req: NextRequest) {
+  // Require either a valid Telegram initData (user-originated) OR an internal secret (service-to-service).
+  const internalSecret = process.env.INTERNAL_API_SECRET?.trim()
+  const providedInternalSecret = req.headers.get('X-Internal-Api-Secret')?.trim()
+  const initData = getInitDataFromRequest(req)
+  const validInitData = initData ? validateInitData(initData) : null
+  const internalAuthed = !!internalSecret && providedInternalSecret === internalSecret
+  if (!validInitData && !internalAuthed) {
+    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+  }
+
   const token = process.env.TELEGRAM_BOT_TOKEN
   const chatId = process.env.TELEGRAM_GROUP_CHAT_ID || '-1001265590297'
   const airdropTopicsId = parseInt(process.env.TELEGRAM_AIRDROP_TOPICS_ID || '142362', 10)

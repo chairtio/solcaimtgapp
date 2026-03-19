@@ -1,11 +1,22 @@
 import { NextResponse } from 'next/server'
+import { getInitDataFromRequest, validateInitData } from '@/lib/telegram-auth'
 
 /**
  * GET /api/test-telegram-group
  * Diagnostic: checks if Telegram env vars are set and tries to send a test message.
  * Call after deploy to verify claim notifications will work.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  // Require either valid Telegram initData or internal service secret.
+  const internalSecret = process.env.INTERNAL_API_SECRET?.trim()
+  const providedInternalSecret = request.headers.get('X-Internal-Api-Secret')?.trim()
+  const initData = getInitDataFromRequest(request)
+  const validInitData = initData ? validateInitData(initData) : null
+  const internalAuthed = !!internalSecret && providedInternalSecret === internalSecret
+  if (!validInitData && !internalAuthed) {
+    return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
+  }
+
   const token = process.env.TELEGRAM_BOT_TOKEN
   const chatId = process.env.TELEGRAM_GROUP_CHAT_ID
   const topicId = parseInt(process.env.TELEGRAM_CLAIM_TOPICS_ID || '247118', 10)

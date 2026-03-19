@@ -152,16 +152,18 @@ export default function SolClaimApp() {
   const [myReferralPercent, setMyReferralPercent] = useState(0)
   const myReferralPercentRef = useRef(0)
   const TOKEN_PROGRAM_ID_STR = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
+  const getTelegramInitData = () => (typeof window !== 'undefined' ? (window as any).Telegram?.WebApp?.initData ?? '' : '')
 
   useEffect(() => {
     // Load once per session/user; do not block scans on this.
-    const tid = user?.telegram_id ? String(user.telegram_id) : ''
-    if (!tid) {
+    if (!user?.telegram_id) {
       setMyReferralPercent(0)
       myReferralPercentRef.current = 0
       return
     }
-    getMyReferralPercentAction(tid)
+    const telegramInitData = getTelegramInitData()
+    if (!telegramInitData) return
+    getMyReferralPercentAction(telegramInitData)
       .then((res) => {
         const pct = res?.referred ? Number(res.referralPercent ?? 0) : 0
         const clamped = Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : 0
@@ -340,7 +342,8 @@ t.me/solclaimxbot?start=${telegramId}`
       loadUserStats()
     }
     if (user && activeTab === 'home') {
-      getRecentClaimsAction(user.id, 10).then(setRecentClaims).catch(() => setRecentClaims([]))
+      const telegramInitData = getTelegramInitData()
+      if (telegramInitData) getRecentClaimsAction(telegramInitData, 10).then(setRecentClaims).catch(() => setRecentClaims([]))
     }
     if (user && activeTab === 'stats') {
       getTotalClaimedAction().then(setTotalClaimed).catch(() => setTotalClaimed(null))
@@ -406,7 +409,13 @@ t.me/solclaimxbot?start=${telegramId}`
   useEffect(() => {
     if (!user?.id || activeTab !== 'tasks') return
     setTasksLoaded(false)
-    getTasksForUser(user.id)
+    const telegramInitData = getTelegramInitData()
+    if (!telegramInitData) {
+      setTasksResult(null)
+      setTasksLoaded(true)
+      return
+    }
+    getTasksForUser(telegramInitData)
       .then(setTasksResult)
       .catch((err) => {
         console.error('Failed to load tasks:', err)
@@ -447,7 +456,9 @@ t.me/solclaimxbot?start=${telegramId}`
     if (!user) return
     setUserStatsLoaded(false)
     try {
-      const stats = await getUserStatsAction(user.id)
+      const telegramInitData = getTelegramInitData()
+      if (!telegramInitData) throw new Error('Missing Telegram initData')
+      const stats = await getUserStatsAction(telegramInitData)
       setUserStats(stats)
     } catch (err) {
       console.error('Failed to load stats:', err)
@@ -696,7 +707,10 @@ t.me/solclaimxbot?start=${telegramId}`
       setAddWalletModalRent(0)
       setAddWalletDerivedAddress('')
       await loadSavedWallets()
-      if (user) getRecentClaimsFreshAction(user.id, 10).then(setRecentClaims).catch(() => {})
+      {
+        const telegramInitData = getTelegramInitData()
+        if (user && telegramInitData) getRecentClaimsFreshAction(telegramInitData, 10).then(setRecentClaims).catch(() => {})
+      }
       toast.success(`Claimed ${netAmount.toFixed(4)} SOL`, {
         action: { label: 'Share with friends', onClick: openSharePopup },
         cancel: sig ? { label: 'View on Solscan', onClick: () => window.open(`https://solscan.io/tx/${sig}`) } : undefined
@@ -1040,7 +1054,10 @@ t.me/solclaimxbot?start=${telegramId}`
         })
         setBatchResults(null)
         await loadSavedWallets()
-        if (user) getRecentClaimsFreshAction(user.id, 10).then(setRecentClaims).catch(() => {})
+        {
+          const telegramInitData = getTelegramInitData()
+          if (user && telegramInitData) getRecentClaimsFreshAction(telegramInitData, 10).then(setRecentClaims).catch(() => {})
+        }
       } else {
         toast.error(`Failed to claim from any wallets. (${failedClaims} failed)`)
       }
@@ -1233,7 +1250,10 @@ t.me/solclaimxbot?start=${telegramId}`
           // When cleanup had errors and nothing was claimed, do not show success toast
           if (claim.netAmount === 0 && claim.closedCount === 0) {
             await loadUserStats()
-            if (user) getRecentClaimsFreshAction(user.id, 10).then(setRecentClaims).catch(() => {})
+            {
+              const telegramInitData = getTelegramInitData()
+              if (user && telegramInitData) getRecentClaimsFreshAction(telegramInitData, 10).then(setRecentClaims).catch(() => {})
+            }
             return true
           }
         }
@@ -1271,7 +1291,10 @@ t.me/solclaimxbot?start=${telegramId}`
       }
 
       await loadUserStats()
-      if (user) getRecentClaimsFreshAction(user.id, 10).then(setRecentClaims).catch(() => {})
+      {
+        const telegramInitData = getTelegramInitData()
+        if (user && telegramInitData) getRecentClaimsFreshAction(telegramInitData, 10).then(setRecentClaims).catch(() => {})
+      }
 
       // Clear claimable immediately – accounts are now claimed
       setClaimableAccounts([])
@@ -1343,7 +1366,9 @@ t.me/solclaimxbot?start=${telegramId}`
     }
     setSettingsReceiverSaving(true)
     try {
-      const result = await updateReceiverWallet(user.telegram_id, settingsReceiverInput.trim())
+      const telegramInitData = getTelegramInitData()
+      if (!telegramInitData) throw new Error('Missing Telegram initData')
+      const result = await updateReceiverWallet(telegramInitData, settingsReceiverInput.trim())
       if (result.success) {
         await refreshUser()
         toast.success('Receiver wallet updated')
@@ -1365,7 +1390,9 @@ t.me/solclaimxbot?start=${telegramId}`
     }
     setSetReceiverSaving(true)
     try {
-      const result = await updateReceiverWallet(user.telegram_id, setReceiverInput.trim())
+      const telegramInitData = getTelegramInitData()
+      if (!telegramInitData) throw new Error('Missing Telegram initData')
+      const result = await updateReceiverWallet(telegramInitData, setReceiverInput.trim())
       if (result.success) {
         const action = pendingClaimAction
         setIsSetReceiverModalOpen(false)
@@ -2470,9 +2497,11 @@ t.me/solclaimxbot?start=${telegramId}`
                       if (task.canComplete || (needsLinkFirst && hasOpenedLink) || (isSettingsTask && hasOpenedInstructions)) {
                         setCompletingTaskId(task.id)
                         try {
-                          const result = await verifyAndCompleteTask(user!.id, task.id)
+                          const telegramInitData = getTelegramInitData()
+                          if (!telegramInitData) throw new Error('Missing Telegram initData')
+                          const result = await verifyAndCompleteTask(telegramInitData, task.id)
                           if (result.success) {
-                            const fresh = await getTasksForUser(user!.id)
+                            const fresh = await getTasksForUser(telegramInitData)
                             setTasksResult(fresh)
                             setTaskConfettiToken(Date.now())
                             toast.success(`+${task.points} XP earned!`)

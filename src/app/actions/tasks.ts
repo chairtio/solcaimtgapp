@@ -10,6 +10,7 @@ import {
   upsertUserTaskCompletion,
   getUserTaskPoints,
 } from '@/lib/database'
+import { requireTelegramUser } from '@/lib/telegram-user'
 
 export interface TaskWithStatus {
   id: string
@@ -137,7 +138,8 @@ async function verifyTask(
   }
 }
 
-export async function getTasksForUser(userId: string): Promise<TasksForUserResult> {
+export async function getTasksForUser(telegramInitData: string): Promise<TasksForUserResult> {
+  const { userId } = await requireTelegramUser(telegramInitData)
   const [definitions, completions, experiencePoints, dbUser, stats] = await Promise.all([
     getTaskDefinitions(),
     getUserTaskCompletions(userId),
@@ -197,10 +199,11 @@ export async function getTasksForUser(userId: string): Promise<TasksForUserResul
 }
 
 export async function verifyAndCompleteTask(
-  userId: string,
+  telegramInitData: string,
   taskDefinitionId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const { userId } = await requireTelegramUser(telegramInitData)
     const [definitions, completions, dbUser] = await Promise.all([
       getTaskDefinitions(),
       getUserTaskCompletions(userId),
