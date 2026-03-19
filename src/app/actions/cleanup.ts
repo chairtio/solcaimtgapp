@@ -1,6 +1,6 @@
 'use server'
 
-import { Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction, ComputeBudgetProgram } from '@solana/web3.js'
+import { Keypair, PublicKey, TransactionMessage, VersionedTransaction, ComputeBudgetProgram } from '@solana/web3.js'
 import bs58 from 'bs58'
 import { connection, getWalletTokenAccounts, getClaimableRentTotalsOnly } from '@/lib/solana'
 import { getUserById, getReferrerByReferee } from '@/lib/database'
@@ -19,12 +19,11 @@ type CleanupSummary = {
 
 const SOL_MINT = 'So11111111111111111111111111111111111111112'
 const TOKEN_PROGRAM_ID_STR = TOKEN_PROGRAM_ID.toString()
-const MAX_SWAPS_PER_TX = 3
 const BURN_BATCH_SIZE = 10
 const BURN_COMPUTE_UNITS = 100_000
 const BURN_COMPUTE_PRICE_MICROLAMPORTS = 50_000
-const FETCH_TIMEOUT_MS = 25_000
-const FETCH_RETRIES = 3
+const FETCH_TIMEOUT_MS = 35_000
+const FETCH_RETRIES = 5
 
 async function fetchWithRetry(
   url: string,
@@ -42,7 +41,7 @@ async function fetchWithRetry(
     } catch (e) {
       clearTimeout(timeout)
       lastErr = e
-      if (i < retries - 1) await new Promise((r) => setTimeout(r, 800 * (i + 1)))
+      if (i < retries - 1) await new Promise((r) => setTimeout(r, 1000 * (i + 1)))
     }
   }
   throw lastErr
@@ -159,191 +158,69 @@ async function jupQuote(params: {
   return await res.json().catch(() => null)
 }
 
-async function jupSwapInstructions(params: {
+/** Jupiter POST /swap: returns serialized tx (reliable, one tx per token). */
+async function jupSwap(params: {
   quoteResponse: any
   userPublicKey: string
   payer: string
-}): Promise<any | null> {
-  const res = await fetchWithRetry(`https://quote-api.jup.ag/v6/swap-instructions`, {
+  nativeDestinationAccount?: string
+}): Promise<{ swapTransaction: string; lastValidBlockHeight: number } | null> {
+  const body: Record<string, unknown> = {
+    quoteResponse: params.quoteResponse,
+    userPublicKey: params.userPublicKey,
+    payer: params.payer,
+    wrapAndUnwrapSol: true,
+    dynamicComputeUnitLimit: true,
+    prioritizationFeeLamports: {
+      priorityLevelWithMaxLamports: {
+        priorityLevel: 'high',
+        maxLamports: 500_000,
+      },
+    },
+  }
+  if (params.nativeDestinationAccount) {
+    body.nativeDestinationAccount = params.nativeDestinationAccount
+  }
+  const res = await fetchWithRetry(`https://api.jup.ag/swap/v1/swap`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
       'User-Agent': 'SolClaim/1.0',
     },
-    body: JSON.stringify({
-      quoteResponse: params.quoteResponse,
-      userPublicKey: params.userPublicKey,
-      payer: params.payer,
-      wrapAndUnwrapSol: true,
-    }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) return null
-  return await res.json().catch(() => null)
-}
-
-async function buildAndSendSwapTx(params: {
-  user: Keypair
-  feePayer: Keypair
-  receiver: PublicKey
-  quote: any
-  swapIxs: any
-}): Promise<{ ok: boolean; signature?: string; error?: string }> {
-  try {
-    const lookupTableAddresses: string[] = Array.isArray(params.swapIxs?.addressLookupTableAddresses)
-      ? params.swapIxs.addressLookupTableAddresses
-      : []
-
-    const luts = await Promise.all(
-      lookupTableAddresses.map(async (addr) => {
-        try {
-          const res = await connection.getAddressLookupTable(new PublicKey(addr))
-          return res.value
-        } catch {
-          return null
-        }
-      })
-    )
-
-    const toIxs = (arr: any[]) =>
-      (Array.isArray(arr) ? arr : [])
-        .map((ix) => {
-          if (!ix?.programId || !ix?.accounts || !ix?.data) return null
-          return {
-            programId: new PublicKey(ix.programId),
-            keys: ix.accounts.map((a: any) => ({
-              pubkey: new PublicKey(a.pubkey),
-              isSigner: !!a.isSigner,
-              isWritable: !!a.isWritable,
-            })),
-            data: Buffer.from(ix.data, 'base64'),
-          }
-        })
-        .filter(Boolean)
-
-    const computeBudget = toIxs(params.swapIxs?.computeBudgetInstructions)
-    const setup = toIxs(params.swapIxs?.setupInstructions)
-    const swapIx = toIxs([params.swapIxs?.swapInstruction])
-    const cleanup = toIxs(params.swapIxs?.cleanupInstruction ? [params.swapIxs.cleanupInstruction] : [])
-
-    // Transfer SOL proceeds (minimum expected) to receiver.
-    // Use otherAmountThreshold (min out) when present; else use outAmount.
-    const minOut = BigInt(params.quote?.otherAmountThreshold ?? params.quote?.outAmount ?? '0')
-    const transferIx =
-      minOut > BigInt(0)
-        ? [
-            SystemProgram.transfer({
-              fromPubkey: params.user.publicKey,
-              toPubkey: params.receiver,
-              lamports: Number(minOut),
-            }),
-          ]
-        : []
-
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
-
-    const message = new TransactionMessage({
-      payerKey: params.feePayer.publicKey,
-      recentBlockhash: blockhash,
-      instructions: [...computeBudget, ...setup, ...swapIx, ...cleanup, ...transferIx] as any,
-    }).compileToV0Message(luts.filter(Boolean) as any)
-
-    const tx = new VersionedTransaction(message)
-    tx.sign([params.feePayer, params.user])
-    const sig = await connection.sendTransaction(tx, { maxRetries: 2 })
-    // Important: cleanup must wait for confirmation before we re-scan token balances to close accounts.
-    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed').catch(() => null)
-    return { ok: true, signature: sig }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Swap tx failed'
-    return { ok: false, error: msg }
+  const json = await res.json().catch(() => null)
+  if (!json?.swapTransaction || json.lastValidBlockHeight == null) return null
+  return {
+    swapTransaction: json.swapTransaction,
+    lastValidBlockHeight: Number(json.lastValidBlockHeight),
   }
 }
 
-async function buildAndSendMultiSwapTx(params: {
-  user: Keypair
+/** Deserialize Jupiter's base64 tx, sign with payer + user, send and confirm. */
+async function sendJupiterSerializedTx(params: {
+  swapTransactionBase64: string
+  lastValidBlockHeight: number
   feePayer: Keypair
-  receiver: PublicKey
-  swaps: Array<{ quote: any; swapIxs: any }>
+  user: Keypair
 }): Promise<{ ok: boolean; signature?: string; error?: string }> {
   try {
-    const toIxs = (arr: any[]) =>
-      (Array.isArray(arr) ? arr : [])
-        .map((ix) => {
-          if (!ix?.programId || !ix?.accounts || !ix?.data) return null
-          return {
-            programId: new PublicKey(ix.programId),
-            keys: ix.accounts.map((a: any) => ({
-              pubkey: new PublicKey(a.pubkey),
-              isSigner: !!a.isSigner,
-              isWritable: !!a.isWritable,
-            })),
-            data: Buffer.from(ix.data, 'base64'),
-          }
-        })
-        .filter(Boolean)
-
-    const lookupTableAddressesSet = new Set<string>()
-    for (const s of params.swaps) {
-      const addrs: string[] = Array.isArray(s.swapIxs?.addressLookupTableAddresses)
-        ? s.swapIxs.addressLookupTableAddresses
-        : []
-      for (const a of addrs) lookupTableAddressesSet.add(a)
-    }
-    const lookupTableAddresses = Array.from(lookupTableAddressesSet)
-
-    const luts = await Promise.all(
-      lookupTableAddresses.map(async (addr) => {
-        try {
-          const res = await connection.getAddressLookupTable(new PublicKey(addr))
-          return res.value
-        } catch {
-          return null
-        }
-      })
-    )
-
-    const instructions: any[] = []
-
-    for (const s of params.swaps) {
-      const swapIxs = s.swapIxs
-
-      const computeBudget = toIxs(swapIxs?.computeBudgetInstructions)
-      const setup = toIxs(swapIxs?.setupInstructions)
-      const swapIx = toIxs([swapIxs?.swapInstruction])
-      const cleanup = toIxs(swapIxs?.cleanupInstruction ? [swapIxs.cleanupInstruction] : [])
-
-      // Transfer SOL proceeds (minimum expected) to receiver.
-      const minOut = BigInt(s.quote?.otherAmountThreshold ?? s.quote?.outAmount ?? '0')
-      const transferIx =
-        minOut > BigInt(0)
-          ? [
-              SystemProgram.transfer({
-                fromPubkey: params.user.publicKey,
-                toPubkey: params.receiver,
-                lamports: Number(minOut),
-              }),
-            ]
-          : []
-
-      instructions.push(...computeBudget, ...setup, ...swapIx, ...cleanup, ...transferIx)
-    }
-
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
-    const message = new TransactionMessage({
-      payerKey: params.feePayer.publicKey,
-      recentBlockhash: blockhash,
-      instructions,
-    }).compileToV0Message(luts.filter(Boolean) as any)
-
-    const tx = new VersionedTransaction(message)
+    const buf = Buffer.from(params.swapTransactionBase64, 'base64')
+    const tx = VersionedTransaction.deserialize(buf)
+    const blockhash =
+      (tx.message as { recentBlockhash?: string }).recentBlockhash ??
+      (await connection.getLatestBlockhash()).blockhash
     tx.sign([params.feePayer, params.user])
     const sig = await connection.sendTransaction(tx, { maxRetries: 2 })
-    // Wait for confirmation before close/claim stage.
-    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed').catch(() => null)
+    await connection.confirmTransaction(
+      { signature: sig, blockhash, lastValidBlockHeight: params.lastValidBlockHeight },
+      'confirmed'
+    ).catch(() => null)
     return { ok: true, signature: sig }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Multi-swap tx failed'
+    const msg = e instanceof Error ? e.message : 'Swap tx failed'
     return { ok: false, error: msg }
   }
 }
@@ -419,7 +296,6 @@ async function cleanupWalletTokens(params: {
     mint: string
     acc: (typeof candidates)[number]
     quote: any
-    swapIxs: any
     usdValue: number | null
   }> = []
   const burnCandidates: BurnCandidate[] = []
@@ -488,40 +364,11 @@ async function cleanupWalletTokens(params: {
       continue
     }
 
-    let swapIxs: Awaited<ReturnType<typeof jupSwapInstructions>>
-    try {
-      swapIxs = await jupSwapInstructions({
-        quoteResponse: bestRoute,
-        userPublicKey: userKp.publicKey.toString(),
-        payer: feePayer.publicKey.toString(),
-      })
-    } catch (e) {
-      summary.errors.push(`${mint} swap-instructions: ${e instanceof Error ? e.message : 'fetch failed'}`)
-      summary.skipped++
-      continue
-    }
-
-    if (!swapIxs) {
-      if (usdValue != null && usdValue < 1 && BigInt(acc.amountRaw) > BigInt(0)) {
-        burnCandidates.push({
-          address: acc.address,
-          mint: acc.mint,
-          amountRaw: acc.amountRaw,
-          decimals: acc.decimals,
-          mintStr: mint,
-        })
-      } else {
-        summary.skipped++
-      }
-      continue
-    }
-
-    // Defer execution: we will attempt true multi-swap execution in chunks.
+    // Defer execution: sell via Jupiter POST /swap (serialized tx) per token for reliability.
     swapCandidates.push({
       mint,
       acc,
       quote: bestRoute,
-      swapIxs,
       usdValue,
     })
   }
@@ -534,39 +381,21 @@ async function cleanupWalletTokens(params: {
     summary,
   })
 
-  // Attempt multi-swap execution per chunk; fall back to per-token swaps on failure.
-  for (let i = 0; i < swapCandidates.length; i += MAX_SWAPS_PER_TX) {
-    const chunk = swapCandidates.slice(i, i + MAX_SWAPS_PER_TX)
-    const multiRes = await buildAndSendMultiSwapTx({
-      user: userKp,
-      feePayer,
-      receiver: receiverPk,
-      swaps: chunk.map((c) => ({ quote: c.quote, swapIxs: c.swapIxs })),
-    })
-
-    if (multiRes.ok) {
-      summary.sold += chunk.length
-      continue
-    }
-
-    summary.errors.push(`Multi-swap tx failed: ${multiRes.error || 'unknown'}`)
-
-    const fallbackBurnCandidates: BurnCandidate[] = []
-    for (const c of chunk) {
-      const swapRes = await buildAndSendSwapTx({
-        user: userKp,
-        feePayer,
-        receiver: receiverPk,
-        quote: c.quote,
-        swapIxs: c.swapIxs,
+  // Sell each token via Jupiter POST /swap (one serialized tx per token; reliable).
+  const fallbackBurnCandidates: BurnCandidate[] = []
+  for (const c of swapCandidates) {
+    let swapResult: { swapTransaction: string; lastValidBlockHeight: number } | null = null
+    try {
+      swapResult = await jupSwap({
+        quoteResponse: c.quote,
+        userPublicKey: userKp.publicKey.toString(),
+        payer: feePayer.publicKey.toString(),
+        nativeDestinationAccount: receiverPk.toString(),
       })
-
-      if (swapRes.ok) {
-        summary.sold++
-        continue
-      }
-
-      // Swap failed; queue burn only if <$1 (batch send after loop)
+    } catch (e) {
+      summary.errors.push(`${c.mint} swap: ${e instanceof Error ? e.message : 'fetch failed'}`)
+    }
+    if (!swapResult) {
       if (c.usdValue != null && c.usdValue < 1 && BigInt(c.acc.amountRaw) > BigInt(0)) {
         fallbackBurnCandidates.push({
           address: c.acc.address,
@@ -577,16 +406,38 @@ async function cleanupWalletTokens(params: {
         })
       } else {
         summary.skipped++
-        summary.errors.push(`Sell failed for ${c.mint}: ${swapRes.error || 'unknown'}`)
       }
+      continue
     }
-    await sendBatchBurns({
-      user: userKp,
+    const sendRes = await sendJupiterSerializedTx({
+      swapTransactionBase64: swapResult.swapTransaction,
+      lastValidBlockHeight: swapResult.lastValidBlockHeight,
       feePayer,
-      candidates: fallbackBurnCandidates,
-      summary,
+      user: userKp,
     })
+    if (sendRes.ok) {
+      summary.sold++
+      continue
+    }
+    summary.errors.push(`Sell failed for ${c.mint}: ${sendRes.error || 'unknown'}`)
+    if (c.usdValue != null && c.usdValue < 1 && BigInt(c.acc.amountRaw) > BigInt(0)) {
+      fallbackBurnCandidates.push({
+        address: c.acc.address,
+        mint: c.acc.mint,
+        amountRaw: c.acc.amountRaw,
+        decimals: c.acc.decimals,
+        mintStr: c.mint,
+      })
+    } else {
+      summary.skipped++
+    }
   }
+  await sendBatchBurns({
+    user: userKp,
+    feePayer,
+    candidates: fallbackBurnCandidates,
+    summary,
+  })
 
   // Final dust burn pass: batch burn remaining <$1 balances so accounts become closeable (bot-style).
   try {
