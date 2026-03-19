@@ -252,6 +252,71 @@ async function sendJupiterSerializedTx(params: {
   }
 }
 
+function ultraUsdValue(order: any): number | null {
+  const raw = order?.inUsdValue
+  const n = typeof raw === 'number' ? raw : raw == null ? NaN : Number(raw)
+  return Number.isFinite(n) ? n : null
+}
+
+async function ultraOrder(params: {
+  inputMint: string
+  outputMint: string
+  amountRaw: string
+  taker?: string
+}): Promise<any | null> {
+  const qs = new URLSearchParams({
+    inputMint: params.inputMint,
+    outputMint: params.outputMint,
+    amount: params.amountRaw,
+  })
+  if (params.taker) qs.set('taker', params.taker)
+
+  const res = await fetchWithRetry(`https://api.jup.ag/ultra/v1/order?${qs.toString()}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'SolClaim/1.0',
+      ...(JUPITER_API_KEY ? { 'x-api-key': JUPITER_API_KEY } : {}),
+    },
+  })
+  if (!res.ok) return null
+  return await res.json().catch(() => null)
+}
+
+async function ultraExecute(params: { signedTransactionBase64: string; requestId: string }): Promise<any | null> {
+  const res = await fetchWithRetry(`https://api.jup.ag/ultra/v1/execute`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'User-Agent': 'SolClaim/1.0',
+      ...(JUPITER_API_KEY ? { 'x-api-key': JUPITER_API_KEY } : {}),
+    },
+    body: JSON.stringify({
+      signedTransaction: params.signedTransactionBase64,
+      requestId: params.requestId,
+    }),
+  })
+  if (!res.ok) return null
+  return await res.json().catch(() => null)
+}
+
+async function signUltraTransaction(params: {
+  swapTransactionBase64: string
+  feePayer: Keypair
+  user: Keypair
+}): Promise<string> {
+  const tx = VersionedTransaction.deserialize(Buffer.from(params.swapTransactionBase64, 'base64'))
+  // Ultra transactions are meant to be signed "as-is". We try with the user first,
+  // then fall back to signing with the fee payer too (some routes may require it).
+  try {
+    tx.sign([params.user])
+  } catch {
+    tx.sign([params.feePayer, params.user])
+  }
+  return Buffer.from(tx.serialize()).toString('base64')
+}
+
 async function cleanupWalletTokens(params: {
   userId: string
   publicKey: string
@@ -310,21 +375,6 @@ async function cleanupWalletTokens(params: {
   }
   const candidates = tokenAccounts.filter((t) => t.programId.toString() === TOKEN_PROGRAM_ID_STR && !t.isEmpty)
 
-  // Batch prices (best-effort; empty map only skips dust logic)
-  const mintStrs = candidates.map((c) => c.mint.toString()).filter((m) => m !== SOL_MINT)
-  let priceMap = new Map<string, number>()
-  try {
-    priceMap = await fetchJupPrices(mintStrs)
-  } catch {
-    // continue without prices; sells still attempted, dust burn skipped
-  }
-
-  const swapCandidates: Array<{
-    mint: string
-    acc: (typeof candidates)[number]
-    quote: any
-    usdValue: number | null
-  }> = []
   const burnCandidates: BurnCandidate[] = []
 
   for (const acc of candidates) {
@@ -352,31 +402,22 @@ async function cleanupWalletTokens(params: {
       continue
     }
 
-    const price = priceMap.get(mint)
-    const uiAmount = amountRawToUi(acc.amountRaw, acc.decimals)
-    const usdValue = price != null ? uiAmount * price : null
-
     summary.attemptedSells++
+    const order = await ultraOrder({
+      inputMint: mint,
+      outputMint: SOL_MINT,
+      amountRaw: acc.amountRaw,
+      taker: userKp.publicKey.toString(),
+    })
 
-    let quote: Awaited<ReturnType<typeof jupQuote>>
-    try {
-      quote = await jupQuote({
-        inputMint: mint,
-        outputMint: SOL_MINT,
-        amountRaw: acc.amountRaw,
-        slippageBps: params.slippageBps,
-      })
-    } catch (e) {
-      summary.errors.push(`${mint} quote: ${e instanceof Error ? e.message : 'fetch failed'}`)
-      summary.skipped++
-      continue
-    }
-
-    // v6 returns the quote at top level (routePlan, outAmount, etc.), not under .data[0]
-    const bestRoute =
-      quote && Array.isArray(quote?.routePlan) && quote.routePlan.length > 0 ? quote : null
-    if (!bestRoute) {
-      // No liquidity/quote. Burn only if we can prove value < $1 (batch later).
+    const usdValue = ultraUsdValue(order)
+    if (!order?.requestId || !order?.transaction) {
+      if (order == null) {
+        summary.errors.push(`${mint} ultra order failed (null response)`)
+      } else if (order?.errorMessage || order?.errorCode) {
+        summary.errors.push(`${mint} ultra order failed: ${order.errorMessage || 'errorCode ' + order.errorCode}`)
+      }
+      // Simulation/quote failed. Burn only if we can prove input value < $1.
       if (usdValue != null && usdValue < 1 && BigInt(acc.amountRaw) > BigInt(0)) {
         burnCandidates.push({
           address: acc.address,
@@ -385,22 +426,56 @@ async function cleanupWalletTokens(params: {
           decimals: acc.decimals,
           mintStr: mint,
         })
-      } else if (usdValue == null || usdValue >= 1) {
+      } else {
         summary.skipped++
       }
       continue
     }
 
-    // Defer execution: sell via Jupiter POST /swap (serialized tx) per token for reliability.
-    swapCandidates.push({
-      mint,
-      acc,
-      quote: bestRoute,
-      usdValue,
-    })
+    let signedTransactionBase64: string
+    try {
+      signedTransactionBase64 = await signUltraTransaction({
+        swapTransactionBase64: order.transaction,
+        feePayer,
+        user: userKp,
+      })
+    } catch (e) {
+      summary.errors.push(`${mint} sign failed: ${e instanceof Error ? e.message : 'unknown'}`)
+      if (usdValue != null && usdValue < 1 && BigInt(acc.amountRaw) > BigInt(0)) {
+        burnCandidates.push({
+          address: acc.address,
+          mint: acc.mint,
+          amountRaw: acc.amountRaw,
+          decimals: acc.decimals,
+          mintStr: mint,
+        })
+      }
+      continue
+    }
+
+    const exec = await ultraExecute({ signedTransactionBase64, requestId: order.requestId })
+    if (exec?.status === 'Success') {
+      summary.sold++
+      continue
+    }
+
+    summary.errors.push(
+      `${mint} ultra execute failed: ${exec?.error || exec?.status || 'unknown'}`
+    )
+    if (usdValue != null && usdValue < 1 && BigInt(acc.amountRaw) > BigInt(0)) {
+      burnCandidates.push({
+        address: acc.address,
+        mint: acc.mint,
+        amountRaw: acc.amountRaw,
+        decimals: acc.decimals,
+        mintStr: mint,
+      })
+    } else {
+      summary.skipped++
+    }
   }
 
-  // Batch burn tokens that had no route or no swap instructions (bot-style: multiple burns per tx).
+  // Burn any < $1 accounts we couldn’t sell.
   await sendBatchBurns({
     user: userKp,
     feePayer,
@@ -408,101 +483,34 @@ async function cleanupWalletTokens(params: {
     summary,
   })
 
-  // Sell each token via Jupiter POST /swap (one serialized tx per token; reliable).
-  const fallbackBurnCandidates: BurnCandidate[] = []
-  const maxParallel = 5
-  let cursor = 0
-
-  await Promise.all(
-    Array.from({ length: Math.min(maxParallel, swapCandidates.length) }, async () => {
-      while (true) {
-        const i = cursor++
-        if (i >= swapCandidates.length) break
-        const c = swapCandidates[i]
-
-        let swapResult: { swapTransaction: string; lastValidBlockHeight: number } | null = null
-        try {
-          swapResult = await jupSwap({
-            quoteResponse: c.quote,
-            userPublicKey: userKp.publicKey.toString(),
-            payer: feePayer.publicKey.toString(),
-            nativeDestinationAccount: receiverPk.toString(),
-          })
-        } catch (e) {
-          summary.errors.push(`${c.mint} swap: ${e instanceof Error ? e.message : 'fetch failed'}`)
-        }
-
-        if (!swapResult) {
-          if (c.usdValue != null && c.usdValue < 1 && BigInt(c.acc.amountRaw) > BigInt(0)) {
-            fallbackBurnCandidates.push({
-              address: c.acc.address,
-              mint: c.acc.mint,
-              amountRaw: c.acc.amountRaw,
-              decimals: c.acc.decimals,
-              mintStr: c.mint,
-            })
-          } else {
-            summary.skipped++
-          }
-          continue
-        }
-
-        const sendRes = await sendJupiterSerializedTx({
-          swapTransactionBase64: swapResult.swapTransaction,
-          lastValidBlockHeight: swapResult.lastValidBlockHeight,
-          feePayer,
-          user: userKp,
-        })
-
-        if (sendRes.ok) {
-          summary.sold++
-          continue
-        }
-
-        summary.errors.push(`Sell failed for ${c.mint}: ${sendRes.error || 'unknown'}`)
-        if (c.usdValue != null && c.usdValue < 1 && BigInt(c.acc.amountRaw) > BigInt(0)) {
-          fallbackBurnCandidates.push({
-            address: c.acc.address,
-            mint: c.acc.mint,
-            amountRaw: c.acc.amountRaw,
-            decimals: c.acc.decimals,
-            mintStr: c.mint,
-          })
-        } else {
-          summary.skipped++
-        }
-      }
-    })
-  )
-  await sendBatchBurns({
-    user: userKp,
-    feePayer,
-    candidates: fallbackBurnCandidates,
-    summary,
-  })
-
-  // Final dust burn pass: batch burn remaining <$1 balances so accounts become closeable (bot-style).
+  // Final dust burn pass: burn remaining <$1 so close step can succeed (Ultra quote-only).
   try {
     const finalTokenAccounts = await getWalletTokenAccounts(userKp.publicKey)
-    const remainingToBurn: BurnCandidate[] = finalTokenAccounts
-      .filter((t) => {
-        if (t.programId.toString() !== TOKEN_PROGRAM_ID_STR) return false
-        if (t.isEmpty) return false
-        if (!t.decimals || t.decimals === 0) return false
-        const mint = t.mint.toString()
-        const price = priceMap.get(mint)
-        if (price == null) return false
-        const uiAmount = amountRawToUi(t.amountRaw, t.decimals)
-        const usdValue = uiAmount * price
-        return Number.isFinite(usdValue) && usdValue < 1 && BigInt(t.amountRaw) > BigInt(0)
-      })
-      .map((t) => ({
-        address: t.address,
-        mint: t.mint,
+    const remainingToBurn: BurnCandidate[] = []
+
+    for (const t of finalTokenAccounts) {
+      if (t.programId.toString() !== TOKEN_PROGRAM_ID_STR) continue
+      if (t.isEmpty) continue
+      if (!t.decimals || t.decimals === 0) continue
+      if (BigInt(t.amountRaw) <= BigInt(0)) continue
+
+      const q = await ultraOrder({
+        inputMint: t.mint.toString(),
+        outputMint: SOL_MINT,
         amountRaw: t.amountRaw,
-        decimals: t.decimals,
-        mintStr: t.mint.toString(),
-      }))
+      })
+      const usdValue = ultraUsdValue(q)
+      if (usdValue != null && usdValue < 1) {
+        remainingToBurn.push({
+          address: t.address,
+          mint: t.mint,
+          amountRaw: t.amountRaw,
+          decimals: t.decimals,
+          mintStr: t.mint.toString(),
+        })
+      }
+    }
+
     await sendBatchBurns({
       user: userKp,
       feePayer,
