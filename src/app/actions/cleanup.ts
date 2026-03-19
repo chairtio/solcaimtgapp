@@ -24,6 +24,7 @@ const BURN_COMPUTE_UNITS = 100_000
 const BURN_COMPUTE_PRICE_MICROLAMPORTS = 50_000
 const FETCH_TIMEOUT_MS = 35_000
 const FETCH_RETRIES = 5
+const JUPITER_API_KEY = process.env.NEXT_PUBLIC_JUPITER_API_KEY?.trim() ?? ''
 
 async function fetchWithRetry(
   url: string,
@@ -31,12 +32,28 @@ async function fetchWithRetry(
   retries = FETCH_RETRIES
 ): Promise<Response> {
   let lastErr: unknown
+  let lastRes: Response | null = null
   for (let i = 0; i < retries; i++) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     try {
       const res = await fetch(url, { ...options, signal: controller.signal })
       clearTimeout(timeout)
+      // Retry on transient upstream errors.
+      if ((res.status === 429 || res.status >= 500) && i < retries - 1) {
+        lastRes = res
+        const retryAfter = res.headers.get('retry-after')
+        let delayMs = 1000 * (i + 1)
+        if (retryAfter) {
+          const parsed = Number(retryAfter)
+          if (Number.isFinite(parsed)) {
+            // Retry-After can be seconds.
+            delayMs = parsed * 1000
+          }
+        }
+        await new Promise((r) => setTimeout(r, delayMs))
+        continue
+      }
       return res
     } catch (e) {
       clearTimeout(timeout)
@@ -44,6 +61,7 @@ async function fetchWithRetry(
       if (i < retries - 1) await new Promise((r) => setTimeout(r, 1000 * (i + 1)))
     }
   }
+  if (lastRes) return lastRes
   throw lastErr
 }
 
@@ -126,7 +144,11 @@ async function fetchJupPrices(mints: string[]): Promise<Map<string, number>> {
   const url = `https://price.jup.ag/v4/price?ids=${encodeURIComponent(ids.join(','))}`
   const res = await fetchWithRetry(url, {
     method: 'GET',
-    headers: { Accept: 'application/json', 'User-Agent': 'SolClaim/1.0' },
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'SolClaim/1.0',
+      ...(JUPITER_API_KEY ? { 'x-api-key': JUPITER_API_KEY } : {}),
+    },
   })
   if (!res.ok) return priceMap
   const json = await res.json().catch(() => null)
@@ -152,7 +174,11 @@ async function jupQuote(params: {
     slippageBps: String(params.slippageBps),
   })
   const res = await fetchWithRetry(`https://quote-api.jup.ag/v6/quote?${qs.toString()}`, {
-    headers: { Accept: 'application/json', 'User-Agent': 'SolClaim/1.0' },
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'SolClaim/1.0',
+      ...(JUPITER_API_KEY ? { 'x-api-key': JUPITER_API_KEY } : {}),
+    },
   })
   if (!res.ok) return null
   return await res.json().catch(() => null)
@@ -187,6 +213,7 @@ async function jupSwap(params: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
       'User-Agent': 'SolClaim/1.0',
+      ...(JUPITER_API_KEY ? { 'x-api-key': JUPITER_API_KEY } : {}),
     },
     body: JSON.stringify(body),
   })
@@ -383,55 +410,70 @@ async function cleanupWalletTokens(params: {
 
   // Sell each token via Jupiter POST /swap (one serialized tx per token; reliable).
   const fallbackBurnCandidates: BurnCandidate[] = []
-  for (const c of swapCandidates) {
-    let swapResult: { swapTransaction: string; lastValidBlockHeight: number } | null = null
-    try {
-      swapResult = await jupSwap({
-        quoteResponse: c.quote,
-        userPublicKey: userKp.publicKey.toString(),
-        payer: feePayer.publicKey.toString(),
-        nativeDestinationAccount: receiverPk.toString(),
-      })
-    } catch (e) {
-      summary.errors.push(`${c.mint} swap: ${e instanceof Error ? e.message : 'fetch failed'}`)
-    }
-    if (!swapResult) {
-      if (c.usdValue != null && c.usdValue < 1 && BigInt(c.acc.amountRaw) > BigInt(0)) {
-        fallbackBurnCandidates.push({
-          address: c.acc.address,
-          mint: c.acc.mint,
-          amountRaw: c.acc.amountRaw,
-          decimals: c.acc.decimals,
-          mintStr: c.mint,
+  const maxParallel = 5
+  let cursor = 0
+
+  await Promise.all(
+    Array.from({ length: Math.min(maxParallel, swapCandidates.length) }, async () => {
+      while (true) {
+        const i = cursor++
+        if (i >= swapCandidates.length) break
+        const c = swapCandidates[i]
+
+        let swapResult: { swapTransaction: string; lastValidBlockHeight: number } | null = null
+        try {
+          swapResult = await jupSwap({
+            quoteResponse: c.quote,
+            userPublicKey: userKp.publicKey.toString(),
+            payer: feePayer.publicKey.toString(),
+            nativeDestinationAccount: receiverPk.toString(),
+          })
+        } catch (e) {
+          summary.errors.push(`${c.mint} swap: ${e instanceof Error ? e.message : 'fetch failed'}`)
+        }
+
+        if (!swapResult) {
+          if (c.usdValue != null && c.usdValue < 1 && BigInt(c.acc.amountRaw) > BigInt(0)) {
+            fallbackBurnCandidates.push({
+              address: c.acc.address,
+              mint: c.acc.mint,
+              amountRaw: c.acc.amountRaw,
+              decimals: c.acc.decimals,
+              mintStr: c.mint,
+            })
+          } else {
+            summary.skipped++
+          }
+          continue
+        }
+
+        const sendRes = await sendJupiterSerializedTx({
+          swapTransactionBase64: swapResult.swapTransaction,
+          lastValidBlockHeight: swapResult.lastValidBlockHeight,
+          feePayer,
+          user: userKp,
         })
-      } else {
-        summary.skipped++
+
+        if (sendRes.ok) {
+          summary.sold++
+          continue
+        }
+
+        summary.errors.push(`Sell failed for ${c.mint}: ${sendRes.error || 'unknown'}`)
+        if (c.usdValue != null && c.usdValue < 1 && BigInt(c.acc.amountRaw) > BigInt(0)) {
+          fallbackBurnCandidates.push({
+            address: c.acc.address,
+            mint: c.acc.mint,
+            amountRaw: c.acc.amountRaw,
+            decimals: c.acc.decimals,
+            mintStr: c.mint,
+          })
+        } else {
+          summary.skipped++
+        }
       }
-      continue
-    }
-    const sendRes = await sendJupiterSerializedTx({
-      swapTransactionBase64: swapResult.swapTransaction,
-      lastValidBlockHeight: swapResult.lastValidBlockHeight,
-      feePayer,
-      user: userKp,
     })
-    if (sendRes.ok) {
-      summary.sold++
-      continue
-    }
-    summary.errors.push(`Sell failed for ${c.mint}: ${sendRes.error || 'unknown'}`)
-    if (c.usdValue != null && c.usdValue < 1 && BigInt(c.acc.amountRaw) > BigInt(0)) {
-      fallbackBurnCandidates.push({
-        address: c.acc.address,
-        mint: c.acc.mint,
-        amountRaw: c.acc.amountRaw,
-        decimals: c.acc.decimals,
-        mintStr: c.mint,
-      })
-    } else {
-      summary.skipped++
-    }
-  }
+  )
   await sendBatchBurns({
     user: userKp,
     feePayer,
