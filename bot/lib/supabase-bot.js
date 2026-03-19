@@ -137,7 +137,11 @@ export async function insertWallets(telegramId, wallets) {
   }))
   const { data, error } = await supabase
     .from('wallets')
-    .insert(rows)
+    // Re-adding previously deleted wallets should reactivate/update, not fail on unique(user_id, public_key).
+    .upsert(rows, {
+      onConflict: 'user_id,public_key',
+      ignoreDuplicates: false
+    })
     .select()
   if (error) throw error
   return data

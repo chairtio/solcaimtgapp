@@ -36,8 +36,9 @@ export async function createOrActivateWalletAction(
   publicKey: string,
 ) {
   const { userId } = await requireTelegramUser(telegramInitData)
+  const normalizedPublicKey = publicKey.trim()
 
-  const existing = await getWalletByPublicKey(userId, publicKey)
+  const existing = await getWalletByPublicKey(userId, normalizedPublicKey)
   if (existing) {
     if (existing.status !== 'active') {
       // We only care about status; we don't want to return any secret-bearing fields.
@@ -46,13 +47,26 @@ export async function createOrActivateWalletAction(
     return { walletId: existing.id }
   }
 
-  const newWallet = await createWallet({
-    user_id: userId,
-    public_key: publicKey,
-    status: 'active',
-  })
-
-  return { walletId: newWallet.id }
+  try {
+    const newWallet = await createWallet({
+      user_id: userId,
+      public_key: normalizedPublicKey,
+      status: 'active',
+    })
+    return { walletId: newWallet.id }
+  } catch (error: any) {
+    // Concurrent requests can race between existence check and insert.
+    if (error?.code === '23505' || String(error?.message || '').includes('wallets_user_id_public_key_key')) {
+      const conflicted = await getWalletByPublicKey(userId, normalizedPublicKey)
+      if (conflicted) {
+        if (conflicted.status !== 'active') {
+          await updateWallet(conflicted.id, { status: 'active' })
+        }
+        return { walletId: conflicted.id }
+      }
+    }
+    throw error
+  }
 }
 
 export async function deactivateMyWalletAction(telegramInitData: string, walletId: string) {
