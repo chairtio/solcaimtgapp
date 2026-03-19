@@ -100,10 +100,10 @@ export const handleWalletActions = async (ctx) => {
 export const handleWalletInfo = async (ctx, walletId) => {
     try {
         const wallet = await fetchData(`${urlTelegramWallet}/${walletId}`);
-        const spoilerPrivateKey = `||${wallet.private_key}||`;
         const walletInfo = `🔐 Wallet Info:\n` +
-            `Address: \`${wallet.public_key}\`\n` +
-            `Private Key: ${spoilerPrivateKey}`;
+            `Address: \`${wallet.public_key}\`\n\n` +
+            `✅ This bot will never display your private key.\n` +
+            `Claims/trades are executed server-side using your saved key.`;
 
         await ctx.editMessageText(walletInfo, {
             parse_mode: 'MarkdownV2',
