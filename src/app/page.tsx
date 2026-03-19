@@ -1341,6 +1341,9 @@ t.me/solclaimxbot?start=${telegramId}`
       // Clear claimable immediately – accounts are now claimed
       setClaimableAccounts([])
       setClaimableRent(0)
+      setClaimableRentWithCleanup(0)
+      setCleanupEligibleAccounts([])
+      setCleanupEligibleTokenCount(0)
 
       return true;
     } catch (err: any) {
@@ -1711,7 +1714,9 @@ t.me/solclaimxbot?start=${telegramId}`
                             {isSubmittingKey ? (
                               <div className="flex items-center gap-2">
                                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground" />
-                                CLAIMING...
+                                {cleanupEnabled
+                                  ? `${(ultraCleanupStage ?? 'claiming').toUpperCase()}...`
+                                  : 'CLAIMING...'}
                               </div>
                             ) : (
                               <>CLAIM {onboardingClaimableNet.toFixed(4)} SOL</>
